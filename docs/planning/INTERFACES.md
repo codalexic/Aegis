@@ -1,373 +1,282 @@
-# Aegis Shared Technical Interfaces
+# Aegis Four Day Shared Interfaces
 
-Owners: Alexis and Mariam
+Owners: Mariam and Alexis
 
-Status: proposed version 1 contract to approve on Day 1
+Status: proposed implementation contract; approve during the first hour of Day 1
 
-Scope: test-asset demo; public-policy baseline with a conditional private-cap extension
+Scope: public policy, one immutable vault authorization, one fixed test DEX
 
-This specification is the boundary between Alexis's TypeScript application and Mariam's Solana programs. It defines proposed interfaces; it does not imply that any implementation or deployed address already exists. [Main plan](../../AEGIS_PLAN.md)
+[Main plan](../../AEGIS_PLAN.md) | [Mariam tasks](MARIAM_TASKS.md) | [Alexis tasks](ALEXIS_TASKS.md)
 
-## 1 Ownership and change control
+## 1 Freeze the smallest useful interface
 
-Alexis implements TypeScript types, runtime validation, SDK ports and serialization. Mariam implements the corresponding Rust types, account checks, instructions and errors. Both approve canonical bytes, hashes and fixture outputs.
+Mariam implements the Anchor accounts and instructions. Alexis implements the matching SDK and application. Both agree on fields, account derivation, units and error meanings before parallel work.
 
-Freeze baseline fields on Day 1. Record any change in this document and update both fixture consumers in the same integration change. Do not independently rename fields or reinterpret units. Export the actual generated IDL; never maintain a handwritten substitute after the program exists.
+The actual generated IDL is the ABI source of truth. Mariam publishes an initial IDL on Day 1 and refreshes it with each agreed instruction. Do not hand-edit an IDL or guess its account order in the SDK.
 
-The private-cap design in section 10 is a candidate until the Day 5 cross-language proof gate passes. Pin exact library versions and proof conversion rules in its artifact manifest. No integrated ZK claim is permitted before the full execution gate.
+This four-day baseline has no separate Session account, policy replacement, private-cap mode, proof envelope, generic route payload or custom intent/route hashing. Authorization is stored directly in the vault. The agent signs the complete Solana transaction and the program validates the fixed operation.
 
-## 2 Primitive types and validation
+## 2 Primitive types
 
-| Type | JSON | SDK and program rules |
+| Value | JSON boundary | Implementation |
 | --- | --- | --- |
-| Address | Base58 string | Decode to exactly 32 bytes; do not hash its textual representation |
-| Raw amount | Unsigned decimal string | Canonical digits, no sign/exponent/fraction; at most u64; SDK uses bigint |
-| Nonce and version | Unsigned decimal string | u64; checked increments; no wraparound |
-| Unix time | Unsigned decimal string | Seconds; reject values outside the agreed nonnegative i64 range |
-| Basis points | JSON integer | u16 with semantic range 0 through 10000 |
-| Hash | 64 lowercase hexadecimal characters | Exactly 32 bytes |
-| Byte payload | Base64 string | Strict decoder and bounded byte length |
-| Policy mode | public or private_cap | Chosen in owner-authorized session creation; read from chain at execution |
+| Address | Base58 string | Decode to 32-byte pubkey; validate against actual accounts |
+| Amount, vault ID and nonce | Canonical unsigned decimal string | Checked u64; SDK arithmetic uses bigint |
+| Expiry and deadline | Nonnegative decimal seconds | Validate against nonnegative i64; chain Clock is authoritative |
+| Basis points | Integer number | u16, constrained to 0 through 10000 |
+| Schema version | Integer 1 | DTO version only |
+| Token selector | input or output | Maps to a supported enum in generated IDL |
 
-Use zero only where the field permits it. Swap input and minimum output must be positive. All calculations use checked integer arithmetic; wide intermediate products use u128 or equivalent. Never pass token amounts through JavaScript Number.
+Reject signs, fractions, exponent notation, overflow and noncanonical numerical strings. Token amounts never go through JavaScript Number. Use checked wide arithmetic for exchange calculations.
 
-Chain time is authoritative. Client time can suggest a deadline but cannot validate authorization. Require `chainTime < deadlineUnix <= sessionExpiryUnix`.
+Require positive input and minimum-output amounts. A valid request satisfies chainTime < deadlineUnix <= expiryUnix. Client time is only a UI estimate.
 
-Amounts are denominated in the configured input token's base units. A cap of `50000000` for a six-decimal test token means 50 test tokens, not a universal USD limit.
+## 3 Accounts and immutable policy
 
-## 3 Account and session model
+Proposed derivations, approved at G0:
 
-Proposed PDA seeds, frozen at G0:
-
-| Account | Seeds under the Aegis program |
+| Account | Seeds under its program |
 | --- | --- |
-| Deployment config | ASCII `config` |
-| Vault state | ASCII `vault`, owner pubkey bytes, vaultId as u64 little-endian |
-| Vault authority | ASCII `authority`, vault state pubkey bytes |
-| Session | ASCII `session`, vault state pubkey bytes, generation as u64 little-endian |
-| Optional trade authority | ASCII `trade`, session pubkey bytes, nonce as u64 little-endian |
+| Aegis configuration | ASCII config |
+| Vault state | ASCII vault, owner pubkey bytes, vaultId as u64 little-endian |
+| Vault authority | ASCII authority, vault state pubkey bytes |
+| Demo pool | ASCII pool, input mint bytes, output mint bytes under demo DEX |
+| Demo pool authority | ASCII pool-authority, pool pubkey bytes under demo DEX |
 
-Use canonical PDA bumps. The fixed input and output token accounts are associated token accounts of the vault authority for the configured original SPL Token program and exact mints. The program validates all derivations and token account relationships; client derivation alone is insufficient.
+Use canonical bumps. The input/output vault token accounts are the vault authority's ATAs for the fixed original SPL Token program and mints. The pool has its own validated input/output reserves and authority. Record exact generated addresses in the manifest.
 
-Vault state contains owner, vaultId, token pair, authority bump, active session, next session generation and next policy version. A session contains agent pubkey, immutable policy, expiry, spent input amount, expected nonce and revocation state.
+Aegis configuration fixes the supported demo DEX, pool, mints, original token program and test rate. Authenticate initialization against the agreed deployment authority. Configuration has no update instruction in this baseline. The on-chain program checks actual program/account identities rather than trusting a manifest supplied by the client.
 
-Only the owner may create or replace a session. Generation and policy version increase on replacement and are never reused. Replacement invalidates the old active session even if its account remains on-chain. Nonce begins at zero for each unique session and advances only after successful execution. The session address prevents cross-session replay.
+Vault state records:
 
-Revocation is effective in chain execution order: an already executed trade is not undone. A trade executed after confirmed revocation or replacement must fail. Withdrawals do not reset spent budget. Deposits do not reset spent budget. Only a new owner-authorized session grants a fresh budget.
+- Owner and agent pubkeys, vaultId and derivation bumps.
+- Fixed input/output mint and vault token account identities.
+- maxTradeRaw, sessionBudgetRaw, maxSlippageBps and expiryUnix.
+- spentRaw, nextNonce and revoked.
 
-Owner withdrawal transfers the selected supported asset from its vault account to the owner's corresponding token account. It requires the owner signature and no proof or agent service. The agent has no withdrawal, token-delegate, authority-change or account-close instruction.
+The retained field name sessionBudgetRaw means the entire authorization budget of this vault; it does not imply a separate session implementation.
 
-## 4 Public DTOs
+All policy fields and the agent are immutable after creation. Only spentRaw, nextNonce and revoked change. New authorization or a new budget requires a new owner-signed vault. There is no close/reinitialize, resume, replace-agent or policy-update instruction in this demo.
 
-The following snippets describe exported TypeScript contracts. Runtime validators must enforce their numerical and address constraints.
+Deposits and withdrawals never reset spentRaw or nextNonce. Revocation permanently disables new agent swaps for this vault. Previously executed swaps are not undone. Owner withdrawal remains available after revocation, expiry or exhaustion.
+
+## 4 SDK request types
+
+These are proposed TypeScript exports to implement inside packages/sdk, with matching runtime validators.
 
 ```ts
 type Address = string;
 type U64String = string;
 type UnixSeconds = string;
-type Hex32 = string;
-type Base64Bytes = string;
 
-type PolicyV1 = {
+interface CreateVaultRequestV1 {
+  version: 1;
+  vaultId: U64String;
+  agent: Address;
+  maxTradeRaw: U64String;
   sessionBudgetRaw: U64String;
-  expiryUnix: UnixSeconds;
-  inputMint: Address;
-  outputMint: Address;
-  adapterProgramId: Address;
   maxSlippageBps: number;
-  feeCapRaw: "0";
-} & (
-  | { policyMode: "public"; maxTradeRaw: U64String }
-  | {
-      policyMode: "private_cap";
-      policyCommitment: Hex32;
-      circuitId: "aegis-private-cap-v1";
-    }
-);
+  expiryUnix: UnixSeconds;
+}
 
-interface SwapIntentV1 {
+interface SwapRequestV1 {
   version: 1;
   vault: Address;
-  session: Address;
-  policyVersion: U64String;
-  nonce: U64String;
-  deadlineUnix: UnixSeconds;
-  inputMint: Address;
-  outputMint: Address;
   amountInRaw: U64String;
   minOutRaw: U64String;
+  expectedNonce: U64String;
+  deadlineUnix: UnixSeconds;
+}
+
+interface VaultSnapshotV1 {
+  version: 1;
+  environment: "mock" | "localnet" | "devnet";
+  vault: Address;
+  owner: Address;
+  agent: Address;
+  inputMint: Address;
+  outputMint: Address;
   inputVaultTokenAccount: Address;
   outputVaultTokenAccount: Address;
-  adapterProgramId: Address;
-  routeHash: Hex32;
-  feeCapRaw: "0";
+  maxTradeRaw: U64String;
+  sessionBudgetRaw: U64String;
+  spentRaw: U64String;
+  nextNonce: U64String;
+  maxSlippageBps: number;
+  expiryUnix: UnixSeconds;
+  revoked: boolean;
+  inputBalanceRaw: U64String;
+  outputBalanceRaw: U64String;
+  observedSlot: U64String;
 }
 
-interface AccountMetaV1 {
-  address: Address;
-  isSigner: boolean;
-  isWritable: boolean;
-}
-
-interface AdapterPayloadV1 {
-  adapterKind: "demo_dex_v1" | "jupiter_local_experiment_v1";
-  instructionDataBase64: Base64Bytes;
-  accounts: AccountMetaV1[];
-}
-
-interface ProofEnvelopeV1 {
-  circuitId: "aegis-private-cap-v1";
-  verifyingKeyHash: Hex32;
-  proofEncoding: "groth16-solana-v1";
-  proofBase64: Base64Bytes;
-  publicInputsBeHex: [Hex32, Hex32, Hex32]; // C, amount, B
-}
-
-interface PreparedSwapV1 {
-  intent: SwapIntentV1;
-  adapter: AdapterPayloadV1;
-  intentHash: Hex32;
-  proof?: ProofEnvelopeV1;
+interface ExecutionReceiptV1 {
+  environment: "mock" | "localnet" | "devnet";
+  vault: Address;
+  status:
+    | "Prepared"
+    | "SigningRejected"
+    | "SimulationRejected"
+    | "Submitted"
+    | "Confirmed"
+    | "Finalized"
+    | "ChainFailed"
+    | "UnknownOutcome";
+  expectedNonce?: U64String;
+  signature?: string;
+  errorCode?: string;
+  errorOrigin?: "client" | "simulation" | "aegis" | "demo_dex" | "rpc";
 }
 ```
 
-`proofEncoding` names the team's versioned adapter format; it is not a claim that libraries share a universal serialization. Freeze its actual byte layout with a valid proof fixture before private mode is enabled.
+The owner is derived from the actual wallet signer. DEX, pool, mints and destination accounts come from validated chain state/configuration. There is no arbitrary recipient or caller-selected instruction payload in SwapRequestV1.
 
-The stored session selects allowed adapter kind and mode. A request cannot enable the Jupiter experiment on a test-DEX session or downgrade private mode. The local Jupiter experiment is not a generally available routing endpoint.
+A prepared transaction is constructed only from supported IDL instructions. It contains no private key. Separate prepare, sign and submit; never accept arbitrary bytes as permission for a local key to sign.
 
-There is no arbitrary recipient. Both token accounts must match the vault's accounts. Program ID, deployment domain, policy values and agent authorization are resolved from verified deployment and account state, not accepted as authority from DTO fields.
+## 5 Instructions and authorization
 
-Use the name `PreparedSwapV1` in exported types; `PreparedSwap` in task prose refers to this type. It contains neither a secret key nor a partially trusted arbitrary transaction to sign blindly.
-
-## 5 Canonical bytes and route hashing
-
-Never hash JSON. Use fixed ordering and fixed-width binary encodings.
-
-`intentHash = SHA256(intentBytes)` where `intentBytes` concatenates:
-
-1. ASCII `AEGIS_SWAP_V1`, without a null terminator or length prefix.
-2. `version` as one byte, equal to 1.
-3. The 32-byte deployment domain from the program's deployment config.
-4. The executing Aegis program ID, decoded to 32 bytes.
-5. `vault`, `session`, each 32 bytes.
-6. `policyVersion`, `nonce`, `deadlineUnix`, each u64 little-endian.
-7. `inputMint`, `outputMint`, each 32 bytes.
-8. `amountInRaw`, `minOutRaw`, each u64 little-endian.
-9. `inputVaultTokenAccount`, `outputVaultTokenAccount`, `adapterProgramId`, each 32 bytes.
-10. `routeHash`, exactly 32 bytes.
-11. `feeCapRaw`, u64 little-endian, zero for this demo.
-
-The deployment domain is initialized as part of trusted deployment configuration and included in the manifest. An agent cannot supply or change it. Mariam and Alexis verify that the manifest matches actual on-chain configuration.
-
-`routeHash = SHA256(routeBytes)` where `routeBytes` concatenates:
-
-1. ASCII `AEGIS_ROUTE_V1`, without a terminator or length prefix.
-2. The actual called adapter program ID, 32 bytes.
-3. Instruction-data length as u32 little-endian, then the exact instruction bytes.
-4. Number of account metas as u32 little-endian.
-5. For every account in exact CPI order: pubkey bytes, one byte for `isSigner`, one byte for `isWritable`.
-
-Flag bytes are exactly 0 or 1. Define and enforce maximum payload size/account count from the chosen adapter during G0; no unbounded allocation from input lengths. Reject unsupported account aliases and privilege requests.
-
-The program reconstructs and hashes the exact CPI it will perform. It compares the result to the intent. A caller-supplied digest cannot stand in for validating the instruction bytes, actual account keys and permitted privileges. Hash the constructed CPI AccountMeta flags, including approved PDA signing privileges, rather than copying outer-transaction AccountInfo flags. Derived PDA signing privileges must match the approved adapter's account model.
-
-Alexis and Mariam independently serialize the same fixture. Store canonical byte hex, route hash and intent hash in `tests/fixtures`. Any field mutation must either fail validation or change the expected hash.
-
-## 6 Program instructions and SDK surface
-
-| SDK operation | On-chain responsibility | Signer |
+| Anchor instruction | Arguments | Required authorization |
 | --- | --- | --- |
-| createVault | Initialize owner-bound vault and supported accounts | Owner |
-| deposit | Move supported input tokens into the vault | Depositor with source authority; demo uses owner |
-| createSession | Set fresh active generation, agent and immutable policy | Owner |
-| getVaultState | Read and validate vault/session/token accounts; no write instruction | None |
-| prepareSwap | Read state, construct exact supported operation; no spend | None |
-| submitPreparedSwap | Authorize exact intent, check policy, execute atomic swap | Authorized agent plus fee payer as needed |
-| revokeAgent | Mark session revoked or remove active authorization | Owner |
-| withdraw | Transfer supported vault assets back to owner | Owner |
+| create_vault | vaultId, agent, maxTradeRaw, sessionBudgetRaw, maxSlippageBps, expiryUnix | Owner signer; supported config and accounts |
+| deposit | amountRaw | Owner signer and source-token authority |
+| execute_swap | amountInRaw, minOutRaw, expectedNonce, deadlineUnix | Stored agent signer; validated fixed accounts |
+| revoke_agent | No mutable policy arguments | Owner signer |
+| withdraw | Supported asset selector, amountRaw | Owner signer; destination is owner's corresponding ATA |
 
-The public-policy execution and private-cap execution may be separate Anchor instructions, but both must check the stored mode. The public entry point rejects private sessions. No generic `executeArbitraryInstruction` exists.
+getVaultState is an RPC read, not a write instruction. The table uses SDK camelCase arguments; the corresponding Rust swap arguments are amount_in_raw, min_out_raw, expected_nonce and deadline_unix. Confirm their generated IDL representation together when wiring the SDK.
 
-Program validation order should produce predictable fixture errors: account and authorization checks; active session/version/time/nonce; supported assets/route/fees; public cap or private proof; cumulative budget; reference-price guard; CPI and postconditions. Define exact numeric Anchor errors in generated artifacts before G2.
+The create path initializes spentRaw and nextNonce to zero and revoked to false. Validate positive cap/budget, cap <= budget, future expiry and supported basis points. Initialize only previously uninitialized vault state with a fresh vaultId.
 
-The program enforces `actualInputDebit == amountInRaw` and `actualOutputCredit >= minOutRaw`. It must reload accounts after CPI and verify their authorities and supported semantics. Nonce/spend updates and all transfers form one atomic operation. Failed execution does not consume nonce or budget; network fees are separate.
+For every execute_swap:
 
-## 7 Chain port and service boundary
+1. Validate account types, owner/authority relationships, program IDs, exact mints and fixed destinations.
+2. Require the stored agent's signature, an active authorization, expected nonce and valid chain-time deadline.
+3. Require positive amount, amount <= maxTradeRaw and checked spentRaw + amount <= sessionBudgetRaw.
+4. Require enough input balance and a minimum output that respects the configured test-rate guard.
+5. Snapshot balances and execute only the fixed typed test-DEX CPI.
+6. Reload accounts; require actualInputDebit == amountInRaw and actualOutputCredit >= minOutRaw.
+7. Increment spentRaw and nextNonce with checked arithmetic as part of the same atomic operation.
 
-```ts
-interface ChainPort {
-  getVaultState(vault: Address): Promise<VaultSnapshotV1>;
-  prepareSwap(request: SwapRequestV1): Promise<PreparedSwapV1>;
-  submitPreparedSwap(
-    prepared: PreparedSwapV1,
-    signer: LocalSignerHandle,
-  ): Promise<ExecutionReceiptV1>;
-  prepareOwnerAction(action: OwnerActionV1): Promise<WalletSignableV1>;
-  getExecution(operationId: string): Promise<ExecutionReceiptV1>;
-}
-```
+Any failure rolls back program state and token transfers. Transaction fees can still be charged. Reject arbitrary DEXs, pools, recipients, token programs, authority changes and unsupported account aliasing. The agent receives no withdraw, delegate, close or admin capability.
 
-The auxiliary types are defined by Alexis under the same shared review. `VaultSnapshotV1` includes owner, active session, agent, policy, balances, spent amount, expected nonce, chain time and source environment. `SwapRequestV1` contains a vault, supported pair, amount and requested minimum output; it does not grant arbitrary account selection.
+The test DEX is trusted demo code with funded reserves. The constrained CPI does not authorize arbitrary real-world routers. Configured program upgrade authorities remain disclosed trust assumptions.
 
-`OwnerActionV1` covers create/fund/create-session/revoke/withdraw. `LocalSignerHandle` is an in-process wallet or signer adapter, never a JSON private key. `WalletSignableV1` is built from allowlisted instructions and inspected before wallet authorization.
+## 6 Price fixture and minimum output
 
-Implement `MockChainPort` first and `AnchorChainPort` against the real IDL. Both satisfy the same semantic tests. Keep the port injectable into the SDK and application rather than scattering environment branches through every screen.
-
-Proposed API boundaries:
-
-| Endpoint | Input and result |
-| --- | --- |
-| GET /v1/vaults/:vault | Validated snapshot with source environment |
-| POST /v1/swaps/prepare | Supported request to exact PreparedSwapV1 |
-| POST /v1/swaps/submit | Prepared operation reference, bound session authorization and local signer dispatch |
-| GET /v1/executions/:operationId | Actual execution state and available evidence |
-| POST /v1/proofs/private-cap | Local-only prover request referencing an exact prepared intent and private policy handle |
-
-The submit service revalidates state and the exact operation. It never accepts arbitrary bytes as permission to sign. Submission authentication and quotas are service defenses; the program independently requires the session agent signature.
-
-Owner actions can be built through the SDK directly and signed by the owner's wallet without the API/prover. A private policy handle resolves cap/salt only inside the local prover. Public API and LLM messages never carry those witness values.
-
-## 8 Execution states and errors
-
-`ExecutionReceiptV1` carries operation ID, environment (`mock`, `localnet`, `devnet`), intent hash, status, stable error when applicable, and a real signature only if one exists. Capture pre/post vault amounts for reproducible tests without pretending a client snapshot is finalized chain evidence.
-
-| Status | Meaning |
-| --- | --- |
-| Prepared | Exact request built; nothing submitted |
-| AwaitingSignature | Waiting for an actual signer |
-| SigningRejected | Signer declined; nothing submitted |
-| SimulationRejected | Preflight or explicit simulation failed; no landed failure implied |
-| Submitted | A transaction was sent; outcome not yet established |
-| Confirmed | Required confirmation observed without program error |
-| Finalized | Finalized successful execution observed |
-| ChainFailed | A submitted transaction has a chain execution error |
-| UnknownOutcome | Submission/confirmation uncertain; reconcile before retrying |
-| Expired | Intent or transaction validity expired without an established successful result |
-
-Preserve already observed signatures during uncertainty. After an unknown outcome, inspect signature status and session nonce/state before resubmission. A new blockhash may wrap the same intent; do not silently create a new nonce or changed trade and call that a retry. Rebuild a proof if any bound intent field changes.
-
-Stable semantic error identifiers:
-
-| Identifier | Meaning |
-| --- | --- |
-| AEGIS_INVALID_REQUEST | Malformed encoding, unsupported version or out-of-range value |
-| AEGIS_OWNER_REQUIRED | Missing owner authorization |
-| AEGIS_AGENT_UNAUTHORIZED | Wrong agent signer |
-| AEGIS_SESSION_INACTIVE | Revoked, replaced or inactive session |
-| AEGIS_SESSION_EXPIRED | Chain time exceeds active session validity |
-| AEGIS_INTENT_EXPIRED | Request deadline invalid or passed |
-| AEGIS_POLICY_MISMATCH | Wrong policy version or stored mode |
-| AEGIS_NONCE_MISMATCH | Stale, repeated or out-of-order request |
-| AEGIS_CAP_EXCEEDED | Public per-trade cap exceeded |
-| AEGIS_BUDGET_EXCEEDED | Session cumulative budget insufficient |
-| AEGIS_ACCOUNT_MISMATCH | Wrong mint, token account, authority or fixed destination |
-| AEGIS_ROUTE_UNSUPPORTED | Wrong adapter, hash, instruction shape or route |
-| AEGIS_FEE_UNSUPPORTED | Nonzero or unsupported demo fee |
-| AEGIS_MIN_OUT_TOO_LOW | Requested threshold weakens the configured price guard |
-| AEGIS_MIN_OUT_NOT_MET | Actual output fails the required minimum |
-| AEGIS_PROOF_REQUIRED | Private session without its proof |
-| AEGIS_PROOF_INVALID | Proof or request binding does not verify |
-| AEGIS_INSUFFICIENT_FUNDS | Insufficient supported input balance |
-
-Alexis maps numeric program codes using Mariam's generated IDL. Raw RPC/DEX failures that cannot be mapped retain their original cause and origin; do not guess an Aegis error. Private-mode verification failure is `AEGIS_PROOF_INVALID`, not evidence that a specific hidden limit was exceeded.
-
-## 9 Shared test fixtures
-
-Store semantic fixtures in `tests/fixtures`; TypeScript packages consume these rather than maintaining divergent copies. Generated deployment addresses are supplied through a manifest. Use actual deterministic test keys when generating byte/hash vectors, not symbolic placeholders inside serialized data.
-
-| Fixture | Setup | Expected result |
-| --- | --- | --- |
-| allowed20 | Fresh 50-cap/100-budget session; input 20000000; minOut 198000000 | Output 200000000; spent 20000000; nonce 1 |
-| cap60 | Fresh session; input 60000000 | Public AEGIS_CAP_EXCEEDED |
-| budgetSixth | Five accepted 20000000 swaps, then a sixth | AEGIS_BUDGET_EXCEEDED |
-| replay | Resubmit the accepted nonce | AEGIS_NONCE_MISMATCH |
-| redirected | Replace output vault token account | AEGIS_ACCOUNT_MISMATCH |
-| weakMinimum | Request minOut below 198000000 for the 20-unit fixture | AEGIS_MIN_OUT_TOO_LOW |
-| impossibleMinimum | Request minOut 201000000 for a 200000000-output swap | Fails with no transfer or state change; attribute actual failure origin |
-| revoked | Confirm revocation, then execute | AEGIS_SESSION_INACTIVE |
-| oldSession | Owner replaces active session, then submits old request | AEGIS_SESSION_INACTIVE |
-| outageExit | Stop API, agent and prover; owner uses direct SDK | Withdrawal succeeds |
-| tamperedPrivate | Modify a bound field of an allowed proof/request | Private execution rejected |
-
-Fixture rate: input has 6 decimals and output has 9. Compute `quoteRaw = floor(amountInRaw * 1000000000 / (100 * 1000000))`. With `maxSlippageBps = 100`, enforce `minOutRaw >= ceil(quoteRaw * 9900 / 10000)` and positive values. Use checked wide intermediates.
-
-The test DEX has funded output reserves. An independently imposed excessive minimum and an underfunded DEX are separate failure cases. Add a contract test for any reachable post-CPI failure to establish rollback instead of relying only on preflight rejection.
-
-Use chain-relative expiry when generating devnet fixtures. For local deterministic tests, explicitly set the test clock and record it in the fixture. Test times are not assumptions about the host's current date.
-
-## 10 Conditional private cap proof boundary
-
-Candidate: Groth16 over BN254, with matching Circom/snarkjs and Solana verifier tooling. The existing library is a starting point, not a security assessment of this design. [Groth16 Solana](https://github.com/Lightprotocol/groth16-solana)
-
-The goal is a small proof with three public signals that binds a hidden cap to the actual trade without computing SHA-256 inside the circuit.
+Use one fixed rate: 100 testUSDC = 1 testSOL. Input decimals are 6; output decimals are 9.
 
 ```text
-Public inputs in exact order: C, a, B
-Private witness: cap, salt, h0, h1
-
-C = Poseidon3(D_POLICY, cap, salt)
-H = SHA256(canonical intent bytes)              computed outside the circuit
-h0 = big-endian integer from H bytes 0..15
-h1 = big-endian integer from H bytes 16..31
-B = Poseidon5(D_BIND, C, a, h0, h1)
-
-Circuit constraints:
-  0 < a <= cap < 2^64
-  0 <= salt < 2^128
-  0 <= h0, h1 < 2^128
-  recomputed C equals the public C
-  recomputed B equals the public B
+quoteRaw = floor(amountInRaw * 1000000000 / (100 * 1000000))
+guardRaw = ceil(quoteRaw * (10000 - maxSlippageBps) / 10000)
+require minOutRaw >= guardRaw
+require minOutRaw > 0
+require actualOutputCredit >= minOutRaw
 ```
 
-Generate `salt` with a cryptographically secure random generator. Define `D_POLICY` as the big-endian integer represented by ASCII `AEGIS_POLICY_V1` and `D_BIND` from ASCII `AEGIS_BIND_V1`; both must be validated as distinct in-field constants.
+For amountInRaw 20000000 and maxSlippageBps 100:
 
-Use the exact same Poseidon BN254 x^5 parameters and input ordering in TypeScript, Rust and the circuit. Do not substitute Poseidon2. The documented Solana Poseidon parameters include BN254 x^5; cross-language compatibility must still be established with golden vectors. [Solana Poseidon parameters](https://docs.rs/solana-poseidon/latest/solana_poseidon/enum.Parameters.html)
+- quoteRaw = 200000000.
+- guardRaw = 198000000.
+- Requesting less than 198000000 weakens the policy and is rejected.
+- Requesting 201000000 cannot succeed at the fixed rate and must leave vault state unchanged.
 
-All public signals are canonical 32-byte big-endian field elements in the declared order; reject values outside the field rather than silently reducing them. Amount and hash-limb ranges must be actual circuit constraints. A declared but unused public input does not establish binding.
+Use checked u128 intermediates and bounded final conversions. Original SPL Token semantics avoid unsupported transfer-fee or hook behavior. The fixed rate is a test reference, not a live-market oracle.
 
-Mariam's program reads C from the active owner-approved policy, reconstructs H from actual execution accounts/data, derives h0/h1 and B, then verifies `[C, actualAmount, B]`. Values in `publicInputsBeHex` are useful for transport consistency checks but do not replace on-chain reconstruction.
+## 7 Thin SDK and independent work
 
-The circuit constrains B using its private digest limbs. A proof for a different request will have a different binding under the chosen hash assumptions. The session agent signature is still required; policy compliance alone does not authorize a caller.
+Implement one small injectable chain adapter with:
 
-The verifier key is pinned to the supported circuit and build. The request's `verifyingKeyHash` is checked against that known key; it cannot select an arbitrary key. Alexis supplies a conversion function from snarkjs output to the pinned verifier's exact point/byte format, and Mariam verifies it against a known positive proof and corruption tests. Do not copy a proof layout from an unrelated verifier.
+- getVaultState(vault).
+- prepareCreateVault(request), prepareDeposit(vault, amount).
+- prepareSwap(request).
+- prepareRevoke(vault), prepareWithdraw(vault, asset, amount).
+- signAndSubmit(prepared, localSignerHandle).
+- getTransactionStatus(signature).
 
-Day 5 private-cap handoff must contain:
+A signer handle is an in-process wallet or local signer, never a JSON secret. The same SDK is used by the owner dashboard, local agent script and CLI fallback. Owner operations work directly through the SDK if the UI or agent is offline.
 
-- Circuit source and compiler/library versions.
-- Canonical request bytes, SHA-256 digest and two 128-bit limbs.
-- Commitment C, amount a and binding B, as scalar values and verifier bytes.
-- A valid proof and tampered amount/vault/session/nonce/route variants.
-- Circuit, proving-key and verifying-key checksums and setup provenance.
-- Measured prover time and on-chain verifier resource usage.
-- An agreed path to fit proof checking and swap into one atomic transaction.
+Alexis's Day 1 stub supplies sample state and receipts for UI work. It is deliberately small, clearly marked mock, and not a second security implementation. Replace create/fund/read with the real adapter by G1 and swap/lifecycle by G2.
 
-Groth16 setup and artifacts are demo-specific and must be identified as such. Do not reuse an unreviewed demo setup as a production assurance. [snarkjs documentation](https://github.com/iden3/snarkjs)
+Mariam provides program tests and a small CLI independently of the frontend. Neither developer must wait for an LLM, web server or indexer.
 
-Public observers still see swap amounts, assets and activity, and may infer bounds. The prover knows the cap and salt. Use a fresh private demo policy instead of claiming to hide a cap already published in an earlier public session.
+Use wallet integration for owner signing and a local delegated test key for the agent script. Do not build a general backend. A script receipt can be imported into the dashboard, but the signature, transaction status and resulting state must be independently checked through RPC.
 
-## 11 Deployment manifest and integration handoffs
+## 8 Stable errors and transaction states
 
-Mariam publishes `deployments/<environment>.json` with:
+| Semantic identifier | Meaning |
+| --- | --- |
+| AEGIS_INVALID_REQUEST | Invalid encoding, amount range or unsupported field |
+| AEGIS_OWNER_REQUIRED | Missing owner authority |
+| AEGIS_AGENT_UNAUTHORIZED | Wrong agent signer |
+| AEGIS_REVOKED | Authorization revoked |
+| AEGIS_EXPIRED | Vault authorization expired |
+| AEGIS_DEADLINE_INVALID | Request deadline passed or exceeds authorization |
+| AEGIS_NONCE_MISMATCH | Stale, repeated or out-of-order request |
+| AEGIS_CAP_EXCEEDED | Per-trade cap exceeded |
+| AEGIS_BUDGET_EXCEEDED | Cumulative authorization budget exceeded |
+| AEGIS_ACCOUNT_MISMATCH | Wrong mint, program, pool, authority or destination |
+| AEGIS_MIN_OUT_TOO_LOW | Requested minimum weakens the price guard |
+| AEGIS_MIN_OUT_NOT_MET | Actual output does not satisfy the minimum |
+| AEGIS_INSUFFICIENT_FUNDS | Insufficient supported input balance |
 
-- Schema version, environment, cluster endpoint and chain genesis identity.
-- Aegis program ID, config address and deployment domain.
-- Test-DEX program ID and supported adapter kind.
-- Original token program, input/output mint addresses and decimals.
-- Build commit, generated IDL location and hash.
-- Public fixture owner/agent identities, seeded vault/session and fixture rate.
-- Upgrade authority public identity and deployment status.
-- Optional circuit ID, verification-key hash and proof encoding version.
+Mariam publishes numeric Anchor codes in the generated IDL; Alexis maps them without changing their meanings. Keep underlying DEX/RPC errors with their actual origin when no Aegis code applies.
 
-Never publish private keys, cap/salt witnesses or credentials. An authenticated RPC URL containing a key belongs in local configuration, not the committed manifest. Record a redacted endpoint or environment-variable reference instead.
+SimulationRejected means preflight or explicit simulation failed; it does not imply a landed transaction. Submitted is not success. Confirmed and Finalized require the corresponding chain observation. Mock receipts have no fabricated signatures or explorer links.
 
-Alexis's handoff includes the typed SDK exports, ChainPort conformance tests, API examples, execution-state mapping, UI startup and E2E commands. Mariam's handoff includes generated IDL, account derivation examples, localnet setup, real accepted/rejected transactions and program tests.
+For UnknownOutcome, retain any signature and reconcile signature status, vault nonce and balances before resubmitting. Do not silently use a new nonce or different amount as a retry. The unique vault and checked nonce prevent duplicate accepted execution.
 
-Use progressively stronger checks at the integration gates:
+## 9 Shared fixtures and acceptance
 
-1. At G0, approve schemas, account derivations and canonical encoding order; define the golden fixtures. A live deployment is not required.
-2. By G1, run the baseline encoding/hash vectors in Rust and TypeScript, validate the initial manifest/IDL against the deployed program, and run create/fund/session/read/revoke/withdraw through the real SDK.
-3. From G2 onward, also run one accepted swap and one direct contract-level rejection; compare balances, nonce, policy version and spent budget.
-4. At GZ and G4, add the cross-language proof fixtures and then atomic proof-plus-swap acceptance respectively.
-5. At each applicable gate, record environment, build identity, actual evidence and remaining unsupported paths. Repeat previous passing checks when interfaces or dependent implementation change.
+Keep one fixture set in tests/fixtures, consumed by both program and SDK tests.
 
-Keep mock, localnet and devnet evidence separate. A local Jupiter fixture result does not establish devnet Jupiter liquidity, arbitrary-route support or live market-price safety.
+| Fixture | Setup | Required result |
+| --- | --- | --- |
+| allowed20 | Fresh funded vault; input 20000000; minOut 198000000 | Output 200000000; spent 20000000; nextNonce 1 |
+| capBoundary50 | Fresh vault; input 50000000 | Accepted if all other conditions hold |
+| cap60 | Fresh 50-cap/100-budget vault; input 60000000 | AEGIS_CAP_EXCEEDED |
+| budgetSixth | Five accepted 20-unit swaps, then a sixth | AEGIS_BUDGET_EXCEEDED |
+| replay | Repeat an accepted nonce | AEGIS_NONCE_MISMATCH |
+| concurrentNonce | Two submissions using the same current nonce | At most one succeeds |
+| wrongSigner | Use an unauthorized local signer | AEGIS_AGENT_UNAUTHORIZED |
+| unauthorizedWithdrawal | Agent attempts owner withdrawal | AEGIS_OWNER_REQUIRED |
+| redirected | Supply a different output token account directly | Contract rejection despite bypassing UI |
+| wrongMintOrProgram | Substitute an unsupported mint/token/DEX program | Contract rejection |
+| weakMinimum | Request less than 198000000 for a 20-unit swap | AEGIS_MIN_OUT_TOO_LOW |
+| impossibleMinimum | Request 201000000 for expected output 200000000 | Failure; balances, spent and nonce unchanged |
+| expired | Use chain clock past expiry/deadline | Corresponding time rejection |
+| revoked | Confirm revoke, then request a swap | AEGIS_REVOKED |
+| outageExit | Stop UI and agent; use direct owner SDK | Withdrawal succeeds |
+
+Allocate enough test funding and pool reserves for the intended failure condition. Use fresh vaults between independent cases; do not reset on-chain counters through a debug escape hatch.
+
+Add a test that actually reaches a post-CPI failure and proves transaction rollback. Use a test-harness fault or narrowly controlled adverse fixture; do not add an agent-accessible production instruction that disables checks.
+
+## 10 Deployment handoff
+
+Mariam generates a public manifest containing:
+
+- Environment and a redacted RPC endpoint or local environment-variable reference.
+- Aegis and demo-DEX program IDs and configuration/pool addresses.
+- Token program, input/output mint addresses and decimals.
+- Test reserve addresses and configured exchange rate.
+- Generated IDL path/hash, build identity and upgrade-authority public identity.
+- Public fixture owner/agent identities and fresh vault IDs.
+
+Private keys and authenticated RPC credentials stay in local ignored configuration. Both people can start the same local test environment. Agree on an existing working toolchain/WSL setup early; do not spend the sprint supporting multiple environments.
+
+Timebox devnet troubleshooting to one hour on Day 2. Localnet fallback must execute the actual programs and SPL token transfers, not return mocked success.
+
+## 11 Four day integration checkpoints
+
+| Gate | Time | Evidence |
+| --- | --- | --- |
+| G0 | Day 1 first hour | Agreed schema, accounts, units, functions and errors |
+| G1 | End of Day 1 | Real create/fund/read through SDK with initial IDL |
+| G2 | End of Day 2 | Revoke/withdraw, actual swap, cap and destination failures |
+| G3 | Day 3 midday | One real dashboard and local agent path |
+| G4 | End of Day 3 | Mandatory acceptance cases pass and ABI freezes |
+| G5 | End of Day 4 | Clean reset, repeated demo, test report and recording |
+
+Re-run affected checks after an interface change. Preserve mock/localnet/devnet labels in every receipt and report. All tasks beyond these checkpoints belong to a later milestone.
+
+ZK, custom proof encoding, hidden policies, Jupiter, live-market oracles and general-purpose execution are deferred. Their earlier specifications are not dependencies of this four-day baseline.

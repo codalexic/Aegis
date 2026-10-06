@@ -1,103 +1,73 @@
-# Alexis Client SDK Agent and Prover Tasks
+# Alexis Four Day SDK Dashboard and Agent Plan
 
-This is a technical assignment for a 20-working-day demo built by Alexis and Mariam. Use test assets only. Alexis can develop against shared fixtures and a mock chain while Mariam builds the programs. Integrate through the contracts in [INTERFACES.md](INTERFACES.md); the overall schedule is in [AEGIS_PLAN.md](../../AEGIS_PLAN.md).
+Alexis owns the client work; Mariam owns the contracts, fixed test DEX, generated IDL, and deployment. This assignment is **four working days, eight hours per day: 32 hours including integration and contingency**. Use test assets only. This is a plan; implementation files do not exist because of this document.
 
-All implementation paths below are proposed. This document does not create implementation files. Planned branches are `feature/alexis-client`, `feature/mariam-program`, and `integration/aegis-demo`; merge at the gates below after both people review compatibility. Pin dependencies only after the initial compatibility spike.
+Follow [INTERFACES.md](INTERFACES.md) and [AEGIS_PLAN.md](../../AEGIS_PLAN.md). Alexis owns `packages/sdk`, `apps/web`, `scripts/agent`, `scripts/demo`, and `tests/e2e`. Both approve shared `tests/fixtures`; Mariam generates the IDL. Build one thin SDK module, one dashboard, and one local agent script. Do not create a separate types package, general REST service, indexer, or complete chain emulator.
 
-## Ownership and integration rules
+ZK, circuits, provers, Jupiter integration, and Blinks are deferred until after the demo. Do not implement new cryptography. An LLM is optional only after the required flow passes; deterministic actions remain the demo path.
 
-Alexis owns `packages/types`, `packages/sdk`, `apps/web`, `services/agent`, `services/api`, `services/prover`, `circuits`, and `tests/e2e`. Mariam owns Rust programs, program tests, and generated IDL. Changes to shared types, encoding, error meanings, or proof inputs require both people's review. Import Mariam's generated IDL; never hand-edit it.
+## Shared baseline
 
-The public fixture is one direction, testUSDC to testSOL, with a 50-unit per-trade cap, 100-unit session budget, and one-hour authorization. Amounts, nonces, policy versions and timestamps use decimal strings on the wire; raw amounts use `bigint` in the SDK. Schema version and basis points use bounded JSON numbers. Timestamps are Unix seconds. Accepted executions advance the nonce; rejected executions do not. Revoked agents cannot execute. Owner withdrawal never requires a prover.
+The immutable public policy belongs to one vault: owner, delegated agent, fixed input/output mints, cap `50000000`, budget `100000000`, one-hour expiry, and `maxSlippageBps=100`. A reset or new authorization creates a new vault. There is no session replacement.
 
-`PreparedSwap` contains the intent, adapter payload, and optional proof, never a signing key. Building and submitting are separate operations. The backend must not blindly relay an arbitrary supplied transaction. Mocks demonstrate application behavior; only program tests or real chain execution establish on-chain enforcement.
+Implement the IDL-backed operations `create_vault`, `deposit`, `revoke_agent`, `withdraw`, and `execute_swap(amountInRaw, minOutRaw, expectedNonce, deadlineUnix)`. Resolve fixed accounts using Mariam's documented derivations. No route hash, generic instruction execution, proof envelope, or arbitrary destination belongs in the baseline.
 
-## A01 Freeze shared types and fixtures
+testUSDC has six decimals; testSOL has nine. The test DEX rate is 100:1: input `20000000` yields output `200000000`, with minimum `198000000`. Amounts, nonce, and expiry use decimal strings in JSON. Use `bigint` arithmetic and checked bounds; never convert token amounts through JavaScript `Number`. Chain time determines validity.
 
-**Days:** 1–2. **Dependencies:** joint day-1 interface review. **Paths:** `packages/types/src`, `tests/fixtures`.
+## A01 Freeze fixtures and client boundary
 
-Implement the frozen interface as TypeScript types and runtime validation. Cover `policyMode` values `public` and `private_cap`, vault/session state, intents, prepared swaps, execution results, and stable `AEGIS_*` errors. Reject malformed raw amounts instead of converting them through JavaScript floating-point numbers.
+**Day 1: 2 hours. Dependency:** joint interface review. **Paths:** `packages/sdk`, `tests/fixtures`.
 
-Use the shared testUSDC/testSOL decimals of 6/9 and fixed demo rate of 100:1. A 20-unit input is `20000000` raw units; expected output is `200000000`, and the 100-basis-point fixture guard permits a `198000000` minimum. Label this trusted test-DEX price configuration explicitly; it is not a market oracle.
+Agree the account map, wire conversions, errors, local signer boundary, and minimal deployment manifest with Mariam. Add shared fixtures for allowed 20, excessive 60, and cumulative budget exhaustion. Freeze the exact immutable-policy arguments and expiry/deadline semantics.
 
-Preserve every `SwapIntentV1` field: `version`, `vault`, `session`, `policyVersion`, `nonce`, `deadlineUnix`, `inputMint`, `outputMint`, `amountInRaw`, `minOutRaw`, `inputVaultTokenAccount`, `outputVaultTokenAccount`, `adapterProgramId`, `routeHash`, and `feeCapRaw`. There is no arbitrary recipient field. Agree with Mariam on canonical encoding and hashing before using either in signatures or proofs.
+Define a small injectable port for read, build, sign/submit, and receipt lookup. Provide static mock results sufficient to scaffold the dashboard; label them as mocks.
 
-**Acceptance:** both implementations consume identical valid and invalid fixtures; integer precision survives JSON round trips; rejected schemas have stable errors. **Handoff:** exported types, fixture manifest, error catalog, and encoding test vectors reviewed by Mariam.
+**Completion/handoff:** agreed types, numerical fixtures, and a minimal mock. Mariam can confirm the same raw amounts and expected outcomes without reading frontend code.
 
-## A02 Build the SDK and mock chain port
+## A02 Scaffold dashboard and connect initial lifecycle
 
-**Days:** 1–3. **Dependencies:** A01 interface baseline. **Paths:** `packages/sdk/src`, `packages/sdk/examples`.
+**Day 1: 6 hours. Dependencies:** A01; Mariam's initial IDL and running lifecycle by the final Day-1 integration block. **Paths:** `packages/sdk`, `apps/web`.
 
-Implement the shared `ChainPort` boundary and a `MockChainPort`. Expose the agreed lifecycle: create vault/session, fund, read state, prepare swap, submit an explicitly signed operation, revoke, and withdraw. Keep wallet/signing dependencies behind adapters so the UI and agent runner can use different authorized signers.
+Create one dashboard with setup, balances/actions, and activity sections. Use mock fixtures briefly, then implement the initial Anchor adapter for vault creation, reading state, and funding. Keep transaction construction separate from signing/submission. Build only the supported instructions and inspect configured program/mint addresses.
 
-Provide a deterministic mock state and lifecycle CLI. Model balances, expiry, nonce, revocation, and budget sufficiently for application development. Mark every mock result as mock data; do not fabricate explorer links or chain signatures.
+The browser wallet signs owner actions. Secrets never enter DTOs, logs, manifests, or the frontend bundle. Label `mock`, `localnet`, and `devnet` explicitly.
 
-**Acceptance:** the mock lifecycle CLI runs independently by Day 2, uses exact amount conversions, and distinguishes owner operations from agent operations. On Day 3, the same SDK surface supports the real lifecycle through the initial A05 adapter. **Handoff:** SDK exports, mock implementation, CLI instructions, and a small integration example.
+**Completion/handoff:** by end Day 1, real SDK lifecycle calls use Mariam's IDL; dashboard structure exists. Share a reproducible create/read/fund command and actual configuration.
 
-## A03 Build the agent runner and request API
+## A03 Complete owner control and real swap
 
-**Days:** 2–6. **Dependencies:** A01; A02 for chain access. **Paths:** `services/agent/src`, `services/api/src`.
+**Day 2: 8 hours, including one shared deployment hour. Dependencies:** A02; Mariam's revoke/withdraw and fixed-DEX handoffs. **Paths:** `packages/sdk`, `scripts/demo`.
 
-Use one structured trading tool. The agent proposes a permitted pair, amount, and minimum output; application code resolves vault accounts and the approved adapter from trusted configuration. Validate all incoming data. Return a typed prepared request; never accept unrestricted transaction bytes as permission to relay or sign them.
+Integrate revoke and owner withdrawal by noon. Both work directly through the SDK and owner wallet with the agent stopped; no application backend is required. Build the exact-input swap and validate current nonce, deadline, fixed accounts, and requested minimum.
 
-Separate preparation from signing/submission. Keep a delegated agent signer isolated in the local runner, with test permissions only. Never include secrets in API responses, prompts, fixtures, or logs. Add deterministic normal and malicious modes so the presentation does not depend on successfully prompt-injecting a live model.
+By end Day 2, execute the 20-unit swap through the actual program and test DEX. Coordinate one hour with Mariam to attempt devnet deployment/integration. If blocked when that hour ends, continue on the real local chain and prepare a clearly labelled recorded fallback.
 
-**Acceptance:** normal mode proposes 20 units; malicious mode proposes an excessive amount or altered protected field. Both requests reach the proper validation/execution path, with precise rejection attribution. **Handoff:** API contract, example requests, runner commands, and signing-boundary notes.
+**Completion/handoff:** successful swap receipt and before/after balances; owner recovery demonstrated; direct 60-unit cap and substituted-destination smoke rejections with unchanged state; reproducible commands and environment decision. The broader attack suite follows on Day 3.
 
-## A04 Build the three screen interface
+## A04 Finish dashboard and deterministic agent
 
-**Days:** 2–8. **Dependencies:** A01–A02; A03 API incrementally. **Paths:** `apps/web/src`.
+**Day 3 morning: 4 hours. Dependencies:** A03. **Paths:** `apps/web`, `scripts/agent`.
 
-Build vault setup, vault management, and activity screens against the mock port first. Setup explains the cap, session budget, pair, and expiry. Management shows actual balances, remaining budget, authorization status, revoke, and withdrawal. Activity distinguishes preparation, wallet rejection, simulation rejection, submission, confirmation, and chain failure.
+Complete balances, remaining budget, nonce, expiry, revoke, withdrawal, and activity. The local Node agent loads only its delegated test key from local secret storage. Provide deterministic valid-20 and malicious-60 modes; never expose the owner key to the agent.
 
-Label mock mode, devnet test assets, and the test DEX prominently. Show raw technical details behind an expandable view. Require explicit owner wallet authorization for owner actions. Do not require the agent or prover service to be online for withdrawal or revocation.
+The script emits non-secret receipt JSON. The dashboard may import that receipt and verify its signature/status via RPC, then refresh balances. Importing JSON alone is not chain evidence. This avoids building a service to connect the script and UI.
 
-**Acceptance:** the complete owner flow works with mocks, large amounts remain exact, and every visible success comes from an identified result source. **Handoff:** reproducible UI startup and a short screen walkthrough for Mariam.
+**Completion/handoff:** dashboard and both agent scenarios work by noon. Share launch commands and supported receipt states.
 
-## A05 Implement the Anchor chain port and integrate
+## A05 Verify attacks and freeze features
 
-**Days:** 3–10. **Dependencies:** A01–A02 and Mariam's initial IDL/manifest for the Day 3 lifecycle; A03–A04 and swap fixtures are later incremental dependencies for the complete application. **Paths:** `packages/sdk/src/chain`, `packages/sdk/examples`.
+**Day 3 afternoon: 4 hours. Dependencies:** A03–A04. **Paths:** `tests/e2e`, `scripts/demo`.
 
-Implement `AnchorChainPort` using the agreed compatible client stack. By Day 3, execute create, fund, create-session, revoke and withdraw through the real SDK without waiting for the UI or agent. Validate the configured network, program IDs, mint addresses, and adapter. Build only supported instructions with explicit accounts. Preserve the distinction between constructing a request and submitting a signed transaction.
+Use fresh vaults to isolate cases: 60 against a fresh 100 budget; five accepted 20-unit swaps and a sixth rejection; replay; revoked agent; changed destination; weak minimum output. Assert balances, nonce, and spent budget. Submit adversarial cases directly to the program rather than counting UI rejection as enforcement.
 
-Run the day-5 public swap smoke test with Mariam. Investigate interface mismatches together instead of patching inconsistent field interpretations locally. By day 10, switch the complete UI/agent flow from mocks to the actual devnet vault and test DEX.
+Distinguish `SimulationRejected`, landed chain failure, signing rejection, and unknown outcome. Preserve signatures and reconcile before retrying. Attribute network fees separately from vault state.
 
-**Acceptance:** creation, funding, an allowed swap, revocation, and owner withdrawal work end to end. Simulation-only rejection is never displayed as an executed on-chain failure. **Handoff:** working client commands, deployment configuration, transaction evidence, and integration issues resolved or documented.
+**Completion/handoff:** core tests pass; unresolved defects are recorded with Mariam. Freeze features at end Day 3.
 
-## A06 Conditional private cap circuit and prover
+## A06 Rehearse record and absorb integration failures
 
-**Days:** spike by 5; integration through 15 only if approved. **Dependencies:** A01 proof specification and Mariam's verifier interface. **Paths:** `circuits/private-cap`, `services/prover/src`.
+**Day 4: 8 hours: four planned, four contingency. Dependencies:** A05.
 
-Build one circuit proving that the requested input amount is within the committed hidden cap. Follow the jointly agreed amount ranges, salted commitment, request encoding, and public inputs. Bind the proof to the concrete intent and policy identity; do not invent an alternative encoding in the prover.
+Reproduce setup from clean instructions, create fresh vaults, rerun acceptance tests, and rehearse setup/fund → allowed swap → blocked malicious request → revoke → blocked trade → owner withdrawal. Record the exact environment, program/IDL identity, signatures or labelled test results, balances, and measured timings.
 
-Keep the cap and salt in a separate local prover service, outside agent prompts, public logs, and on-chain creation arguments. Return a proof for an exact validated request. Measure proving time and exchange matching positive/negative vectors with Mariam.
-
-**Acceptance:** day 5 determines whether to continue; day 15 requires actual proof verification and its corresponding swap in the complete path. Otherwise retain the public-policy demo and identify ZK as a separate prototype. Withdrawal and revocation remain usable with the prover stopped. **Handoff:** circuit, setup provenance, prover command, proof vectors, and measured results; no production-security claim.
-
-## A07 Implement independent end to end acceptance cases
-
-**Days:** 6–12. **Dependencies:** A03–A05; private cases depend on A06. **Paths:** `tests/e2e`.
-
-Use fresh sessions to isolate failure causes. Test an allowed 20-unit swap, a 60-unit request against the 50-unit cap, five accepted 20-unit swaps followed by a sixth budget rejection, replay, expiry, changed output account, wrong adapter, and revoked authorization. Assert balances, nonce, and spent budget before and after each result. Account separately for network fees.
-
-Also reject a requested minimum output below the fixed-rate fixture guard, with the relevant guard error preserved.
-
-Private-mode cases must send altered requests to the contract; a prover refusing to generate a proof is insufficient evidence. Include changed amount and policy identity, and attempts to omit the required proof.
-
-**Acceptance:** failures identify the intended rule and evidence source. **Handoff:** one test command, deterministic inputs, and a result report Mariam can reproduce.
-
-## A08 Harden transaction status and diagnostics
-
-**Days:** 11–16. **Dependencies:** A05–A07. **Paths:** existing SDK, API, and UI modules.
-
-Keep `SimulationRejected` distinct from chain failure, signing rejection, and an unknown submission outcome. Preserve stable `AEGIS_*` codes and relevant signatures. Reconcile chain state before retrying an uncertain submission; never silently sign a changed request or duplicate a swap. Show expired sessions and stale nonces as actionable states.
-
-**Acceptance:** RPC interruption and rejected signing do not create false success, duplicated execution, or misleading balances. Logs expose enough context to diagnose a request without exposing secrets. **Handoff:** status/error mapping and reproducible interruption cases.
-
-## A09 Integrate verify and package the demo
-
-**Days:** 16–20. **Dependencies:** A01–A08, with A06 optional.
-
-With Mariam, merge compatible work into the planned integration branch, run from a clean setup, and repeat the acceptance suite. Freeze the demonstrated configuration. Label local Jupiter fixture results separately from devnet test-DEX transactions and planned functionality.
-
-**Acceptance:** both people can reproduce the three-minute flow: configure and fund, execute an allowed trade, reject a malicious request, revoke, and withdraw. Private-cap claims appear only if the integrated gate passed. **Handoff:** startup instructions, configuration template without secrets, test results, measured timings, evidence links, and a clearly labelled backup recording.
+**Completion/handoff:** working launch/reset instructions, acceptance report, and clearly labelled backup recording. Spend contingency on defects, deployment, or recording; add no deferred features. Deliver only claims demonstrated by the real program.

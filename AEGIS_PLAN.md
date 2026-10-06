@@ -4,7 +4,7 @@ Updated: 6 October 2026
 
 Target: a four-week hackathon and investor demo using test assets
 
-Engineers: **Alexi** and **Mariam**
+Engineers: **Alexis** and **Mariam**
 
 Status: implementation plan; the code paths and commands below are proposed deliverables
 
@@ -14,7 +14,7 @@ Build a Solana vault that executes only authorized swaps even when its agent sub
 
 | Person | Primary responsibilities | Independent task file |
 | --- | --- | --- |
-| Alexi | Shared TypeScript types, SDK, API, agent runner, frontend and end-to-end tests; conditional circuit and prover | [Alexi tasks](docs/planning/ALEXI_TASKS.md) |
+| Alexis | Shared TypeScript types, SDK, API, agent runner, frontend and end-to-end tests; conditional circuit and prover | [Alexis tasks](docs/planning/ALEXIS_TASKS.md) |
 | Mariam | Anchor program, vault and session authorization, policy checks, swap adapters, contract tests, deployment; conditional on-chain verifier | [Mariam tasks](docs/planning/MARIAM_TASKS.md) |
 | Both | Interface freeze, fixture approval, integration gates and cross-review | [Shared interfaces](docs/planning/INTERFACES.md) |
 
@@ -42,7 +42,7 @@ This is a working allocation by component, not an assumption about either person
 
 - Hide only the per-trade cap.
 - Keep session budget, asset pair, slippage setting and executed swap details public.
-- Alexi supplies the circuit, prover and proof fixtures.
+- Alexis supplies the circuit, prover and proof fixtures.
 - Mariam supplies the verifier, deployment binding and atomic proof-plus-swap execution.
 - A private-cap vault must never fall back to public-mode execution if proving fails.
 - If the extension misses its gates, retain the public-policy demo and label ZK work as a separate prototype.
@@ -76,42 +76,42 @@ Only planning files exist as part of this request. Implement the following struc
 AEGIS_PLAN.md
 docs/planning/
   INTERFACES.md                 shared contract; changes require both reviewers
-  ALEXI_TASKS.md                Alexi backlog
+  ALEXIS_TASKS.md                Alexis backlog
   MARIAM_TASKS.md                 Mariam backlog
 programs/
   aegis/                        Mariam
   demo-dex/                     Mariam
 packages/
-  types/                        Alexi; Mariam reviews wire-format changes
-  sdk/                          Alexi
+  types/                        Alexis; Mariam reviews wire-format changes
+  sdk/                          Alexis
 apps/
-  web/                          Alexi
+  web/                          Alexis
 services/
-  api/                          Alexi
-  agent/                        Alexi
-  prover/                       Alexi; conditional ZK
+  api/                          Alexis
+  agent/                        Alexis
+  prover/                       Alexis; conditional ZK
 circuits/
-  private-cap/                  Alexi; conditional ZK
+  private-cap/                  Alexis; conditional ZK
 tests/
   fixtures/                     shared; each fixture has one designated editor
   program/                      Mariam
-  e2e/                          Alexi
+  e2e/                          Alexis
 artifacts/
   idl/                          Mariam generates; never hand-edit
-  zk/                           Alexi generates; Mariam verifies
+  zk/                           Alexis generates; Mariam verifies
 deployments/                     Mariam; no secrets
 scripts/
   localnet/                     Mariam
-  demo/                         Alexi
+  demo/                         Alexis
 ```
 
-Mariam owns the Rust lockfile and Anchor configuration. Alexi owns the JavaScript workspace manifest and lockfile. Pin tool versions after the compatibility spike rather than selecting versions independently.
+Mariam owns the Rust lockfile and Anchor configuration. Alexis owns the JavaScript workspace manifest and lockfile. Pin tool versions after the compatibility spike rather than selecting versions independently.
 
-Use separate feature branches such as `feature/alexi-client` and `feature/mariam-program`, merged into `integration/aegis-demo` at each gate. These are proposed branch names; this plan does not create branches. Neither person changes the other's owned implementation without coordination. Interface and fixture changes require both reviewers.
+Use separate feature branches such as `feature/alexis-client` and `feature/mariam-program`, merged into `integration/aegis-demo` at each gate. These are proposed branch names; this plan does not create branches. Neither person changes the other's owned implementation without coordination. Interface and fixture changes require both reviewers.
 
 ## 4 Architecture and trust boundary
 
-The agent emits a constrained swap request. Alexi's SDK resolves vault state, builds the exact intent and prepares the transaction. Mariam's program checks the active session, policy, nonce, route and actual accounts before signing a swap from a PDA-controlled account.
+The agent emits a constrained swap request. Alexis's SDK resolves vault state, builds the exact intent and prepares the transaction. Mariam's program checks the active session, policy, nonce, route and actual accounts before signing a swap from a PDA-controlled account.
 
 In private mode, a local prover supplies a proof bound to that exact request. The program reconstructs the proof inputs from the real operation. It does not trust the proof submitter's description of what will execute.
 
@@ -123,7 +123,7 @@ PDA signing and CPI privileges must be handled explicitly. [Solana PDA documenta
 
 ## 5 Build independently
 
-### Alexi without Mariam's running program
+### Alexis without Mariam's running program
 
 Implement the `ChainPort` interface from the shared specification with a `MockChainPort`. Use the shared fixtures to model balances, authorization, nonces and stable error identifiers.
 
@@ -131,7 +131,7 @@ Develop the SDK facade, API, agent runner and UI against this port. Every screen
 
 Keep transaction construction behind the port so replacing the mock with `AnchorChainPort` does not change the frontend or agent API.
 
-### Mariam without Alexi's running application
+### Mariam without Alexis's running application
 
 Use Rust tests and local-validator or LiteSVM fixtures to exercise the program directly. Provide a minimal CLI or test script for create, fund, authorize, swap, revoke and withdraw.
 
@@ -139,7 +139,7 @@ Accept the canonical intent fields in the shared specification. Export a generat
 
 ### Connect the two
 
-Alexi implements `AnchorChainPort` using Mariam's generated IDL. Run the same semantic fixtures against mock and actual program behavior. Program results decide security outcomes when the two differ.
+Alexis implements `AnchorChainPort` using Mariam's generated IDL. Run the same semantic fixtures against mock and actual program behavior. Program results decide security outcomes when the two differ.
 
 The critical path is:
 
@@ -154,16 +154,16 @@ Detailed tasks: [Mariam tasks](docs/planning/MARIAM_TASKS.md).
 3. Implement one active session, immutable policy, expiry, revocation and nonce accounting.
 4. Implement exact-input execution through a fixed test-DEX adapter with pre/post balance checks.
 5. Reject wrong accounts, extra authority, unsupported routes, replay and cumulative overspending.
-6. Export IDL and fixtures for Alexi; support the first real SDK integration.
+6. Export IDL and fixtures for Alexis; support the first real SDK integration.
 7. Run a bounded Jupiter CPI experiment using approved instructions and local account snapshots.
 8. If the ZK gate passes, integrate the pinned verifier and actual-request proof binding.
 9. Deploy the demo, exercise the attack corpus and produce reproducible evidence.
 
 For Jupiter, evaluate per-trade escrow authority funded with exactly the approved input; do not forward full vault authority to arbitrary API instructions. Restrict supported instruction shapes and route legs. Jupiter's current Build API supports raw instructions and CPI-oriented customization. [Jupiter Build](https://developers.jup.ag/docs/swap/build/index)
 
-## 7 Alexi workstream
+## 7 Alexis workstream
 
-Detailed tasks: [Alexi tasks](docs/planning/ALEXI_TASKS.md).
+Detailed tasks: [Alexis tasks](docs/planning/ALEXIS_TASKS.md).
 
 1. Publish shared TypeScript types, input validation and a mock implementation.
 2. Build a typed SDK with separate prepare and submit operations.
@@ -201,7 +201,7 @@ A shared schema is not sufficient by itself: maintain golden serialized bytes an
 
 Days are working days from the agreed project start.
 
-| Gate | Deadline | Alexi delivers | Mariam delivers | Exit condition |
+| Gate | Deadline | Alexis delivers | Mariam delivers | Exit condition |
 | --- | --- | --- | --- | --- |
 | G0 | Day 1 | Types, mock-port skeleton and fixture schema | Account/instruction proposal and manifest schema | Both approve interfaces and encoding order |
 | G1 | Day 3 | SDK lifecycle calls using the initial IDL | Running create/fund/session/revoke/withdraw path | One owner lifecycle works through the real SDK |
@@ -219,7 +219,7 @@ During Weeks 1–3, have a short daily interface check: blockers, changed fields
 
 ## 10 Acceptance and test ownership
 
-| Test | Mariam | Alexi | Acceptance |
+| Test | Mariam | Alexis | Acceptance |
 | --- | --- | --- | --- |
 | Owner lifecycle | Program and authorization tests | Wallet/SDK E2E | Create, deposit and withdraw work |
 | Allowed 20-unit swap | Balance/counter checks | Full request flow | Correct output and budget update |
@@ -254,9 +254,9 @@ Proposed commands to implement during the project:
 
 | Command | Owner | Purpose |
 | --- | --- | --- |
-| `pnpm demo:mock` | Alexi | Run the application against fixtures |
-| `pnpm demo:reset` | Alexi | Create a fresh isolated demo vault/session |
-| `pnpm test:e2e -- --env localnet` | Alexi | Run SDK/application acceptance tests |
+| `pnpm demo:mock` | Alexis | Run the application against fixtures |
+| `pnpm demo:reset` | Alexis | Create a fresh isolated demo vault/session |
+| `pnpm test:e2e -- --env localnet` | Alexis | Run SDK/application acceptance tests |
 | `anchor test` | Mariam | Run contract checks with pinned configuration |
 | `scripts/localnet/start` | Mariam | Start the chosen local chain and seeded test programs |
 | `scripts/localnet/export-manifest` | Mariam | Write the generated deployment manifest |
@@ -267,7 +267,7 @@ Before a demo, reset to a fresh vault, validate the manifest, check fee-payer fu
 
 ## 12 Completion checklist
 
-- [ ] Alexi and Mariam approve the shared interfaces and golden vectors.
+- [ ] Alexis and Mariam approve the shared interfaces and golden vectors.
 - [ ] Each workstream runs independently with its documented commands.
 - [ ] The real program and SDK pass G1 and G2.
 - [ ] Public-policy lifecycle, atomic swap and attack corpus pass G3.

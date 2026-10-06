@@ -1,12 +1,12 @@
-# Alexi Client SDK Agent and Prover Tasks
+# Alexis Client SDK Agent and Prover Tasks
 
-This is a technical assignment for a 20-working-day demo built by Alexi and Mariam. Use test assets only. Alexi can develop against shared fixtures and a mock chain while Mariam builds the programs. Integrate through the contracts in [INTERFACES.md](INTERFACES.md); the overall schedule is in [AEGIS_PLAN.md](../../AEGIS_PLAN.md).
+This is a technical assignment for a 20-working-day demo built by Alexis and Mariam. Use test assets only. Alexis can develop against shared fixtures and a mock chain while Mariam builds the programs. Integrate through the contracts in [INTERFACES.md](INTERFACES.md); the overall schedule is in [AEGIS_PLAN.md](../../AEGIS_PLAN.md).
 
-All implementation paths below are proposed. This document does not create implementation files. Planned branches are `feature/alexi-client`, `feature/mariam-program`, and `integration/aegis-demo`; merge at the gates below after both people review compatibility. Pin dependencies only after the initial compatibility spike.
+All implementation paths below are proposed. This document does not create implementation files. Planned branches are `feature/alexis-client`, `feature/mariam-program`, and `integration/aegis-demo`; merge at the gates below after both people review compatibility. Pin dependencies only after the initial compatibility spike.
 
 ## Ownership and integration rules
 
-Alexi owns `packages/types`, `packages/sdk`, `apps/web`, `services/agent`, `services/api`, `services/prover`, `circuits`, and `tests/e2e`. Mariam owns Rust programs, program tests, and generated IDL. Changes to shared types, encoding, error meanings, or proof inputs require both people's review. Import Mariam's generated IDL; never hand-edit it.
+Alexis owns `packages/types`, `packages/sdk`, `apps/web`, `services/agent`, `services/api`, `services/prover`, `circuits`, and `tests/e2e`. Mariam owns Rust programs, program tests, and generated IDL. Changes to shared types, encoding, error meanings, or proof inputs require both people's review. Import Mariam's generated IDL; never hand-edit it.
 
 The public fixture is one direction, testUSDC to testSOL, with a 50-unit per-trade cap, 100-unit session budget, and one-hour authorization. Amounts, nonces, policy versions and timestamps use decimal strings on the wire; raw amounts use `bigint` in the SDK. Schema version and basis points use bounded JSON numbers. Timestamps are Unix seconds. Accepted executions advance the nonce; rejected executions do not. Revoked agents cannot execute. Owner withdrawal never requires a prover.
 

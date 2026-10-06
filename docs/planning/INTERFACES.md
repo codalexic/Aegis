@@ -1,16 +1,16 @@
 # Aegis Shared Technical Interfaces
 
-Owners: Alexi and Mariam
+Owners: Alexis and Mariam
 
 Status: proposed version 1 contract to approve on Day 1
 
 Scope: test-asset demo; public-policy baseline with a conditional private-cap extension
 
-This specification is the boundary between Alexi's TypeScript application and Mariam's Solana programs. It defines proposed interfaces; it does not imply that any implementation or deployed address already exists. [Main plan](../../AEGIS_PLAN.md)
+This specification is the boundary between Alexis's TypeScript application and Mariam's Solana programs. It defines proposed interfaces; it does not imply that any implementation or deployed address already exists. [Main plan](../../AEGIS_PLAN.md)
 
 ## 1 Ownership and change control
 
-Alexi implements TypeScript types, runtime validation, SDK ports and serialization. Mariam implements the corresponding Rust types, account checks, instructions and errors. Both approve canonical bytes, hashes and fixture outputs.
+Alexis implements TypeScript types, runtime validation, SDK ports and serialization. Mariam implements the corresponding Rust types, account checks, instructions and errors. Both approve canonical bytes, hashes and fixture outputs.
 
 Freeze baseline fields on Day 1. Record any change in this document and update both fixture consumers in the same integration change. Do not independently rename fields or reinterpret units. Export the actual generated IDL; never maintain a handwritten substitute after the program exists.
 
@@ -157,7 +157,7 @@ Never hash JSON. Use fixed ordering and fixed-width binary encodings.
 10. `routeHash`, exactly 32 bytes.
 11. `feeCapRaw`, u64 little-endian, zero for this demo.
 
-The deployment domain is initialized as part of trusted deployment configuration and included in the manifest. An agent cannot supply or change it. Mariam and Alexi verify that the manifest matches actual on-chain configuration.
+The deployment domain is initialized as part of trusted deployment configuration and included in the manifest. An agent cannot supply or change it. Mariam and Alexis verify that the manifest matches actual on-chain configuration.
 
 `routeHash = SHA256(routeBytes)` where `routeBytes` concatenates:
 
@@ -171,7 +171,7 @@ Flag bytes are exactly 0 or 1. Define and enforce maximum payload size/account c
 
 The program reconstructs and hashes the exact CPI it will perform. It compares the result to the intent. A caller-supplied digest cannot stand in for validating the instruction bytes, actual account keys and permitted privileges. Hash the constructed CPI AccountMeta flags, including approved PDA signing privileges, rather than copying outer-transaction AccountInfo flags. Derived PDA signing privileges must match the approved adapter's account model.
 
-Alexi and Mariam independently serialize the same fixture. Store canonical byte hex, route hash and intent hash in `tests/fixtures`. Any field mutation must either fail validation or change the expected hash.
+Alexis and Mariam independently serialize the same fixture. Store canonical byte hex, route hash and intent hash in `tests/fixtures`. Any field mutation must either fail validation or change the expected hash.
 
 ## 6 Program instructions and SDK surface
 
@@ -207,7 +207,7 @@ interface ChainPort {
 }
 ```
 
-The auxiliary types are defined by Alexi under the same shared review. `VaultSnapshotV1` includes owner, active session, agent, policy, balances, spent amount, expected nonce, chain time and source environment. `SwapRequestV1` contains a vault, supported pair, amount and requested minimum output; it does not grant arbitrary account selection.
+The auxiliary types are defined by Alexis under the same shared review. `VaultSnapshotV1` includes owner, active session, agent, policy, balances, spent amount, expected nonce, chain time and source environment. `SwapRequestV1` contains a vault, supported pair, amount and requested minimum output; it does not grant arbitrary account selection.
 
 `OwnerActionV1` covers create/fund/create-session/revoke/withdraw. `LocalSignerHandle` is an in-process wallet or signer adapter, never a JSON private key. `WalletSignableV1` is built from allowlisted instructions and inspected before wallet authorization.
 
@@ -269,7 +269,7 @@ Stable semantic error identifiers:
 | AEGIS_PROOF_INVALID | Proof or request binding does not verify |
 | AEGIS_INSUFFICIENT_FUNDS | Insufficient supported input balance |
 
-Alexi maps numeric program codes using Mariam's generated IDL. Raw RPC/DEX failures that cannot be mapped retain their original cause and origin; do not guess an Aegis error. Private-mode verification failure is `AEGIS_PROOF_INVALID`, not evidence that a specific hidden limit was exceeded.
+Alexis maps numeric program codes using Mariam's generated IDL. Raw RPC/DEX failures that cannot be mapped retain their original cause and origin; do not guess an Aegis error. Private-mode verification failure is `AEGIS_PROOF_INVALID`, not evidence that a specific hidden limit was exceeded.
 
 ## 9 Shared test fixtures
 
@@ -329,7 +329,7 @@ Mariam's program reads C from the active owner-approved policy, reconstructs H f
 
 The circuit constrains B using its private digest limbs. A proof for a different request will have a different binding under the chosen hash assumptions. The session agent signature is still required; policy compliance alone does not authorize a caller.
 
-The verifier key is pinned to the supported circuit and build. The request's `verifyingKeyHash` is checked against that known key; it cannot select an arbitrary key. Alexi supplies a conversion function from snarkjs output to the pinned verifier's exact point/byte format, and Mariam verifies it against a known positive proof and corruption tests. Do not copy a proof layout from an unrelated verifier.
+The verifier key is pinned to the supported circuit and build. The request's `verifyingKeyHash` is checked against that known key; it cannot select an arbitrary key. Alexis supplies a conversion function from snarkjs output to the pinned verifier's exact point/byte format, and Mariam verifies it against a known positive proof and corruption tests. Do not copy a proof layout from an unrelated verifier.
 
 Day 5 private-cap handoff must contain:
 
@@ -360,7 +360,7 @@ Mariam publishes `deployments/<environment>.json` with:
 
 Never publish private keys, cap/salt witnesses or credentials. An authenticated RPC URL containing a key belongs in local configuration, not the committed manifest. Record a redacted endpoint or environment-variable reference instead.
 
-Alexi's handoff includes the typed SDK exports, ChainPort conformance tests, API examples, execution-state mapping, UI startup and E2E commands. Mariam's handoff includes generated IDL, account derivation examples, localnet setup, real accepted/rejected transactions and program tests.
+Alexis's handoff includes the typed SDK exports, ChainPort conformance tests, API examples, execution-state mapping, UI startup and E2E commands. Mariam's handoff includes generated IDL, account derivation examples, localnet setup, real accepted/rejected transactions and program tests.
 
 Use progressively stronger checks at the integration gates:
 

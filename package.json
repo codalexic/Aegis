@@ -9,7 +9,7 @@
   "scripts": {
     "build": "anchor build",
     "idl:sync": "node scripts/idl-sync.mjs",
-    "test:program": "node -e \"console.error('Program tests are implemented in P2'); process.exit(1)\"",
+    "test:program": "vitest run tests/program",
     "localnet": "node -e \"console.error('localnet is implemented in P5'); process.exit(1)\"",
     "test:e2e": "node -e \"console.error('End-to-end tests are implemented in C5'); process.exit(1)\"",
     "test:sdk": "node -e \"console.error('SDK tests are implemented in C0'); process.exit(1)\"",
@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "@coral-xyz/anchor": "npm:@anchor-lang/core@1.1.2",
+    "@solana/kit": "8.4.0",
     "@solana/spl-token": "0.4.15",
     "@solana/web3.js": "1.99.0",
     "litesvm": "1.5.0",

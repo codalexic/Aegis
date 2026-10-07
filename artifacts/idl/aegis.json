@@ -374,11 +374,38 @@
       "accounts": [
         {
           "name": "owner",
-          "signer": true
+          "signer": true,
+          "relations": [
+            "vault"
+          ]
         },
         {
           "name": "vault",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.owner",
+                "account": "Vault"
+              },
+              {
+                "kind": "account",
+                "path": "vault.vault_id",
+                "account": "Vault"
+              }
+            ]
+          }
         }
       ],
       "args": []
@@ -398,13 +425,62 @@
       "accounts": [
         {
           "name": "owner",
-          "signer": true
+          "signer": true,
+          "relations": [
+            "vault"
+          ]
         },
         {
-          "name": "vault"
+          "name": "vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.owner",
+                "account": "Vault"
+              },
+              {
+                "kind": "account",
+                "path": "vault.vault_id",
+                "account": "Vault"
+              }
+            ]
+          }
         },
         {
-          "name": "vault_authority"
+          "name": "vault_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
         },
         {
           "name": "source",

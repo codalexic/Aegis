@@ -380,11 +380,38 @@ export type Aegis = {
       "accounts": [
         {
           "name": "owner",
-          "signer": true
+          "signer": true,
+          "relations": [
+            "vault"
+          ]
         },
         {
           "name": "vault",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.owner",
+                "account": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "vault.vaultId",
+                "account": "vault"
+              }
+            ]
+          }
         }
       ],
       "args": []
@@ -404,13 +431,62 @@ export type Aegis = {
       "accounts": [
         {
           "name": "owner",
-          "signer": true
+          "signer": true,
+          "relations": [
+            "vault"
+          ]
         },
         {
-          "name": "vault"
+          "name": "vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.owner",
+                "account": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "vault.vaultId",
+                "account": "vault"
+              }
+            ]
+          }
         },
         {
-          "name": "vaultAuthority"
+          "name": "vaultAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
         },
         {
           "name": "source",

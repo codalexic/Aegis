@@ -1,9 +1,9 @@
-//! P1 interface scaffold. Handler logic and policy checks are added in P2 and P4.
+//! Vault lifecycle. Swap execution and its policy checks are added in P4.
 
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token::{Mint, Token, TokenAccount},
+    token::{self, Mint, Token, TokenAccount, Transfer},
 };
 use demo_dex::{program::DemoDex, Pool};
 
@@ -14,14 +14,29 @@ pub mod aegis {
     use super::*;
 
     pub fn create_vault(
-        _ctx: Context<CreateVault>,
+        ctx: Context<CreateVault>,
         vault_id: u64,
         agent: Pubkey,
         max_trade_raw: u64,
         budget_raw: u64,
         expiry_unix: i64,
     ) -> Result<()> {
-        let _ = (vault_id, agent, max_trade_raw, budget_raw, expiry_unix);
+        ctx.accounts.vault.set_inner(Vault {
+            owner: ctx.accounts.owner.key(),
+            agent,
+            vault_id,
+            input_mint: ctx.accounts.input_mint.key(),
+            output_mint: ctx.accounts.output_mint.key(),
+            input_vault: ctx.accounts.input_vault.key(),
+            output_vault: ctx.accounts.output_vault.key(),
+            max_trade_raw,
+            budget_raw,
+            expiry_unix,
+            spent_raw: 0,
+            revoked: false,
+            bump: ctx.bumps.vault,
+            authority_bump: ctx.bumps.vault_authority,
+        });
         Ok(())
     }
 
@@ -30,18 +45,34 @@ pub mod aegis {
         Ok(())
     }
 
-    pub fn revoke_agent(_ctx: Context<RevokeAgent>) -> Result<()> {
+    pub fn revoke_agent(ctx: Context<RevokeAgent>) -> Result<()> {
+        ctx.accounts.vault.revoked = true;
         Ok(())
     }
 
-    pub fn withdraw(_ctx: Context<Withdraw>, amount_raw: u64) -> Result<()> {
-        let _ = amount_raw;
-        Ok(())
+    pub fn withdraw(ctx: Context<Withdraw>, amount_raw: u64) -> Result<()> {
+        require!(amount_raw > 0, AegisError::InvalidAmount);
+
+        let vault_key = ctx.accounts.vault.key();
+        let authority_bump = [ctx.accounts.vault.authority_bump];
+        let seeds = &[b"authority".as_ref(), vault_key.as_ref(), &authority_bump];
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.key(),
+                Transfer {
+                    from: ctx.accounts.source.to_account_info(),
+                    to: ctx.accounts.destination.to_account_info(),
+                    authority: ctx.accounts.vault_authority.to_account_info(),
+                },
+                &[seeds],
+            ),
+            amount_raw,
+        )
     }
 }
 
 #[derive(Accounts)]
-#[instruction(vault_id: u64)]
+#[instruction(vault_id: u64, agent: Pubkey, max_trade_raw: u64, budget_raw: u64, expiry_unix: i64)]
 pub struct CreateVault<'info> {
     #[account(mut)]
     pub owner: Signer<'info>,
@@ -50,7 +81,11 @@ pub struct CreateVault<'info> {
         payer = owner,
         space = 8 + Vault::INIT_SPACE,
         seeds = [b"vault", owner.key().as_ref(), &vault_id.to_le_bytes()],
-        bump
+        bump,
+        constraint = max_trade_raw > 0 && max_trade_raw <= budget_raw @ AegisError::InvalidAmount,
+        constraint = expiry_unix > Clock::get()?.unix_timestamp @ AegisError::InvalidAmount,
+        // Check before initializing ATAs, which would coincide for equal mints.
+        constraint = input_mint.key() != output_mint.key() @ AegisError::InvalidAmount
     )]
     pub vault: Account<'info, Vault>,
     /// CHECK: This PDA is used only as a token authority; its seeds are checked here.
@@ -102,19 +137,43 @@ pub struct ExecuteSwap<'info> {
 #[derive(Accounts)]
 pub struct RevokeAgent<'info> {
     pub owner: Signer<'info>,
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"vault", vault.owner.as_ref(), &vault.vault_id.to_le_bytes()],
+        bump = vault.bump,
+        has_one = owner @ AegisError::Unauthorized
+    )]
     pub vault: Account<'info, Vault>,
 }
 
 #[derive(Accounts)]
 pub struct Withdraw<'info> {
     pub owner: Signer<'info>,
+    #[account(
+        seeds = [b"vault", vault.owner.as_ref(), &vault.vault_id.to_le_bytes()],
+        bump = vault.bump,
+        has_one = owner @ AegisError::Unauthorized
+    )]
     pub vault: Account<'info, Vault>,
-    /// CHECK: Unused by the P1 stub. P2 validates this PDA before signing transfers.
+    /// CHECK: Only used as the transfer authority; seeds and stored bump are checked.
+    #[account(
+        seeds = [b"authority", vault.key().as_ref()],
+        bump = vault.authority_bump
+    )]
     pub vault_authority: UncheckedAccount<'info>,
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = (source.key() == vault.input_vault && source.mint == vault.input_mint)
+            || (source.key() == vault.output_vault && source.mint == vault.output_mint)
+            @ AegisError::AccountMismatch,
+        constraint = source.owner == vault_authority.key() @ AegisError::AccountMismatch
+    )]
     pub source: Account<'info, TokenAccount>,
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = destination.owner == owner.key() @ AegisError::AccountMismatch,
+        constraint = destination.mint == source.mint @ AegisError::AccountMismatch
+    )]
     pub destination: Account<'info, TokenAccount>,
     pub token_program: Program<'info, Token>,
 }

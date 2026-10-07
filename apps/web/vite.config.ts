@@ -3,6 +3,7 @@ import { defineConfig, loadEnv } from "vite";
 import { ownerApiPlugin } from "./server/owner-api";
 import { agentApiPlugin } from "./server/agent-api";
 import { faucetApiPlugin } from "./server/faucet-api";
+import { actionsPlugin } from "./api/actions/plugin";
 
 const workspaceRoot = fileURLToPath(new URL("../../", import.meta.url));
 
@@ -14,10 +15,12 @@ export default defineConfig(({ mode }) => {
   const signing = process.env.AEGIS_SIGNING ?? loadEnv(mode, workspaceRoot, "AEGIS_").AEGIS_SIGNING;
   if (signing !== undefined && signing !== "wallet" && signing !== "server") throw new Error("AEGIS_SIGNING must be wallet or server.");
   const walletMode = environment === "devnet" || (environment === "localnet" && signing === "wallet");
+  const settings = { ...loadEnv(mode, workspaceRoot, "AEGIS_"), ...process.env };
   return {
     plugins: [
       ...(environment === "localnet" && !walletMode ? [ownerApiPlugin(workspaceRoot)] : []),
       ...(environment !== "mock" ? [agentApiPlugin(workspaceRoot, environment, walletMode), ...(walletMode ? [faucetApiPlugin(workspaceRoot, environment)] : [])] : []),
+      ...(environment !== "mock" ? [actionsPlugin(workspaceRoot, environment, { deploymentPath: settings.AEGIS_ACTIONS_DEPLOYMENT, origin: settings.AEGIS_ACTIONS_ORIGIN })] : []),
       { name: "aegis-browser-read-only", enforce: "pre", resolveId(source, importer) {
         if (source === "@solana/web3.js") return fileURLToPath(new URL("./src/browser-web3.js", import.meta.url));
         if (source === "@solana/spl-token") return fileURLToPath(new URL("./src/browser-token.ts", import.meta.url));

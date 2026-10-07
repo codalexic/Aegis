@@ -10,6 +10,9 @@ export async function connectWalletDashboard(environment: "localnet" | "devnet",
   if (!response.ok) throw new Error(deployment.error ?? "Cannot load this cluster's deployment.");
   if (deployment.environment !== environment) throw new Error("Deployment environment mismatch.");
   const client = new WalletAegisClient(deployment), agent = new PublicKey(deployment.agent);
+  const latestResponse = await fetch(`/api/actions/latest-vault?account=${wallet.publicKey.toBase58()}`, { cache: "no-store" });
+  const latest: { vault?: string | null; message?: string } = await latestResponse.json();
+  if (!latestResponse.ok) throw new Error(latest.message ?? "Cannot find the wallet's latest vault.");
   const create = async () => {
     const slot = await client.rpc<number>("getSlot", [{ commitment: "confirmed" }]);
     const time = await client.rpc<number | null>("getBlockTime", [slot]);
@@ -18,7 +21,7 @@ export async function connectWalletDashboard(environment: "localnet" | "devnet",
     return client.createVault(wallet, { vaultId, agent, maxTradeRaw: 50_000_000n, budgetRaw: 100_000_000n, expiryUnix: BigInt(time) + 3600n });
   };
   return {
-    environment, walletMode: true, client, owner: wallet.publicKey, agent, initialVault: null,
+    environment, walletMode: true, client, owner: wallet.publicKey, agent, initialVault: latest.vault ? new PublicKey(latest.vault) : null,
     create,
     newDemo: async () => {
       const created = await create();

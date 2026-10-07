@@ -8,6 +8,8 @@ import type { ChainDeployment } from "../../../packages/sdk/src/anchor";
 import { connectWalletDashboard } from "../src/wallet-client";
 import { faucetApiMiddleware } from "../server/faucet-api";
 import { agentApiMiddleware } from "../server/agent-api";
+import { actionsMiddleware } from "../api/actions/routes";
+import { ActionsService } from "../api/actions/service";
 
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 let server: Server, url: string, deployment: ChainDeployment, connection: Connection;
@@ -26,7 +28,9 @@ beforeAll(async () => {
   const signature = await connection.requestAirdrop(owner.publicKey, 1_000_000_000);
   await connection.confirmTransaction({ signature, ...await connection.getLatestBlockhash("confirmed") }, "confirmed");
   const faucet = faucetApiMiddleware(root, "localnet"), agent = agentApiMiddleware(root, "localnet", true);
-  server = createServer((req, res) => faucet(req, res, () => agent(req, res, () => res.writeHead(404).end())));
+  const chainId = `solana:${(await connection.getGenesisHash()).slice(0, 32)}`;
+  const actions = actionsMiddleware(async () => ({ service: new ActionsService(deployment, connection), origin: url, chainId }));
+  server = createServer((req, res) => actions(req, res, () => faucet(req, res, () => agent(req, res, () => res.writeHead(404).end()))));
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Missing port");

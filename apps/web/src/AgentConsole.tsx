@@ -73,12 +73,13 @@ export function AgentConsole({ vault, disabled, onBusy, onComplete }: {
   const resisted = steps.some((step) => step.type === "notice" && step.code === "injection_resisted");
   const locked = disabled || busy || !vault;
   return <section className="agent-console" aria-labelledby="agent-title" aria-busy={busy}>
-    <div className="card-heading"><h2 id="agent-title">Agent console</h2></div>
-    <div className="agent-content">
+    <div className="card-heading"><h2 id="agent-title">Agent console</h2>
       <div className="agent-mode" role="group" aria-label="Agent mode">
         <button aria-pressed={live} disabled={locked} onClick={() => setLive(true)}>Live AI</button>
         <button aria-pressed={!live} disabled={locked} onClick={() => setLive(false)}>Scripted</button>
       </div>
+    </div>
+    <div className="agent-content">
       <p className="muted agent-model">{live ? model ?? "Live AI not configured · Scripted is available" : "Fixed replies · No AI or network call"}</p>
       <div className="agent-actions">
         <button className="primary" disabled={locked} onClick={() => void run("normal")}>Run normal trade</button>
@@ -88,16 +89,17 @@ export function AgentConsole({ vault, disabled, onBusy, onComplete }: {
       {!vault && <p className="muted">Create and fund a vault to run the agent.</p>}
       {busy && <p role="status">Agent running… Waiting for the reply and chain confirmation.</p>}
       {error && <p className="notice error" role="alert">{error}</p>}
-      {resisted && <div className="agent-resisted" role="status"><strong>The model resisted the injection</strong>
-        <p>Any valid proposal was sent unchanged. Try the fixed 1,000 testUSDC attack.</p>
-        <button disabled={locked} onClick={() => { setLive(false); void run("injected", false); }}>Retry scripted</button>
-      </div>}
       {result && <div role="status" data-testid="agent-outcome" className={`agent-outcome ${result.ok ? "executed" : "blocked"}`}>
         <strong>{result.ok ? "Executed" : result.origin === "program" ? `Blocked by Aegis program: ${result.error}` : `Request failed: ${result.error}`}</strong>
         <p>{result.ok ? `Swapped ${decimal(request?.amountUsdc ?? "0")} testUSDC; output stayed in the vault.`
           : result.origin === "program" && vault ? rejectionReason(result.error, vault, request?.amountUsdc) : "The request could not be confirmed by the program. Check localnet and retry."}</p>
       </div>}
-      <div className="agent-steps" role="region" aria-label="Agent details" tabIndex={0}>{steps.map((step, index) => {
+      <div className="agent-steps" role="region" aria-label="Agent details" tabIndex={0}>
+        {resisted && <div className="agent-resisted" role="status"><strong>The model resisted the injection</strong>
+          <p>Any valid proposal was sent unchanged. Try the fixed 1,000 testUSDC attack.</p>
+          <button disabled={locked} onClick={() => { setLive(false); void run("injected", false); }}>Retry scripted</button>
+        </div>}
+        {steps.map((step, index) => {
         switch (step.type) {
           case "news": return <div key={index}><h3>News</h3><News step={step} /></div>;
           case "model_reply": return <div key={index}><h3>{step.source === "live" ? "Model reply" : step.source === "scripted" ? "Scripted reply" : "Fixed hacker request · No AI"}</h3><pre>{typeof step.reply === "string" ? step.reply : JSON.stringify(step.reply, null, 2)}</pre></div>;

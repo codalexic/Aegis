@@ -37,8 +37,7 @@ export function App() {
       <div className="header-inner">
         <a className="brand" href="/" aria-label="Aegis home"><img src="/favicon.svg" alt="" />Aegis</a>
         <span className="header-caption">Agent vault</span>
-        <div className="environment"><span className="environment-dot" />{environment}</div>
-        {environment === "localnet" && <span className="local-key-label">test key · localnet only</span>}
+        <div className="environment" title={environment === "localnet" ? "Real transactions on your local Solana chain. Test tokens only · test key · localnet only" : "Simulated funds and transactions. Refreshing the page starts a new session."}><span className="environment-dot" />{environment}</div>
       </div>
     </header>
     {connection ? <Dashboard connection={connection} /> : <main><p role={error ? "alert" : "status"}>{error ?? "Connecting to the vault…"}</p></main>}
@@ -180,11 +179,11 @@ function Dashboard({ connection }: { connection: DashboardConnection }) {
 
   return <main>
     <div className="page-heading">
-      <div><h1>Vault overview</h1><p className="muted">AI agents can be tricked. Aegis enforces the limits on-chain.</p></div>
+      <h1>AI agents can be tricked. Aegis enforces the limits on-chain.</h1>
       <button className="primary" disabled={!ready || !!busy || agentBusy} onClick={() => void newDemo()}>New demo vault</button>
     </div>
 
-    <div className="mock-note"><span className="note-icon" aria-hidden="true">i</span>{environment === "mock"
+    <div className={`mock-note ${environment === "localnet" ? "localnet-note" : ""}`}><span className="note-icon" aria-hidden="true">i</span>{environment === "mock"
       ? <span><strong>Mock environment</strong> · Simulated funds and transactions. Refreshing the page starts a new session.</span>
       : <span><strong>Localnet environment</strong> · Real transactions on your local Solana chain. Test tokens only.</span>}</div>
     <div className="dashboard-notice">
@@ -193,14 +192,15 @@ function Dashboard({ connection }: { connection: DashboardConnection }) {
     </div>
 
     <div className={environment === "localnet" ? "dashboard-panels" : undefined}>
-    <section className="vault-card" aria-labelledby="vault-title">
+    <section className={`vault-card ${vault ? "" : "is-empty"}`} aria-labelledby="vault-title">
       <div className="card-heading">
         <h2 id="vault-title">Trading vault</h2>
         <span className={`status ${status.toLowerCase().replace(" ", "-")}`} data-testid="vault-status"><span className="small-dot" />{status}</span>
       </div>
+      <p className="vault-empty">No vault yet · Click New demo vault</p>
       <div className="balances">
-        <div className="balance"><span className="token-icon" aria-hidden="true">U</span><div><span className="field-label">Input balance</span><strong data-testid="input-balance">{vault ? amount(vault.inputBalanceRaw) : "—"}<small>testUSDC</small></strong></div></div>
-        <div className="balance"><span className="token-icon sol" aria-hidden="true">S</span><div><span className="field-label">Output balance</span><strong data-testid="output-balance">{vault ? amount(vault.outputBalanceRaw, 9) : "—"}<small>testSOL</small></strong></div></div>
+        <div className="balance"><div className="balance-heading"><span className="field-label">Input balance</span><span className="token-mark"><span className="token-dot" aria-hidden="true" />testUSDC</span></div><strong data-testid="input-balance">{vault ? amount(vault.inputBalanceRaw) : "—"}</strong></div>
+        <div className="balance"><div className="balance-heading"><span className="field-label">Output balance</span><span className="token-mark"><span className="token-dot sol" aria-hidden="true" />testSOL</span></div><strong data-testid="output-balance">{vault ? amount(vault.outputBalanceRaw, 9) : "—"}</strong></div>
       </div>
       <div className="policy-grid">
         <div><span className="field-label">Per-trade cap</span><strong>{vault ? amount(vault.maxTradeRaw) : "50"} <small>testUSDC</small></strong></div>
@@ -209,14 +209,17 @@ function Dashboard({ connection }: { connection: DashboardConnection }) {
         <div><span className="field-label">Expires in</span><strong className="countdown" data-testid="expiry">{vault ? countdown(vault.expiryUnix, now) : "1h on creation"}</strong></div>
       </div>
       <div className={`budget-section ${budgetLevel}`}>
-        <div className="budget-label"><span>Remaining budget</span><span data-testid="remaining-budget">{vault ? <><strong>{amount(remaining)}</strong><small> / {amount(vault.budgetRaw)} testUSDC</small></> : "Create a vault to activate"}</span></div>
-        <progress aria-label="Remaining budget" aria-valuetext={vault ? `${amount(remaining)} of ${amount(vault.budgetRaw)} testUSDC remaining` : "No vault"} value={remainingBasisPoints.toString()} max="10000" />
+        <span className="budget-label">Remaining budget</span>
+        <div className="budget-bar">
+          <progress aria-label="Remaining budget" aria-valuetext={vault ? `${amount(remaining)} of ${amount(vault.budgetRaw)} testUSDC remaining` : "No vault"} value={remainingBasisPoints.toString()} max="10000" />
+          <span className="budget-number" data-testid="remaining-budget">{vault ? <><strong>{amount(remaining)}</strong><small> / {amount(vault.budgetRaw)} testUSDC</small></> : "Create a vault to activate"}</span>
+        </div>
       </div>
       <div className="identities">
         <div><span className="field-label">Owner</span><code title={owner.toBase58()} aria-label={owner.toBase58()}>{shorten(owner.toBase58())}</code></div>
         <div><span className="field-label">Agent <span className="identity-note">{vault?.revoked ? "· revoked" : "· trading only"}</span></span><code title={agent.toBase58()} aria-label={agent.toBase58()}>{shorten(agent.toBase58())}</code></div>
+        {vault && <p className="vault-address">Vault <code title={vault.address.toBase58()} aria-label={vault.address.toBase58()}>{shorten(vault.address.toBase58())}</code></p>}
       </div>
-      {vault && <p className="vault-address">Vault <code title={vault.address.toBase58()} aria-label={vault.address.toBase58()}>{shorten(vault.address.toBase58())}</code></p>}
       <div className="actions">
         <button className="primary" disabled={!ready || !!vault || !!busy || agentBusy} onClick={() => void create()}>Create vault</button>
         <button disabled={!vault || !!busy || agentBusy} onClick={() => void fund()}>Fund 1,000</button>

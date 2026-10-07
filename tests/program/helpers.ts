@@ -19,10 +19,9 @@ import { expect } from "vitest";
 
 const root = new URL("../../", import.meta.url);
 export const aegisIdl: Idl = JSON.parse(readFileSync(new URL("target/idl/aegis.json", root), "utf8"));
-const dexIdl: Idl = JSON.parse(readFileSync(new URL("target/idl/demo_dex.json", root), "utf8"));
+export const dexIdl: Idl = JSON.parse(readFileSync(new URL("target/idl/demo_dex.json", root), "utf8"));
 export const AEGIS_ID = new PublicKey(aegisIdl.address);
 export const DEMO_DEX_ID = new PublicKey(dexIdl.address);
-const instructionCoder = new BorshInstructionCoder(aegisIdl);
 const accountCoder = new BorshAccountsCoder(aegisIdl);
 const transactionDecoder = getTransactionDecoder();
 
@@ -36,18 +35,18 @@ export type Policy = {
   expiryUnix: bigint;
 };
 
-export function instruction(name: string, args: Record<string, unknown>, accounts: Record<string, PublicKey>) {
-  const definition = aegisIdl.instructions.find((item) => item.name === name);
+export function instruction(name: string, args: Record<string, unknown>, accounts: Record<string, PublicKey>, idl: Idl = aegisIdl) {
+  const definition = idl.instructions.find((item) => item.name === name);
   if (!definition) throw new Error(`Unknown instruction: ${name}`);
   return new TransactionInstruction({
-    programId: AEGIS_ID,
+    programId: new PublicKey(idl.address),
     keys: definition.accounts.map((account) => {
       if ("accounts" in account) throw new Error("Nested accounts are not used by Aegis");
       const pubkey = accounts[account.name];
       if (!pubkey) throw new Error(`Missing account: ${account.name}`);
       return { pubkey, isSigner: account.signer ?? false, isWritable: account.writable ?? false };
     }),
-    data: instructionCoder.encode(name, args),
+    data: new BorshInstructionCoder(idl).encode(name, args),
   });
 }
 
@@ -68,10 +67,10 @@ export function assertSuccess(result: TransactionMetadata | FailedTransactionMet
   }
 }
 
-export function assertProgramError(result: TransactionMetadata | FailedTransactionMetadata, name: string) {
+export function assertProgramError(result: TransactionMetadata | FailedTransactionMetadata, name: string, idl: Idl = aegisIdl) {
   expect(result, "Expected the program to reject the transaction").toBeInstanceOf(FailedTransactionMetadata);
   const failure = result as FailedTransactionMetadata;
-  const expected = aegisIdl.errors?.find((error) => error.name === name);
+  const expected = idl.errors?.find((error) => error.name === name);
   expect(expected).toBeDefined();
   expect(failure.meta().logs().join("\n")).toContain(`Error Code: ${name}. Error Number: ${expected!.code}.`);
 }

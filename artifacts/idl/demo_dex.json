@@ -298,10 +298,60 @@
           "signer": true
         },
         {
-          "name": "pool"
+          "name": "pool",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool.input_mint",
+                "account": "Pool"
+              },
+              {
+                "kind": "account",
+                "path": "pool.output_mint",
+                "account": "Pool"
+              }
+            ]
+          }
         },
         {
-          "name": "pool_authority"
+          "name": "pool_authority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              }
+            ]
+          }
         },
         {
           "name": "user_input",
@@ -313,11 +363,17 @@
         },
         {
           "name": "input_reserve",
-          "writable": true
+          "writable": true,
+          "relations": [
+            "pool"
+          ]
         },
         {
           "name": "output_reserve",
-          "writable": true
+          "writable": true,
+          "relations": [
+            "pool"
+          ]
         },
         {
           "name": "token_program",

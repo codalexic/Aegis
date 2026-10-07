@@ -304,10 +304,60 @@ export type DemoDex = {
           "signer": true
         },
         {
-          "name": "pool"
+          "name": "pool",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool.inputMint",
+                "account": "pool"
+              },
+              {
+                "kind": "account",
+                "path": "pool.outputMint",
+                "account": "pool"
+              }
+            ]
+          }
         },
         {
-          "name": "poolAuthority"
+          "name": "poolAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  111,
+                  108,
+                  45,
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pool"
+              }
+            ]
+          }
         },
         {
           "name": "userInput",
@@ -319,11 +369,17 @@ export type DemoDex = {
         },
         {
           "name": "inputReserve",
-          "writable": true
+          "writable": true,
+          "relations": [
+            "pool"
+          ]
         },
         {
           "name": "outputReserve",
-          "writable": true
+          "writable": true,
+          "relations": [
+            "pool"
+          ]
         },
         {
           "name": "tokenProgram",

@@ -179,10 +179,10 @@ export function createFixture(overrides: Partial<Policy> & { sameMint?: boolean 
 
 export type Fixture = ReturnType<typeof createFixture>;
 
-export function createVaultInstruction(f: Fixture) {
+export function createVaultInstruction(f: Fixture, agent = f.agent.publicKey) {
   return instruction("create_vault", {
     vault_id: new BN(f.policy.vaultId.toString()),
-    agent: f.agent.publicKey,
+    agent,
     max_trade_raw: new BN(f.policy.maxTradeRaw.toString()),
     budget_raw: new BN(f.policy.budgetRaw.toString()),
     expiry_unix: new BN(f.policy.expiryUnix.toString()),

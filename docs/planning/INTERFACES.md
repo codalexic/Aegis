@@ -36,7 +36,7 @@ Only `spent_raw` and `revoked` change after creation.
 
 | Instruction | Arguments | Signer | Rules |
 | --- | --- | --- | --- |
-| `create_vault` | `vault_id: u64, agent: Pubkey, max_trade_raw: u64, budget_raw: u64, expiry_unix: i64` | owner (also pays rent) | cap > 0, cap ≤ budget, expiry > chain time, input mint ≠ output mint; creates the vault and both vault token accounts |
+| `create_vault` | `vault_id: u64, agent: Pubkey, max_trade_raw: u64, budget_raw: u64, expiry_unix: i64` | owner (also pays rent) | cap > 0, cap ≤ budget, expiry > chain time, agent is not the default key or the owner, input mint ≠ output mint; creates the vault and both vault token accounts |
 | `execute_swap` | `amount_in_raw: u64` | agent (also pays fees) | see below |
 | `revoke_agent` | none | owner | sets `revoked = true` permanently |
 | `withdraw` | `amount_raw: u64` | owner | source is `input_vault` or `output_vault`; destination is a token account owned by the owner with the same mint; signed by vault authority; works anytime, including after revoke or expiry |

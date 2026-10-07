@@ -269,6 +269,7 @@ pub struct CreateVault<'info> {
         space = 8 + Vault::INIT_SPACE,
         seeds = [b"vault", owner.key().as_ref(), &vault_id.to_le_bytes()],
         bump,
+        constraint = agent != Pubkey::default() && agent != owner.key() @ AegisError::InvalidAmount,
         constraint = max_trade_raw > 0 && max_trade_raw <= budget_raw @ AegisError::InvalidAmount,
         constraint = expiry_unix > Clock::get()?.unix_timestamp @ AegisError::InvalidAmount,
         // Check before initializing ATAs, which would coincide for equal mints.

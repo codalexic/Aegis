@@ -6,6 +6,7 @@ import {
   MintLayout,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
+import { PublicKey } from "@solana/web3.js";
 import { FailedTransactionMetadata } from "litesvm";
 import { describe, expect, it } from "vitest";
 import {
@@ -48,6 +49,21 @@ describe("vault lifecycle", () => {
     const mintsBefore = [accountData(f.svm, f.inputMint), accountData(f.svm, f.outputMint)];
     assertProgramError(send(f.svm, [createVaultInstruction(f)], [f.owner]), "InvalidAmount");
     for (const key of [f.vault, f.inputVault, f.outputVault]) {
+      expect(f.svm.getAccount(address(key.toBase58())).exists).toBe(false);
+    }
+    expect([accountData(f.svm, f.inputMint), accountData(f.svm, f.outputMint)]).toEqual(mintsBefore);
+  });
+
+  it.each(["default key", "owner"])("rejects the %s as agent with InvalidAmount and creates no accounts", (invalidAgent) => {
+    const f = createFixture();
+    const agent = invalidAgent === "default key" ? PublicKey.default : f.owner.publicKey;
+    const accounts = [f.vault, f.inputVault, f.outputVault];
+    const mintsBefore = [accountData(f.svm, f.inputMint), accountData(f.svm, f.outputMint)];
+    for (const key of accounts) {
+      expect(f.svm.getAccount(address(key.toBase58())).exists).toBe(false);
+    }
+    assertProgramError(send(f.svm, [createVaultInstruction(f, agent)], [f.owner]), "InvalidAmount");
+    for (const key of accounts) {
       expect(f.svm.getAccount(address(key.toBase58())).exists).toBe(false);
     }
     expect([accountData(f.svm, f.inputMint), accountData(f.svm, f.outputMint)]).toEqual(mintsBefore);

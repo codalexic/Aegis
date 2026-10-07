@@ -52,7 +52,7 @@ Funding is a normal SPL token transfer from the owner into `input_vault`; the SD
 3. 0 < amount (`InvalidAmount`); amount ≤ `max_trade_raw` (`CapExceeded`); `spent_raw + amount ≤ budget_raw` with checked arithmetic (`BudgetExceeded`).
 4. Accounts match, else `AccountMismatch`: `input_vault`/`output_vault` equal the stored keys; pool is the PDA for the vault's mints under `demo_dex`; reserves equal the pool's stored reserves; `demo_dex_program` and `token_program` are the expected programs.
 5. Record both vault balances, CPI `demo_dex::swap` signed by the vault authority PDA, reload both accounts.
-6. Require input decreased by exactly `amount` and output increased by at least `amount × 10`, else `SwapResultMismatch`.
+6. Require input decreased by exactly `amount` and output increased by at least `amount × EXPECTED_RATE_MULTIPLIER`, using Aegis's own rate constant (`EXPECTED_RATE_MULTIPLIER = 10`), else `SwapResultMismatch`.
 7. `spent_raw += amount` (checked).
 
 Any failure reverts the whole transaction.

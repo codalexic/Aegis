@@ -9,6 +9,8 @@ use demo_dex::{program::DemoDex, Pool};
 
 declare_id!("E6QbymjuPGqyKeQBCo2rfXiRv1Bp55uM7yVYEDnzxDhe");
 
+pub const EXPECTED_RATE_MULTIPLIER: u64 = 10;
+
 #[program]
 pub mod aegis {
     use super::*;
@@ -204,7 +206,7 @@ pub mod aegis {
             AegisError::SwapResultMismatch
         );
         let minimum_output = amount_in_raw
-            .checked_mul(demo_dex::RATE_MULTIPLIER)
+            .checked_mul(EXPECTED_RATE_MULTIPLIER)
             .ok_or(AegisError::SwapResultMismatch)?;
         let output_received = output
             .amount
@@ -410,4 +412,14 @@ pub enum AegisError {
     AccountMismatch,
     #[msg("The swap did not produce the expected balance changes")]
     SwapResultMismatch,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::EXPECTED_RATE_MULTIPLIER;
+
+    #[test]
+    fn expected_rate_matches_demo_dex() {
+        assert_eq!(EXPECTED_RATE_MULTIPLIER, demo_dex::RATE_MULTIPLIER);
+    }
 }

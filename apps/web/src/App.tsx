@@ -4,8 +4,9 @@ import type { Activity, TxResult, VaultState } from "@aegis/sdk";
 import { rawAmountToUi, uiAmountToRaw } from "../../../packages/sdk/src/amounts";
 import { connectDashboard, type DashboardConnection } from "./client";
 import type { ActionDetail } from "./activity";
-import { AgentConsole } from "./AgentConsole";
+import { AgentConsole, rejectionReason } from "./AgentConsole";
 const nowUnix = () => BigInt(Math.floor(Date.now() / 1000));
+const shorten = (value: string) => `${value.slice(0, 4)}…${value.slice(-4)}`;
 
 function amount(raw: bigint, decimals = 6): string {
   const [whole, fraction] = rawAmountToUi(raw, decimals).split(".");
@@ -172,28 +173,31 @@ function Dashboard({ connection }: { connection: DashboardConnection }) {
 
   const remaining = vault ? vault.budgetRaw - vault.spentRaw : 0n;
   const remainingBasisPoints = vault ? remaining * 10_000n / vault.budgetRaw : 0n;
+  const budgetLevel = vault && remaining * 100n < vault.budgetRaw * 15n ? "low"
+    : vault && remaining * 100n < vault.budgetRaw * 40n ? "warning" : "healthy";
   const status = !vault ? "Not created" : vault.revoked ? "Revoked" : now >= vault.expiryUnix ? "Expired" : "Active";
   const hasBalance = vault && (vault.inputBalanceRaw > 0n || vault.outputBalanceRaw > 0n);
 
   return <main>
     <div className="page-heading">
-      <div><p className="eyebrow">CONTROL CENTER</p><h1>Vault overview</h1><p className="muted">An agent can trade. You set the boundaries.</p></div>
+      <div><h1>Vault overview</h1><p className="muted">AI agents can be tricked. Aegis enforces the limits on-chain.</p></div>
       <button className="primary" disabled={!ready || !!busy || agentBusy} onClick={() => void newDemo()}>New demo vault</button>
     </div>
 
     <div className="mock-note"><span className="note-icon" aria-hidden="true">i</span>{environment === "mock"
       ? <span><strong>Mock environment</strong> · Simulated funds and transactions. Refreshing the page starts a new session.</span>
       : <span><strong>Localnet environment</strong> · Real transactions on your local Solana chain. Test tokens only.</span>}</div>
-    {busy && <p className="notice" role="status">{busy}…</p>}
-    {notice && <p className={`notice ${notice.ok ? "success" : "error"}`} role={notice.ok ? "status" : "alert"}>{notice.text}</p>}
+    <div className="dashboard-notice">
+      {busy ? <p className="notice" role="status">{busy}…</p>
+        : notice && <p className={`notice ${notice.ok ? "success" : "error"}`} role={notice.ok ? "status" : "alert"}>{notice.text}</p>}
+    </div>
 
     <div className={environment === "localnet" ? "dashboard-panels" : undefined}>
     <section className="vault-card" aria-labelledby="vault-title">
       <div className="card-heading">
-        <div><p className="eyebrow">YOUR VAULT</p><h2 id="vault-title">Trading vault</h2></div>
+        <h2 id="vault-title">Trading vault</h2>
         <span className={`status ${status.toLowerCase().replace(" ", "-")}`} data-testid="vault-status"><span className="small-dot" />{status}</span>
       </div>
-      {!vault && <div className="empty-vault"><strong>Start with a vault. Keep the limits fixed.</strong><p>Create your {environment} vault with a 50 testUSDC trade cap, a 100 testUSDC budget, and a one-hour expiry.</p></div>}
       <div className="balances">
         <div className="balance"><span className="token-icon" aria-hidden="true">U</span><div><span className="field-label">Input balance</span><strong data-testid="input-balance">{vault ? amount(vault.inputBalanceRaw) : "—"}<small>testUSDC</small></strong></div></div>
         <div className="balance"><span className="token-icon sol" aria-hidden="true">S</span><div><span className="field-label">Output balance</span><strong data-testid="output-balance">{vault ? amount(vault.outputBalanceRaw, 9) : "—"}<small>testSOL</small></strong></div></div>
@@ -202,22 +206,22 @@ function Dashboard({ connection }: { connection: DashboardConnection }) {
         <div><span className="field-label">Per-trade cap</span><strong>{vault ? amount(vault.maxTradeRaw) : "50"} <small>testUSDC</small></strong></div>
         <div><span className="field-label">Total budget</span><strong>{vault ? amount(vault.budgetRaw) : "100"} <small>testUSDC</small></strong></div>
         <div><span className="field-label">Spent</span><strong data-testid="spent">{vault ? amount(vault.spentRaw) : "—"} <small>testUSDC</small></strong></div>
-        <div><span className="field-label">Expires in</span><strong className="countdown" data-testid="expiry">{vault ? countdown(vault.expiryUnix, now) : "1 hour after creation"}</strong></div>
+        <div><span className="field-label">Expires in</span><strong className="countdown" data-testid="expiry">{vault ? countdown(vault.expiryUnix, now) : "1h on creation"}</strong></div>
       </div>
-      <div className="budget-section">
-        <div className="budget-label"><span>Remaining budget</span><span data-testid="remaining-budget">{vault ? `${amount(remaining)} / ${amount(vault.budgetRaw)} testUSDC` : "Create a vault to activate"}</span></div>
-        <progress aria-label="Remaining budget" value={remainingBasisPoints.toString()} max="10000" />
+      <div className={`budget-section ${budgetLevel}`}>
+        <div className="budget-label"><span>Remaining budget</span><span data-testid="remaining-budget">{vault ? <><strong>{amount(remaining)}</strong><small> / {amount(vault.budgetRaw)} testUSDC</small></> : "Create a vault to activate"}</span></div>
+        <progress aria-label="Remaining budget" aria-valuetext={vault ? `${amount(remaining)} of ${amount(vault.budgetRaw)} testUSDC remaining` : "No vault"} value={remainingBasisPoints.toString()} max="10000" />
       </div>
       <div className="identities">
-        <div><span className="field-label">Owner</span><code>{owner.toBase58()}</code></div>
-        <div><span className="field-label">Agent <span className="identity-note">{vault?.revoked ? "· revoked" : "· trading only"}</span></span><code>{agent.toBase58()}</code></div>
+        <div><span className="field-label">Owner</span><code title={owner.toBase58()} aria-label={owner.toBase58()}>{shorten(owner.toBase58())}</code></div>
+        <div><span className="field-label">Agent <span className="identity-note">{vault?.revoked ? "· revoked" : "· trading only"}</span></span><code title={agent.toBase58()} aria-label={agent.toBase58()}>{shorten(agent.toBase58())}</code></div>
       </div>
-      {vault && <p className="vault-address">Vault <code>{vault.address.toBase58()}</code></p>}
+      {vault && <p className="vault-address">Vault <code title={vault.address.toBase58()} aria-label={vault.address.toBase58()}>{shorten(vault.address.toBase58())}</code></p>}
       <div className="actions">
         <button className="primary" disabled={!ready || !!vault || !!busy || agentBusy} onClick={() => void create()}>Create vault</button>
         <button disabled={!vault || !!busy || agentBusy} onClick={() => void fund()}>Fund 1,000</button>
         <button className="danger" disabled={!vault || vault.revoked || !!busy || agentBusy} onClick={() => void revoke()}>Revoke agent</button>
-        <button disabled={!hasBalance || !!busy || agentBusy} onClick={() => void withdraw()}>Withdraw all <span aria-hidden="true">↗</span></button>
+        <button disabled={!hasBalance || !!busy || agentBusy} onClick={() => void withdraw()}>Withdraw all</button>
       </div>
     </section>
     {environment === "localnet" && <AgentConsole key={address.current?.toBase58()} vault={vault} disabled={!!busy} onBusy={setAgentBusy} onComplete={refresh} />}
@@ -232,14 +236,21 @@ function Dashboard({ connection }: { connection: DashboardConnection }) {
     </section> : null}
 
     <section className="activity-card" aria-labelledby="activity-title">
-      <div className="card-heading"><div><p className="eyebrow">HISTORY</p><h2 id="activity-title">Vault activity</h2></div><span className="activity-count">{activity.length} {activity.length === 1 ? "event" : "events"}</span></div>
+      <div className="card-heading"><div><h2 id="activity-title">Vault activity</h2>
+        {environment === "localnet" && <p className="muted">Explorer uses your local chain. Allow local network access if prompted.</p>}
+      </div><span className="activity-count">{activity.length} {activity.length === 1 ? "event" : "events"}</span></div>
       {activity.length === 0 ? <div className="empty-activity"><span aria-hidden="true">↔</span><strong>No activity yet</strong><p>Create your vault to begin. Actions and rejected trades will appear here.</p></div> : <div className="table-scroll"><table>
         <thead><tr><th>Time</th><th>Action</th><th>Amount</th><th>Result</th></tr></thead>
         <tbody>{activity.map((item) => <tr key={item.signature}>
           <td><time>{timeLabel(item.blockTime)}</time></td>
-          <td><span className="action-name">{details.current.get(item.signature)?.label ?? "Transaction"}</span><code className="signature" title={item.signature}>{item.signature}</code></td>
+          <td><span className="action-name">{details.current.get(item.signature)?.label ?? "Transaction"}</span>
+            {environment === "localnet" ? <a className="signature" title={item.signature} aria-label={`View transaction ${item.signature} on Solana Explorer`}
+              href={`https://explorer.solana.com/tx/${encodeURIComponent(item.signature)}?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899`} target="_blank" rel="noopener noreferrer"><code>{shorten(item.signature)}</code></a>
+              : <code className="signature">{item.signature}</code>}</td>
           <td className="activity-amount">{details.current.get(item.signature)?.amount ?? "—"}</td>
-          <td><span className={`result ${item.ok ? "ok" : "blocked"}`}><span aria-hidden="true">{item.ok ? "✓" : "✗"}</span> {item.ok ? "Success" : item.error ?? "Failed"}</span></td>
+          <td><span className={`result ${item.ok ? "ok" : "blocked"}`}><span aria-hidden="true">{item.ok ? "✓" : "✗"}</span> {item.ok ? "Success" : item.error ?? "Failed"}</span>
+            {!item.ok && vault && <p className="rejection-reason">{rejectionReason(item.error ?? "Failed", vault,
+              details.current.get(item.signature)?.amount.replace(/ testUSDC$/, ""))}</p>}</td>
         </tr>)}</tbody>
       </table></div>}
     </section>

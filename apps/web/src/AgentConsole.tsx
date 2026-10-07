@@ -73,7 +73,7 @@ export function AgentConsole({ vault, disabled, onBusy, onComplete }: {
   const resisted = steps.some((step) => step.type === "notice" && step.code === "injection_resisted");
   const locked = disabled || busy || !vault;
   return <section className="agent-console" aria-labelledby="agent-title" aria-busy={busy}>
-    <div className="card-heading"><div><p className="eyebrow">BOUNDED AUTONOMY</p><h2 id="agent-title">Agent console</h2></div></div>
+    <div className="card-heading"><h2 id="agent-title">Agent console</h2></div>
     <div className="agent-content">
       <div className="agent-mode" role="group" aria-label="Agent mode">
         <button aria-pressed={live} disabled={locked} onClick={() => setLive(true)}>Live AI</button>
@@ -97,7 +97,7 @@ export function AgentConsole({ vault, disabled, onBusy, onComplete }: {
         <p>{result.ok ? `Swapped ${decimal(request?.amountUsdc ?? "0")} testUSDC; output stayed in the vault.`
           : result.origin === "program" && vault ? rejectionReason(result.error, vault, request?.amountUsdc) : "The request could not be confirmed by the program. Check localnet and retry."}</p>
       </div>}
-      <div className="agent-steps">{steps.map((step, index) => {
+      <div className="agent-steps" role="region" aria-label="Agent details" tabIndex={0}>{steps.map((step, index) => {
         switch (step.type) {
           case "news": return <div key={index}><h3>News</h3><News step={step} /></div>;
           case "model_reply": return <div key={index}><h3>{step.source === "live" ? "Model reply" : step.source === "scripted" ? "Scripted reply" : "Fixed hacker request · No AI"}</h3><pre>{typeof step.reply === "string" ? step.reply : JSON.stringify(step.reply, null, 2)}</pre></div>;

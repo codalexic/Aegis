@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 import {
   accountData, assertProgramError, assertSuccess, DEMO_DEX_ID, dexIdl,
   freshVault, FUNDING, instruction, readVault, revokeInstruction, send,
-  snapshotVault, tokenAccount,
+  snapshotVault, tokenAccount, withdrawInstruction,
 } from "./helpers";
 import {
   createPoolFixture, initializePoolInstruction, OUTPUT_LIQUIDITY, type PoolFixture,
@@ -65,10 +65,40 @@ describe("vault execute_swap", () => {
     expect(accountData(f.svm, f.pool)).toEqual(poolBefore);
   });
 
+  it("permits a swap of 50 at the exact per-trade cap", () => {
+    const f = freshSwapVault();
+    const vaultBefore = readVault(f);
+    assertSuccess(send(f.svm, [executeSwapInstruction(f, 50_000_000n)], [f.agent]));
+    expect(tokenAccount(f.svm, f.inputVault).amount).toBe(FUNDING - 50_000_000n);
+    expect(tokenAccount(f.svm, f.outputVault).amount).toBe(500_000_000n);
+    expect(tokenAccount(f.svm, f.inputReserve).amount).toBe(50_000_000n);
+    expect(tokenAccount(f.svm, f.outputReserve).amount).toBe(OUTPUT_LIQUIDITY - 500_000_000n);
+    expect(readVault(f)).toEqual({ ...vaultBefore, spent_raw: 50_000_000n });
+  });
+
   it("rejects 60 with CapExceeded and leaves balances and spent unchanged", () => {
     const f = freshSwapVault();
     const before = snapshot(f);
     assertPolicyError(send(f.svm, [executeSwapInstruction(f, 60_000_000n)], [f.agent]), "CapExceeded");
+    expect(snapshot(f)).toEqual(before);
+  });
+
+  it("permits five swaps of 20, then rejects a sixth with BudgetExceeded", () => {
+    // Fund enough output for all six trades to isolate the budget restriction.
+    const liquidity = 1_200_000_000n;
+    const f = freshSwapVault(liquidity);
+    const vaultBefore = readVault(f);
+    for (let count = 1n; count <= 5n; count++) {
+      assertSuccess(send(f.svm, [executeSwapInstruction(f, 20_000_000n)], [f.agent]));
+      const spent = count * 20_000_000n;
+      expect(readVault(f)).toEqual({ ...vaultBefore, spent_raw: spent });
+      expect(tokenAccount(f.svm, f.inputVault).amount).toBe(FUNDING - spent);
+      expect(tokenAccount(f.svm, f.outputVault).amount).toBe(count * 200_000_000n);
+      expect(tokenAccount(f.svm, f.inputReserve).amount).toBe(spent);
+      expect(tokenAccount(f.svm, f.outputReserve).amount).toBe(liquidity - count * 200_000_000n);
+    }
+    const before = snapshot(f);
+    assertPolicyError(send(f.svm, [executeSwapInstruction(f, 20_000_000n)], [f.agent]), "BudgetExceeded");
     expect(snapshot(f)).toEqual(before);
   });
 
@@ -86,6 +116,69 @@ describe("vault execute_swap", () => {
     ], [f.agent]), "AccountMismatch");
     expect(snapshot(f)).toEqual(before);
     expect(accountData(f.svm, destination)).toEqual(attackerBefore);
+  });
+
+  it("rejects a swap signed by the owner instead of the agent with Unauthorized", () => {
+    const f = freshSwapVault();
+    const before = snapshot(f);
+    assertPolicyError(send(f.svm, [
+      executeSwapInstruction(f, 20_000_000n, { agent: f.owner.publicKey }),
+    ], [f.owner]), "Unauthorized");
+    expect(snapshot(f)).toEqual(before);
+  });
+
+  it("rejects an agent withdrawal with Unauthorized after a successful swap", () => {
+    const f = freshSwapVault();
+    assertSuccess(send(f.svm, [executeSwapInstruction(f, 20_000_000n)], [f.agent]));
+    const before = snapshot(f);
+    assertPolicyError(send(f.svm, [
+      withdrawInstruction(f, 20_000_000n, { owner: f.agent.publicKey }),
+    ], [f.agent]), "Unauthorized");
+    expect(snapshot(f)).toEqual(before);
+  });
+
+  it("rejects an otherwise valid swap after revocation with Revoked", () => {
+    const f = freshSwapVault();
+    assertSuccess(send(f.svm, [executeSwapInstruction(f, 20_000_000n)], [f.agent]));
+    assertSuccess(send(f.svm, [revokeInstruction(f)], [f.owner]));
+    expect(readVault(f)).toMatchObject({ revoked: true, spent_raw: 20_000_000n });
+    const before = snapshot(f);
+    assertPolicyError(send(f.svm, [executeSwapInstruction(f, 20_000_000n)], [f.agent]), "Revoked");
+    expect(snapshot(f)).toEqual(before);
+  });
+
+  it.each([0n, 1n])("rejects an otherwise valid swap at expiry + %s seconds with Expired", (secondsAfterExpiry) => {
+    const f = freshSwapVault();
+    const clock = f.svm.getClock();
+    clock.unixTimestamp = f.policy.expiryUnix - 1n;
+    f.svm.setClock(clock);
+    // Trading still works immediately before the chain-time boundary.
+    assertSuccess(send(f.svm, [executeSwapInstruction(f, 20_000_000n)], [f.agent]));
+    expect(readVault(f).spent_raw).toBe(20_000_000n);
+    clock.unixTimestamp = f.policy.expiryUnix + secondsAfterExpiry;
+    f.svm.setClock(clock);
+    const before = snapshot(f);
+    assertPolicyError(send(f.svm, [executeSwapInstruction(f, 20_000_000n)], [f.agent]), "Expired");
+    expect(snapshot(f)).toEqual(before);
+  });
+
+  it("lets the owner withdraw remaining input and swap proceeds after revocation", () => {
+    const f = freshSwapVault();
+    assertSuccess(send(f.svm, [executeSwapInstruction(f, 20_000_000n)], [f.agent]));
+    assertSuccess(send(f.svm, [revokeInstruction(f)], [f.owner]));
+    const revokedState = readVault(f);
+    expect(revokedState).toMatchObject({ revoked: true, spent_raw: 20_000_000n });
+    assertSuccess(send(f.svm, [
+      withdrawInstruction(f, FUNDING - 20_000_000n),
+      withdrawInstruction(f, 200_000_000n, { source: f.outputVault, destination: f.ownerOutput }),
+    ], [f.owner]));
+    expect(tokenAccount(f.svm, f.inputVault).amount).toBe(0n);
+    expect(tokenAccount(f.svm, f.outputVault).amount).toBe(0n);
+    expect(tokenAccount(f.svm, f.ownerInput).amount).toBe(FUNDING - 20_000_000n);
+    expect(tokenAccount(f.svm, f.ownerOutput).amount).toBe(200_000_000n);
+    expect(tokenAccount(f.svm, f.inputReserve).amount).toBe(20_000_000n);
+    expect(tokenAccount(f.svm, f.outputReserve).amount).toBe(OUTPUT_LIQUIDITY - 200_000_000n);
+    expect(readVault(f)).toEqual(revokedState);
   });
 
   it.each([

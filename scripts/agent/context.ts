@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { Keypair, PublicKey, type Signer } from "@solana/web3.js";
-import { MockAegisClient, type AegisClient, type SwapAccounts, type TxResult } from "../../packages/sdk/src/index";
+import { AnchorAegisClient, MockAegisClient, type LocalnetDeployment, type AegisClient, type SwapAccounts, type TxResult } from "../../packages/sdk/src/index";
 import { AgentError } from "./model";
 
 export type AgentClient = AegisClient & {
@@ -24,7 +24,7 @@ export function vaultAddress(value: unknown): PublicKey {
   }
 }
 
-/** Localnet credential/address loading only; the real client is wired in C4. */
+/** Always read only the agent's signing key. */
 export async function loadLocalnetAgent(explicitVault?: string): Promise<{ agent: Signer; vault: PublicKey }> {
   let selected: unknown = explicitVault;
   if (!selected) {
@@ -44,6 +44,21 @@ export async function loadLocalnetAgent(explicitVault?: string): Promise<{ agent
   } catch {
     throw new AgentError("Cannot load .keys/agent.json; run pnpm localnet to create a valid test agent key.");
   }
+}
+
+export async function createLocalnetContext(explicitVault?: string): Promise<AgentContext> {
+  let deployment: LocalnetDeployment & { lastVault?: string; vaults?: string[] };
+  try {
+    deployment = JSON.parse(await readFile(new URL("../../deployments/localnet.json", import.meta.url), "utf8"));
+  } catch { throw new AgentError("Cannot read deployments/localnet.json; start pnpm localnet first."); }
+  const selected = explicitVault ?? deployment.lastVault ?? deployment.vaults?.at(-1);
+  const identity = await loadLocalnetAgent(vaultAddress(selected).toBase58());
+  try {
+    if (identity.agent.publicKey.toBase58() !== deployment.agent) throw new Error();
+    const client = new AnchorAegisClient({ deployment });
+    await client.getVault(identity.vault);
+    return { client, ...identity };
+  } catch { throw new AgentError("Cannot connect the localnet agent to this vault; create a vault in the dashboard and check the deployment/agent key."); }
 }
 
 export async function createMockContext(explicitVault?: string): Promise<AgentContext> {

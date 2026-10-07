@@ -152,6 +152,8 @@ async function main() {
   console.log("Starting a fresh local validator with aegis and demo_dex...");
   const validator = spawn("solana-test-validator", [
     "--reset", "--ledger", ledger, "--bind-address", "127.0.0.1", "--rpc-port", "8899",
+    // Preserve RPC activity through a demo; the default 10,000 shreds prune it within minutes.
+    "--limit-ledger-size", "1000000",
     // Avoid depending on a globally configured CLI wallet on a clean machine.
     "--mint", owner.publicKey.toBase58(),
     "--bpf-program", aegisId.toBase58(), resolve(root, "target/deploy/aegis.so"),

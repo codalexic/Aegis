@@ -1,4 +1,5 @@
-import { BN, Program, utils, type IdlAccounts } from "@coral-xyz/anchor";
+import * as anchor from "@coral-xyz/anchor";
+import type { IdlAccounts } from "@coral-xyz/anchor";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID, createAssociatedTokenAccountIdempotentInstruction,
   createTransferCheckedInstruction, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID, unpackAccount,
@@ -15,13 +16,16 @@ import { isU64 } from "./amounts";
 import { ClientError, failure, transactionErrorName } from "./errors";
 import type { Activity, AegisClient, CreateVaultParams, SwapAccounts, TxResult, VaultState } from "./types";
 
-export type LocalnetDeployment = typeof localnet;
+// Dashboard creation adds lastVault; a freshly seeded deployment has no vault yet.
+export type LocalnetDeployment = Omit<typeof localnet, "lastVault"> & { lastVault?: string };
 export interface AnchorClientOptions {
   /** Public addresses only. Pass freshly read JSON after reseeding localnet if needed. */
   deployment?: LocalnetDeployment;
   connection?: Connection;
 }
 const commitment = "confirmed";
+// Node's ESM loader exposes Anchor's CommonJS exports through default; browser builds expose named exports.
+const { BN, Program, utils } = (Reflect.get(anchor, "default") ?? anchor) as typeof anchor;
 const transactionRead = { commitment, maxSupportedTransactionVersion: 1 } as const;
 
 function requireLocalUrl(value: string, protocol: "http:" | "ws:") {
@@ -31,7 +35,7 @@ function requireLocalUrl(value: string, protocol: "http:" | "ws:") {
   }
 }
 
-function u64(value: bigint): BN {
+function u64(value: bigint): anchor.BN {
   // Serialization bounds only; policy checks (including zero) belong to the program.
   if (!isU64(value)) throw new ClientError("InvalidAmount");
   return new BN(value.toString());
@@ -41,7 +45,7 @@ function u64(value: bigint): BN {
 export class AnchorAegisClient implements AegisClient {
   readonly environment = "localnet" as const;
   readonly connection: Connection;
-  private readonly program: Program<Aegis>;
+  private readonly program: anchor.Program<Aegis>;
   private readonly inputMint: PublicKey;
   private readonly outputMint: PublicKey;
   private readonly pool: PublicKey;

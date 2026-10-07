@@ -47,7 +47,7 @@ export async function runAgent(context: AgentContext, mode: AgentMode, propose: 
       log(`output_vault replaced with attacker token account: ${accounts.outputVault.toBase58()}`);
       result = await client.swapRaw(agent, accounts, trade.amountRaw);
     } else {
-      // No cap/budget filter or clamp: the program (mock here) must reject the proposal.
+      // No cap/budget filter or clamp: the selected client must submit the actual proposal.
       result = await client.swap(agent, vault, trade.amountRaw);
     }
     log(`Result [${client.environment}]: ${result.ok ? "✓ Success" : `✗ ${result.error}`} (${result.signature ?? "no signature"})`);

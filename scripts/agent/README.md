@@ -1,4 +1,4 @@
-# Agent demo (C2)
+# Agent demo
 
 Run from the repository root. Each mock command creates its own vault funded with
 1,000 testUSDC, cap 50, budget 100, expiry +1h. Its in-memory state is separate from
@@ -39,9 +39,15 @@ directly to `bigint`; cap and budget are never used to clamp or replace a propos
 If the model ignores/refuses the injection, the output says so and recommends
 `--mode scripted`. Nothing silently falls back or fabricates a model reply.
 
-Localnet credential loading accepts `--vault ADDRESS`, then `lastVault` (or the
-last entry of `vaults`) in `deployments/localnet.json`, and reads only
-`.keys/agent.json`. The real client and localnet execution remain C3/C4 work.
+For localnet, start `pnpm localnet` and `AEGIS_ENV=localnet pnpm dev`, then create
+and fund the vault in the dashboard at http://127.0.0.1:5173. Run the same commands
+above with `AEGIS_ENV=localnet`; normal and both blocked attacks appear in the
+dashboard activity automatically. Unlike mock mode, commands share persistent
+chain state and spend the same vault budget.
+
+Localnet accepts `--vault ADDRESS`, then `lastVault` (or the last entry of `vaults`)
+in `deployments/localnet.json`. Dashboard creation records `lastVault`. The agent
+uses `AnchorAegisClient` and reads only `.keys/agent.json` for signing.
 Mock `--vault` can select only this process's deterministic demo vault.
 
 Offline checks:

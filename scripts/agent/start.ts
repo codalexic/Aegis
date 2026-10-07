@@ -1,6 +1,6 @@
 import { loadEnvFile } from "node:process";
 import { parseArgs } from "node:util";
-import { createMockContext, loadLocalnetAgent } from "./context";
+import { createMockContext, createLocalnetContext } from "./context";
 import { AgentError, askModel, modelConfig, SCRIPTED_HINT } from "./model";
 import { runAgent } from "./run";
 
@@ -12,7 +12,7 @@ async function main() {
     }, strict: true }));
   } catch { throw new AgentError("Usage: pnpm agent --mode normal|injected|attacker|scripted [--vault ADDRESS]"); }
   if (values.help) {
-    console.log("Usage: pnpm agent --mode normal|injected|attacker|scripted [--vault ADDRESS]\nAEGIS_ENV=mock (default). AI_PROVIDER=gemini|anthropic|openai, AI_MODEL optional; provider keys in .env.\nMock runs create a fresh funded vault, separate from the dashboard. Localnet integration follows in C4.");
+    console.log("Usage: pnpm agent --mode normal|injected|attacker|scripted [--vault ADDRESS]\nAEGIS_ENV=mock|localnet (default mock). AI_PROVIDER=gemini|anthropic|openai, AI_MODEL optional; provider keys in .env.\nMock runs create a fresh funded vault. Localnet uses --vault or the last vault recorded by the dashboard.");
     return;
   }
   const mode = values.mode;
@@ -24,12 +24,10 @@ async function main() {
   }
   const environment = process.env.AEGIS_ENV ?? "mock";
   if (environment !== "mock" && environment !== "localnet") throw new AgentError("AEGIS_ENV must be mock or localnet.");
-  if (environment === "localnet") {
-    await loadLocalnetAgent(values.vault);
-    throw new AgentError("Localnet agent integration is task C4. Use AEGIS_ENV=mock for C2.");
-  }
-  const context = await createMockContext(values.vault);
-  console.log(`[mock] Aegis agent · ${mode}\nFresh demo vault: ${context.vault.toBase58()}\nFunded 1,000 testUSDC · cap 50 · budget 100 · expiry +1h.\nSimulated transactions; this session is separate from the dashboard.`);
+  const context = environment === "mock" ? await createMockContext(values.vault) : await createLocalnetContext(values.vault);
+  console.log(`[${environment}] Aegis agent · ${mode}\nVault: ${context.vault.toBase58()}`);
+  console.log(environment === "mock" ? "Fresh simulated vault: 1,000 testUSDC · cap 50 · budget 100 · expiry +1h. Separate from the dashboard."
+    : "Test key · localnet only. Transactions use the agent key and appear in the dashboard's chain activity.");
   const config = mode === "normal" || mode === "injected" ? modelConfig(process.env) : undefined;
   if (config) console.log(`AI: ${config.provider} / ${config.model}`);
   const passed = await runAgent(context, mode, async (input) => {

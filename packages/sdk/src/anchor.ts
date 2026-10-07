@@ -14,13 +14,15 @@ import localnet from "../../../deployments/localnet.json";
 import { AEGIS_PROGRAM_ID, DEMO_DEX_PROGRAM_ID, deriveSwapAccounts, deriveVaultAuthorityPda, deriveVaultPda } from "./addresses";
 import { isU64 } from "./amounts";
 import { ClientError, failure, transactionErrorName } from "./errors";
+import { createDevnetConnection, DEVNET_RPC_URL, DEVNET_WS_URL } from "./devnet";
 import type { Activity, AegisClient, CreateVaultParams, SwapAccounts, TxResult, VaultState } from "./types";
 
 // Dashboard creation adds lastVault; a freshly seeded deployment has no vault yet.
-export type LocalnetDeployment = Omit<typeof localnet, "lastVault"> & { lastVault?: string };
+export type ChainDeployment = Omit<typeof localnet, "lastVault"> & { lastVault?: string };
+export type LocalnetDeployment = ChainDeployment;
 export interface AnchorClientOptions {
   /** Public addresses only. Pass freshly read JSON after reseeding localnet if needed. */
-  deployment?: LocalnetDeployment;
+  deployment?: ChainDeployment;
   connection?: Connection;
 }
 const commitment = "confirmed";
@@ -43,7 +45,7 @@ function u64(value: bigint): anchor.BN {
 
 /** Wallet-free reads; each write signs only with the explicitly supplied signer. */
 export class AnchorAegisClient implements AegisClient {
-  readonly environment = "localnet" as const;
+  readonly environment: "localnet" | "devnet";
   readonly connection: Connection;
   private readonly program: anchor.Program<Aegis>;
   private readonly inputMint: PublicKey;
@@ -54,12 +56,21 @@ export class AnchorAegisClient implements AegisClient {
   private readonly outputReserve: PublicKey;
 
   constructor({ deployment = localnet, connection }: AnchorClientOptions = {}) {
-    requireLocalUrl(deployment.rpcUrl, "http:");
-    requireLocalUrl(deployment.wsUrl, "ws:");
-    if (connection) requireLocalUrl(connection.rpcEndpoint, "http:");
-    if (deployment.environment !== "localnet" || deployment.programs.aegis !== AEGIS_PROGRAM_ID.toBase58() ||
+    if (deployment.environment === "devnet") {
+      if (deployment.rpcUrl !== DEVNET_RPC_URL || deployment.wsUrl !== DEVNET_WS_URL ||
+          (connection && connection.rpcEndpoint !== DEVNET_RPC_URL)) {
+        throw new ClientError("Only the public Solana devnet endpoint is supported in devnet mode.");
+      }
+    } else {
+      requireLocalUrl(deployment.rpcUrl, "http:");
+      requireLocalUrl(deployment.wsUrl, "ws:");
+      if (connection) requireLocalUrl(connection.rpcEndpoint, "http:");
+    }
+    if (!["localnet", "devnet"].includes(deployment.environment) || deployment.programs.aegis !== AEGIS_PROGRAM_ID.toBase58() ||
         deployment.programs.demoDex !== DEMO_DEX_PROGRAM_ID.toBase58()) throw new ClientError("DeploymentProgramMismatch");
-    this.connection = connection ?? new Connection(deployment.rpcUrl, { commitment, wsEndpoint: deployment.wsUrl });
+    this.environment = deployment.environment as "localnet" | "devnet";
+    this.connection = connection ?? (this.environment === "devnet" ? createDevnetConnection()
+      : new Connection(deployment.rpcUrl, { commitment, wsEndpoint: deployment.wsUrl }));
     this.program = new Program<Aegis>(aegisIdl as Aegis, { connection: this.connection });
     this.inputMint = new PublicKey(deployment.inputMint);
     this.outputMint = new PublicKey(deployment.outputMint);

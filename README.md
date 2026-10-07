@@ -96,3 +96,50 @@ For an offline simulation, use `AEGIS_ENV=mock pnpm dev` or
 
 Details: [agent providers and modes](scripts/agent/README.md),
 [terminal demo](scripts/demo/README.md), [interface specification](docs/planning/INTERFACES.md).
+
+## Devnet
+
+D1 tooling is ready; public deployment and the devnet 8/8 demo still require
+funding. The dashboard remains localnet/mock until D2.
+
+Keep the original program keypairs backed up in `.keys/programs/`; the deploy
+command verifies their public keys against the committed IDs. A fresh clone
+needs those backups to deploy at the same IDs. Deployer, mint, agent and upload
+buffer keys stay under ignored `.keys/` with mode 600. Never publish them.
+
+```bash
+anchor build
+pnpm devnet:deploy --check  # read-only RPC; never sends transactions
+```
+
+The check prints the public deployer address, live balance, program sizes and
+exact funding shortfall, and exits nonzero if underfunded. Its threshold includes
+live account rent, 0.05 SOL for agent fees and a 0.05 SOL transaction-fee allowance.
+Actual fees vary; unused SOL stays in the deployer. Fund the printed address with
+**devnet SOL** at https://faucet.solana.com (GitHub login provides a higher limit).
+The script never requests an airdrop itself.
+
+Once funded and ready to deploy:
+
+```bash
+pnpm devnet:deploy
+AEGIS_ENV=devnet pnpm demo
+# For an existing active, funded devnet vault:
+AEGIS_ENV=devnet pnpm agent --mode scripted --vault <VAULT_ADDRESS>
+```
+
+Deployment checks funding before any transaction, uses the existing program IDs
+and `.keys/devnet-deployer.json` as upgrade/mint authority, creates testUSDC (6
+decimals) and testSOL (9), seeds 100,000 testSOL in the pool and 10,000 testUSDC
+for the owner, and funds `.keys/devnet-agent.json`. Reruns reuse mints/pool,
+skip identical binaries and top up only missing balances. Upload buffer keys
+are preserved for resuming failures. Run one deployment process at a time.
+
+Successful setup writes public addresses to `deployments/devnet.json`. Pass it
+to the SDK with `createClient("devnet", { deployment })`. The agent uses only the
+devnet agent key; the demo also uses the deployer. RPC retries use bounded backoff
+and identical signed bytes. Signatures link to Explorer with `?cluster=devnet`.
+Localnet defaults and loopback restrictions are preserved.
+
+With localnet running, `pnpm test:devnet` checks the funding gate, key reuse and
+seeding twice on the local validator. It spends no public devnet SOL.

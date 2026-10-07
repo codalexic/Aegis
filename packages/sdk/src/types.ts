@@ -1,6 +1,6 @@
 import type { PublicKey, Signer } from "@solana/web3.js";
 
-export type AegisEnvironment = "mock" | "localnet";
+export type AegisEnvironment = "mock" | "localnet" | "devnet";
 
 export interface CreateVaultParams {
   vaultId: bigint;

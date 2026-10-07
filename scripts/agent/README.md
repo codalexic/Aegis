@@ -1,5 +1,11 @@
 # Agent demo
 
+After `pnpm devnet:deploy`, use `AEGIS_ENV=devnet pnpm agent --mode scripted --vault <ADDRESS>`
+for an active funded devnet vault. Devnet reads `deployments/devnet.json` and only
+`.keys/devnet-agent.json`, never the deployer/mint-authority key. It prints devnet
+Explorer links and uses the SDK's bounded RPC retries. Live modes use the same
+provider configuration below; keys are never part of a model request.
+
 Run from the repository root. Each mock command creates its own vault funded with
 1,000 testUSDC, cap 50, budget 100, expiry +1h. Its in-memory state is separate from
 the dashboard. Every simulated transaction is labelled `mock`.

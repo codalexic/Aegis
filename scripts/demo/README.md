@@ -28,6 +28,12 @@ owner funds the vault; successful runs return 980 testUSDC and 0.2 testSOL, spen
 The demo reads `AEGIS_ENV` from the process environment and defaults to localnet;
 it does not load the agent's `.env` configuration.
 
+After `pnpm devnet:deploy` succeeds, `AEGIS_ENV=devnet pnpm demo` runs the same
+eight steps against devnet. It reads `deployments/devnet.json`, uses
+`.keys/devnet-deployer.json` as owner and `.keys/devnet-agent.json` as agent,
+requires real program-origin rejections, and prints devnet Explorer links for
+every signature. RPC transport retries never rebuild a signed transaction.
+
 Completion check: start a fresh `pnpm localnet` in another terminal, then run both
 demos consecutively against that same chain:
 

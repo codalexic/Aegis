@@ -5,8 +5,8 @@ import { isDeepStrictEqual, parseArgs } from "node:util";
 import { getAccount, getAssociatedTokenAddressSync, getOrCreateAssociatedTokenAccount } from "@solana/spl-token";
 import { Keypair, PublicKey, type Signer } from "@solana/web3.js";
 import {
-  AnchorAegisClient, MockAegisClient, deriveSwapAccounts, rawAmountToUi,
-  type LocalnetDeployment, type TxResult, type VaultState,
+  AnchorAegisClient, MockAegisClient, deriveSwapAccounts, explorerTransactionUrl, rawAmountToUi,
+  type AegisEnvironment, type ChainDeployment, type TxResult, type VaultState,
 } from "../../packages/sdk/src/index";
 
 class DemoError extends Error {}
@@ -18,7 +18,7 @@ function requireDemo(condition: boolean, message: string): asserts condition {
   if (!condition) throw new DemoError(message);
 }
 
-async function loadKey(name: "owner" | "agent", expected: string): Promise<Signer> {
+async function loadKey(name: string, expected: string): Promise<Signer> {
   try {
     const bytes: unknown = JSON.parse(await readFile(new URL(`../../.keys/${name}.json`, import.meta.url), "utf8"));
     if (!Array.isArray(bytes) || bytes.length !== 64 ||
@@ -26,7 +26,7 @@ async function loadKey(name: "owner" | "agent", expected: string): Promise<Signe
     const key = Keypair.fromSecretKey(Uint8Array.from(bytes));
     if (key.publicKey.toBase58() !== expected) throw new Error();
     return key;
-  } catch { throw new DemoError(`Cannot load the localnet ${name} test key; run pnpm localnet first.`); }
+  } catch { throw new DemoError(`Cannot load .keys/${name}.json or its public key does not match the deployment.`); }
 }
 
 function mockIdentity(byte: number): Signer {
@@ -34,19 +34,21 @@ function mockIdentity(byte: number): Signer {
     get secretKey(): Uint8Array { throw new DemoError("Mock identities cannot sign transactions."); } };
 }
 
-async function context(environment: "localnet" | "mock") {
+async function context(environment: AegisEnvironment) {
   if (environment === "mock") return {
     client: new MockAegisClient(), owner: mockIdentity(3), agent: mockIdentity(4), now: BigInt(Math.floor(Date.now() / 1000)),
   };
-  let deployment: LocalnetDeployment;
-  try { deployment = JSON.parse(await readFile(new URL("../../deployments/localnet.json", import.meta.url), "utf8")); }
-  catch { throw new DemoError("Cannot read deployments/localnet.json; run pnpm localnet first."); }
+  let deployment: ChainDeployment;
+  try { deployment = JSON.parse(await readFile(new URL(`../../deployments/${environment}.json`, import.meta.url), "utf8")); }
+  catch { throw new DemoError(`Cannot read deployments/${environment}.json; run pnpm ${environment === "devnet" ? "devnet:deploy" : "localnet"} first.`); }
+  requireDemo(deployment.environment === environment, "Deployment environment mismatch.");
   const client = new AnchorAegisClient({ deployment });
   let chainTime: number | null;
   try { chainTime = await client.connection.getBlockTime(await client.connection.getSlot("confirmed")); }
-  catch { throw new DemoError("Localnet RPC is unavailable; keep pnpm localnet running."); }
-  if (chainTime === null) throw new DemoError("Localnet clock is unavailable; wait for pnpm localnet to finish seeding.");
-  return { client, owner: await loadKey("owner", deployment.owner), agent: await loadKey("agent", deployment.agent), now: BigInt(chainTime) };
+  catch { throw new DemoError(`${environment} RPC is unavailable; retry when the endpoint is healthy.`); }
+  if (chainTime === null) throw new DemoError(`${environment} clock is unavailable; retry shortly.`);
+  return { client, owner: await loadKey(environment === "devnet" ? "devnet-deployer" : "owner", deployment.owner),
+    agent: await loadKey(environment === "devnet" ? "devnet-agent" : "agent", deployment.agent), now: BigInt(chainTime) };
 }
 
 async function main() {
@@ -54,15 +56,16 @@ async function main() {
   try { ({ values: { help } } = parseArgs({ options: { help: { type: "boolean" } }, strict: true })); }
   catch { throw new DemoError("Usage: pnpm demo [--help]"); }
   if (help) {
-    console.log("Usage: pnpm demo\nRun the scripted vault story on localnet (default). Start pnpm localnet first.\nAEGIS_ENV=mock pnpm demo runs a labelled simulation without keys or RPC.");
+    console.log("Usage: pnpm demo\nRun the scripted vault story on localnet (default). Start pnpm localnet first.\nAEGIS_ENV=devnet pnpm demo uses deployments/devnet.json after pnpm devnet:deploy.\nAEGIS_ENV=mock pnpm demo runs a labelled simulation without keys or RPC.");
     return;
   }
   const environment = process.env.AEGIS_ENV ?? "localnet";
-  requireDemo(environment === "localnet" || environment === "mock", "AEGIS_ENV must be localnet or mock.");
+  requireDemo(environment === "localnet" || environment === "mock" || environment === "devnet", "AEGIS_ENV must be localnet, devnet or mock.");
   const { client, owner, agent, now } = await context(environment);
   const expiryUnix = now + 3600n;
   console.log(`[${environment}] Aegis · scripted terminal demo`);
-  console.log(environment === "localnet" ? "Test key · localnet only. Real transactions with test tokens." : "Mock simulation. All transactions and balances are simulated.");
+  console.log(environment === "mock" ? "Mock simulation. All transactions and balances are simulated."
+    : `Test key · ${environment} only. Real transactions with test tokens.`);
   console.log("Cap 50 testUSDC · budget 100 testUSDC · expiry +1 hour\nScripted proposals; no AI provider is called.");
   let step = 0;
   async function title(text: string) {
@@ -71,9 +74,10 @@ async function main() {
   }
   function result(transaction: TxResult, expectedError?: string) {
     const expected = expectedError ? !transaction.ok && transaction.error === expectedError &&
-      transaction.origin === (environment === "localnet" ? "program" : "client") : transaction.ok;
+      transaction.origin === (environment === "mock" ? "client" : "program") : transaction.ok;
     console.log(`  ${transaction.ok ? "✓ Success" : `✗ ${transaction.error} (${transaction.origin})`}`);
     if (transaction.signature) console.log(`  Signature: ${transaction.signature}`);
+    if (transaction.signature && environment === "devnet") console.log(`  Explorer: ${explorerTransactionUrl(transaction.signature, environment)}`);
     requireDemo(Boolean(expected), `Unexpected result; expected ${expectedError ?? "Success"}. Demo stopped.`);
     requireDemo(Boolean(transaction.signature) && transaction.signature!.startsWith("mock-") === (environment === "mock"),
       "Missing or incorrectly labelled transaction signature. Demo stopped.");

@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createMockContext, createLocalnetContext, loadLocalnetAgent, vaultAddress } from "../context";
-import { AnchorAegisClient, type VaultState } from "../../../packages/sdk/src/index";
+import { createMockContext, createLocalnetContext, createChainContext, loadLocalnetAgent, vaultAddress } from "../context";
+import { AnchorAegisClient, DEVNET_RPC_URL, DEVNET_WS_URL, type VaultState } from "../../../packages/sdk/src/index";
 import deployment from "../../../deployments/localnet.json";
 
 vi.mock("node:fs/promises", () => ({ readFile: vi.fn() }));
@@ -10,6 +10,26 @@ afterEach(() => { vi.restoreAllMocks(); vi.mocked(readFile).mockReset(); });
 const address = new PublicKey(new Uint8Array(32).fill(7)).toBase58();
 
 describe("agent identity and vault selection", () => {
+  it("loads only the devnet agent key and an explicit vault in devnet mode", async () => {
+    const devnet = { ...deployment, environment: "devnet", rpcUrl: DEVNET_RPC_URL, wsUrl: DEVNET_WS_URL };
+    vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(devnet)).mockResolvedValueOnce(JSON.stringify(Array(64).fill(0)));
+    vi.spyOn(Keypair, "fromSecretKey").mockReturnValue({ publicKey: new PublicKey(deployment.agent) } as Keypair);
+    vi.spyOn(AnchorAegisClient.prototype, "getVault").mockResolvedValue({ address: new PublicKey(address) } as VaultState);
+    const context = await createChainContext("devnet", address);
+    expect(context.client.environment).toBe("devnet");
+    expect(context.vault.toBase58()).toBe(address);
+    expect(vi.mocked(readFile).mock.calls.map((call) => String(call[0]).split("/").slice(-2).join("/")))
+      .toEqual(["deployments/devnet.json", ".keys/devnet-agent.json"]);
+  });
+  it("rejects a cross-environment deployment before reading a signing key", async () => {
+    vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify(deployment));
+    await expect(createChainContext("devnet", address)).rejects.toThrow("environment mismatch");
+    expect(readFile).toHaveBeenCalledTimes(1);
+  });
+  it("fails clearly while the devnet deployment is not ready", async () => {
+    vi.mocked(readFile).mockRejectedValueOnce(new Error("missing"));
+    await expect(createChainContext("devnet", address)).rejects.toThrow("run pnpm devnet:deploy first");
+  });
   it("connects the real client with only the agent key and the recorded vault", async () => {
     vi.mocked(readFile).mockResolvedValueOnce(JSON.stringify({ ...deployment, lastVault: address }))
       .mockResolvedValueOnce(JSON.stringify(Array(64).fill(0)));

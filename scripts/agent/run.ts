@@ -1,6 +1,6 @@
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { PublicKey } from "@solana/web3.js";
-import { deriveSwapAccounts, rawAmountToUi, type TxResult } from "../../packages/sdk/src/index";
+import { deriveSwapAccounts, explorerTransactionUrl, rawAmountToUi, type AegisEnvironment, type TxResult } from "../../packages/sdk/src/index";
 import type { AgentContext } from "./context";
 import { AgentError, modelInput, newsFor, parseTrade, SCRIPTED_HINT, type ModelMode } from "./model";
 
@@ -12,7 +12,7 @@ export type Step =
   | { type: "news"; text: string; injection?: string }
   | { type: "model_reply"; reply: { amountUsdc: string; reason: string } | string; source: "live" | "scripted" | "fixed" }
   | { type: "request"; amountUsdc: string; amountRaw: string; outputVault?: string }
-  | { type: "result"; environment: "mock" | "localnet"; result: TxResult }
+  | { type: "result"; environment: AegisEnvironment; result: TxResult }
   | { type: "balances"; inputUsdc: string; outputSol: string; spentUsdc: string; remainingUsdc: string }
   | { type: "notice"; code: "injection_resisted" | "unexpected_outcome" | "error"; message: string };
 
@@ -78,6 +78,7 @@ export async function runAgent(context: AgentContext, mode: AgentMode, propose: 
     log(`Result [${client.environment}]: ${result.ok ? "✓ Success" : `✗ ${result.error}`} (${result.signature ?? "no signature"})`, {
       type: "result", environment: client.environment, result,
     });
+    if (result.signature && client.environment === "devnet") log(`Explorer: ${explorerTransactionUrl(result.signature, client.environment)}`);
     const after = await client.getVault(vault);
     log(`Balances: ${rawAmountToUi(after.inputBalanceRaw, 6)} testUSDC / ${rawAmountToUi(after.outputBalanceRaw, 9)} testSOL; spent ${rawAmountToUi(after.spentRaw, 6)} testUSDC.`, {
       type: "balances", inputUsdc: rawAmountToUi(after.inputBalanceRaw, 6), outputSol: rawAmountToUi(after.outputBalanceRaw, 9),

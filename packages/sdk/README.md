@@ -4,7 +4,16 @@
 `createClient("localnet")` or `new AnchorAegisClient()` uses the public addresses
 in `deployments/localnet.json`. After reseeding, a caller can pass freshly read
 JSON as `new AnchorAegisClient({ deployment })`. Only loopback localnet endpoints
-and the generated program IDs are accepted.
+and the generated program IDs are accepted in localnet mode.
+
+For devnet, pass the successful deployment manifest explicitly to
+`createClient("devnet", { deployment })` or `new AnchorAegisClient({ deployment })`.
+Devnet accepts only `https://api.devnet.solana.com` and its matching WebSocket
+endpoint. The default connection retries HTTP 429/5xx, transient RPC errors and
+network failures up to three times with exponential backoff. A retry resends the
+same signed bytes; program rejections are never retried as new transactions.
+`explorerTransactionUrl(signature, environment)` selects the correct cluster and
+returns no link for mock signatures. No dashboard devnet signing is added here.
 
 The client holds no wallet and reads no key files. Reads work without a signer;
 each write receives its owner or agent `Signer`, which is also the fee payer.

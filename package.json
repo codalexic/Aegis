@@ -11,6 +11,8 @@
     "idl:sync": "node scripts/idl-sync.mjs",
     "test:program": "vitest run tests/program",
     "localnet": "tsx scripts/localnet/start.ts",
+    "devnet:deploy": "tsx scripts/devnet/start.ts",
+    "test:devnet": "vitest run scripts/devnet/tests",
     "start:demo": "tsx scripts/stage/start.ts",
     "test:e2e": "vitest run --config tests/e2e/vitest.config.ts",
     "test:sdk": "vitest run packages/sdk/tests",

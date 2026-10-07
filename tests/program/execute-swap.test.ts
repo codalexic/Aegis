@@ -1,11 +1,12 @@
 import { BN } from "@coral-xyz/anchor";
+import { address, lamports } from "@solana/kit";
 import {
   createAssociatedTokenAccountInstruction,
   createMintToInstruction,
   getAssociatedTokenAddressSync,
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
-import { Keypair, type PublicKey, SystemProgram } from "@solana/web3.js";
+import { Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
 import { FailedTransactionMetadata } from "litesvm";
 import { describe, expect, it } from "vitest";
 import {
@@ -238,5 +239,104 @@ describe("vault execute_swap", () => {
     const before = snapshot(f);
     assertProgramError(send(f.svm, [executeSwapInstruction(f, 20_000_000n)], [f.agent]), "InsufficientReserve", dexIdl);
     expect(snapshot(f)).toEqual(before);
+  });
+});
+
+describe("vault rotate_agent", () => {
+  function rotateInstruction(f: PoolFixture, newAgent: PublicKey, owner = f.owner.publicKey) {
+    return instruction("rotate_agent", { new_agent: newAgent }, { owner, vault: f.vault });
+  }
+
+  function fundedReplacement(f: PoolFixture) {
+    const replacement = Keypair.generate();
+    assertSuccess(f.svm.airdrop(address(replacement.publicKey.toBase58()), lamports(10_000_000_000n)));
+    return replacement;
+  }
+
+  it.each([false, true])("lets the owner rotate with revoked=%s, preserving policy and enabling only the new agent", (revoked) => {
+    const f = freshSwapVault();
+    const replacement = fundedReplacement(f);
+    assertSuccess(send(f.svm, [executeSwapInstruction(f, 20_000_000n)], [f.agent]));
+    if (revoked) {
+      assertSuccess(send(f.svm, [revokeInstruction(f)], [f.owner]));
+      const before = snapshot(f);
+      assertPolicyError(send(f.svm, [executeSwapInstruction(f, 20_000_000n)], [f.agent]), "Revoked");
+      expect(snapshot(f)).toEqual(before);
+    }
+    const stateBefore = readVault(f);
+    const accountsBefore = snapshot(f);
+    assertSuccess(send(f.svm, [rotateInstruction(f, replacement.publicKey)], [f.owner]));
+    expect(readVault(f)).toEqual({ ...stateBefore, agent: replacement.publicKey, revoked: false });
+    expect(snapshot(f).slice(1)).toEqual(accountsBefore.slice(1));
+
+    const rotated = snapshot(f);
+    assertPolicyError(send(f.svm, [executeSwapInstruction(f, 20_000_000n)], [f.agent]), "Unauthorized");
+    expect(snapshot(f)).toEqual(rotated);
+    assertSuccess(send(f.svm, [executeSwapInstruction(f, 20_000_000n, { agent: replacement.publicKey })], [replacement]));
+    expect(readVault(f)).toEqual({ ...stateBefore, agent: replacement.publicKey, revoked: false, spent_raw: 40_000_000n });
+    expect(tokenAccount(f.svm, f.inputVault).amount).toBe(FUNDING - 40_000_000n);
+    expect(tokenAccount(f.svm, f.outputVault).amount).toBe(400_000_000n);
+  });
+
+  it("enforces the same cumulative budget across the old and new agents", () => {
+    const f = freshSwapVault();
+    const replacement = fundedReplacement(f);
+    for (let i = 0; i < 2; i++) {
+      assertSuccess(send(f.svm, [executeSwapInstruction(f, 40_000_000n)], [f.agent]));
+    }
+    const stateBefore = readVault(f);
+    expect(stateBefore.spent_raw).toBe(80_000_000n);
+    const accountsBefore = snapshot(f);
+    assertSuccess(send(f.svm, [rotateInstruction(f, replacement.publicKey)], [f.owner]));
+    expect(readVault(f)).toEqual({ ...stateBefore, agent: replacement.publicKey, revoked: false });
+    expect(snapshot(f).slice(1)).toEqual(accountsBefore.slice(1));
+
+    const beforeOverspend = snapshot(f);
+    assertPolicyError(send(f.svm, [executeSwapInstruction(f, 40_000_000n, { agent: replacement.publicKey })], [replacement]), "BudgetExceeded");
+    expect(snapshot(f)).toEqual(beforeOverspend);
+    assertSuccess(send(f.svm, [executeSwapInstruction(f, 20_000_000n, { agent: replacement.publicKey })], [replacement]));
+    expect(readVault(f)).toEqual({ ...stateBefore, agent: replacement.publicKey, revoked: false, spent_raw: 100_000_000n });
+    expect(tokenAccount(f.svm, f.inputVault).amount).toBe(FUNDING - 100_000_000n);
+    expect(tokenAccount(f.svm, f.outputVault).amount).toBe(1_000_000_000n);
+    const exhausted = snapshot(f);
+    assertPolicyError(send(f.svm, [executeSwapInstruction(f, 20_000_000n, { agent: replacement.publicKey })], [replacement]), "BudgetExceeded");
+    expect(snapshot(f)).toEqual(exhausted);
+  });
+
+  it.each([false, true])("rejects rotation by the agent with Unauthorized when revoked=%s", (revoked) => {
+    const f = freshSwapVault();
+    assertSuccess(send(f.svm, [executeSwapInstruction(f, 20_000_000n)], [f.agent]));
+    if (revoked) assertSuccess(send(f.svm, [revokeInstruction(f)], [f.owner]));
+    const before = snapshot(f);
+    assertPolicyError(send(f.svm, [rotateInstruction(f, Keypair.generate().publicKey, f.agent.publicKey)], [f.agent]), "Unauthorized");
+    expect(snapshot(f)).toEqual(before);
+  });
+
+  it.each(["default key", "owner", "current agent"])("rejects the %s as replacement without clearing revocation or changing state", (invalidAgent) => {
+    const f = freshSwapVault();
+    assertSuccess(send(f.svm, [executeSwapInstruction(f, 20_000_000n)], [f.agent]));
+    assertSuccess(send(f.svm, [revokeInstruction(f)], [f.owner]));
+    const newAgent = invalidAgent === "default key" ? PublicKey.default
+      : invalidAgent === "owner" ? f.owner.publicKey : f.agent.publicKey;
+    const before = snapshot(f);
+    assertPolicyError(send(f.svm, [rotateInstruction(f, newAgent)], [f.owner]), "InvalidAmount");
+    expect(snapshot(f)).toEqual(before);
+  });
+
+  it("does not extend an expired vault's trading permission when rotating", () => {
+    const f = freshSwapVault();
+    const replacement = fundedReplacement(f);
+    assertSuccess(send(f.svm, [executeSwapInstruction(f, 20_000_000n)], [f.agent]));
+    const clock = f.svm.getClock();
+    clock.unixTimestamp = f.policy.expiryUnix;
+    f.svm.setClock(clock);
+    const stateBefore = readVault(f);
+    const accountsBefore = snapshot(f);
+    assertSuccess(send(f.svm, [rotateInstruction(f, replacement.publicKey)], [f.owner]));
+    expect(readVault(f)).toEqual({ ...stateBefore, agent: replacement.publicKey, revoked: false });
+    expect(snapshot(f).slice(1)).toEqual(accountsBefore.slice(1));
+    const rotated = snapshot(f);
+    assertPolicyError(send(f.svm, [executeSwapInstruction(f, 20_000_000n, { agent: replacement.publicKey })], [replacement]), "Expired");
+    expect(snapshot(f)).toEqual(rotated);
   });
 });

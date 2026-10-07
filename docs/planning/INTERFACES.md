@@ -28,7 +28,7 @@ The vault's token accounts (`input_vault`, `output_vault`) are the vault authori
 
 **Vault fields:** `owner: Pubkey`, `agent: Pubkey`, `vault_id: u64`, `input_mint: Pubkey`, `output_mint: Pubkey`, `input_vault: Pubkey`, `output_vault: Pubkey`, `max_trade_raw: u64`, `budget_raw: u64`, `expiry_unix: i64`, `spent_raw: u64`, `revoked: bool`, `bump: u8`, `authority_bump: u8`, `pool_bump: u8`.
 
-Only `spent_raw` and `revoked` change after creation.
+Only `spent_raw`, `revoked`, and `agent` change after creation. `agent` changes only through owner-authorized `rotate_agent`, which also clears `revoked`.
 
 **Pool fields:** `input_mint`, `output_mint`, `input_reserve`, `output_reserve` (all `Pubkey`), `bump: u8`, `authority_bump: u8`.
 
@@ -38,10 +38,13 @@ Only `spent_raw` and `revoked` change after creation.
 | --- | --- | --- | --- |
 | `create_vault` | `vault_id: u64, agent: Pubkey, max_trade_raw: u64, budget_raw: u64, expiry_unix: i64` | owner (also pays rent) | cap > 0, cap ≤ budget, expiry > chain time, agent is not the default key or the owner, input mint ≠ output mint; creates the vault and both vault token accounts |
 | `execute_swap` | `amount_in_raw: u64` | agent (also pays fees) | see below |
-| `revoke_agent` | none | owner | sets `revoked = true` permanently |
+| `revoke_agent` | none | owner | sets `revoked = true` until the owner rotates to a different valid agent |
+| `rotate_agent` | `new_agent: Pubkey` | owner | rejects the default key, the owner, or the current agent with `InvalidAmount`; sets `agent = new_agent` and `revoked = false`; `spent_raw`, cap, budget, and expiry do not change |
 | `withdraw` | `amount_raw: u64` | owner | source is `input_vault` or `output_vault`; destination is a token account owned by the owner with the same mint; signed by vault authority; works anytime, including after revoke or expiry |
 
 Funding is a normal SPL token transfer from the owner into `input_vault`; the SDK wraps it as `fundVault`.
+
+**`rotate_agent` accounts:** `owner` (signer), `vault` (mut, same seeds and `has_one = owner @ Unauthorized` as `revoke_agent`).
 
 **`execute_swap` accounts:** `agent` (signer), `vault` (mut), `vault_authority`, `input_vault` (mut), `output_vault` (mut), `pool`, `pool_authority`, `input_reserve` (mut), `output_reserve` (mut), `demo_dex_program`, `token_program`.
 

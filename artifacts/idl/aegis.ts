@@ -415,6 +415,62 @@ export type Aegis = {
       "args": []
     },
     {
+      "name": "rotateAgent",
+      "discriminator": [
+        182,
+        91,
+        147,
+        107,
+        155,
+        47,
+        150,
+        176
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.owner",
+                "account": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "vault.vaultId",
+                "account": "vault"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "newAgent",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "withdraw",
       "discriminator": [
         183,

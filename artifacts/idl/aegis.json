@@ -409,6 +409,62 @@
       "args": []
     },
     {
+      "name": "rotate_agent",
+      "discriminator": [
+        182,
+        91,
+        147,
+        107,
+        155,
+        47,
+        150,
+        176
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.owner",
+                "account": "Vault"
+              },
+              {
+                "kind": "account",
+                "path": "vault.vault_id",
+                "account": "Vault"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_agent",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
       "name": "withdraw",
       "discriminator": [
         183,

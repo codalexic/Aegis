@@ -239,6 +239,19 @@ pub mod aegis {
         Ok(())
     }
 
+    pub fn rotate_agent(ctx: Context<RotateAgent>, new_agent: Pubkey) -> Result<()> {
+        let vault = &mut ctx.accounts.vault;
+        require!(
+            new_agent != Pubkey::default()
+                && new_agent != vault.owner
+                && new_agent != vault.agent,
+            AegisError::InvalidAmount
+        );
+        vault.agent = new_agent;
+        vault.revoked = false;
+        Ok(())
+    }
+
     pub fn withdraw(ctx: Context<Withdraw>, amount_raw: u64) -> Result<()> {
         require!(amount_raw > 0, AegisError::InvalidAmount);
 
@@ -345,6 +358,18 @@ pub struct ExecuteSwap<'info> {
 
 #[derive(Accounts)]
 pub struct RevokeAgent<'info> {
+    pub owner: Signer<'info>,
+    #[account(
+        mut,
+        seeds = [b"vault", vault.owner.as_ref(), &vault.vault_id.to_le_bytes()],
+        bump = vault.bump,
+        has_one = owner @ AegisError::Unauthorized
+    )]
+    pub vault: Account<'info, Vault>,
+}
+
+#[derive(Accounts)]
+pub struct RotateAgent<'info> {
     pub owner: Signer<'info>,
     #[account(
         mut,

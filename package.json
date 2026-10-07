@@ -12,7 +12,7 @@
     "test:program": "vitest run tests/program",
     "localnet": "tsx scripts/localnet/start.ts",
     "test:e2e": "node -e \"console.error('End-to-end tests are implemented in C5'); process.exit(1)\"",
-    "test:sdk": "node -e \"console.error('SDK tests are implemented in C0'); process.exit(1)\"",
+    "test:sdk": "vitest run packages/sdk/tests",
     "dev": "node -e \"console.error('The dashboard is implemented in C1'); process.exit(1)\"",
     "agent": "node -e \"console.error('The agent is implemented in C2'); process.exit(1)\" --",
     "demo": "node -e \"console.error('The demo is implemented in C6'); process.exit(1)\""

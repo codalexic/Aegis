@@ -2,13 +2,13 @@
 
 Ordered tasks for Codex or another coding agent. Follow [AGENTS.md](../../AGENTS.md) and implement exactly what [INTERFACES.md](INTERFACES.md) specifies. Do one task per run; stop when its **Done when** check passes and report the command output.
 
-Two tracks run in parallel: **P** (programs, Mariam reviews) and **C** (client, Alexis reviews). C tasks before C5 need nothing from the P track.
+One operator runs every task in this order: **P0 → P6, then C0 → C7.** Programs come first because they carry the most risk. Before each task, `git pull`; after its check passes, commit and push.
 
-| Order | P track (Mariam) | C track (Alexis) |
-| --- | --- | --- |
-| Day 1 | P0, P1, P2 | C0, C1, C2 |
-| Day 2 | P3, P4, P5 | C3, C4, C5 |
-| Day 3 | P6 | C6, C7 |
+| Day | Tasks |
+| --- | --- |
+| Day 1 | P0, P1, P2, P3, P4 |
+| Day 2 | P5, P6, C0, C1, C2, C3, C4 |
+| Day 3 morning | C5, C6, C7, then the review below |
 
 ---
 
@@ -24,7 +24,7 @@ Two tracks run in parallel: **P** (programs, Mariam reviews) and **C** (client, 
 
 **Done when:** `anchor build` succeeds and `pnpm install` succeeds.
 
-## P1 Program skeleton and IDL (handoff H1)
+## P1 Program skeleton and IDL
 
 **Files:** `programs/aegis/src/lib.rs`, `programs/demo_dex/src/lib.rs`, `artifacts/idl/`.
 
@@ -59,11 +59,11 @@ Two tracks run in parallel: **P** (programs, Mariam reviews) and **C** (client, 
 - Implement the seven checks in INTERFACES §3 in order, with the CPI into `demo_dex::swap` signed by the vault authority PDA, and the balance check after reload.
 - Tests: normal 20 swap; swap 60 → `CapExceeded`; output redirected to an attacker token account → `AccountMismatch`.
 
-**Done when:** `pnpm test:program` passes. **Mariam reviews every check by hand before this task is closed.**
+**Done when:** `pnpm test:program` passes. These checks are reviewed by hand in the final review (R).
 
-*Plan B (decide at Day 2 hour 4): if the CPI cannot be made to work, replace the swap with `execute_payment(amount)` that transfers testUSDC to a fixed merchant token account stored in the vault, keeping checks 1–4 and 7. Update INTERFACES.md and tell Alexis.*
+*Plan B (decide at end of Day 1): if the CPI cannot be made to work, replace the swap with `execute_payment(amount)` that transfers testUSDC to a fixed merchant token account stored in the vault, keeping checks 1–4 and 7. Update INTERFACES.md to match.*
 
-## P5 Local chain script (handoff H2)
+## P5 Local chain script
 
 **Files:** `scripts/localnet/start.ts`, `deployments/localnet.json`.
 
@@ -138,7 +138,7 @@ If the model refuses the injection, print that and suggest `--mode scripted`; do
 
 **Files:** `packages/sdk/`.
 
-Requires H1 (`artifacts/idl/`).
+Requires P1 (`artifacts/idl/`).
 
 - `AnchorAegisClient` implementing every method with `@coral-xyz/anchor` and the IDL; `swapRaw`; error mapping from Anchor error codes to the names in INTERFACES §5; `listActivity` via `getSignaturesForAddress` + `getTransaction`.
 - Reads addresses from `deployments/localnet.json`.
@@ -149,7 +149,7 @@ Requires H1 (`artifacts/idl/`).
 
 **Files:** `apps/web/`, `scripts/agent/`.
 
-Requires H2 (`pnpm localnet`).
+Requires P5 (`pnpm localnet`).
 
 - Vite dev-server plugin with `POST /api/owner/{create,fund,revoke,withdraw}` that loads `.keys/owner.json` in Node and calls `AnchorAegisClient` (INTERFACES §7). The browser never receives a key.
 - Dashboard and agent use the real client when `AEGIS_ENV=localnet`.
@@ -179,3 +179,33 @@ Run every INTERFACES §8 case through `AnchorAegisClient` against `pnpm localnet
 Short: what Aegis is, prerequisites (WSL, pinned versions), and the commands to build, start localnet, run the dashboard, agent and demo.
 
 **Done when:** following the README on a clean clone runs `pnpm demo` successfully.
+
+---
+
+## R Joint review (Alexis and Mariam, after C7)
+
+Not a Codex task. Go through this together before the feature freeze.
+
+**`programs/aegis` — compare line by line with INTERFACES §3:**
+
+- [ ] `execute_swap` requires the signer to equal `vault.agent`.
+- [ ] Revoked and expiry checks come before any transfer.
+- [ ] Cap and budget use checked arithmetic; `spent_raw` is updated only after the balance check.
+- [ ] `input_vault`, `output_vault`, pool, reserves, `demo_dex` program and token program are all constrained; no account is taken on trust.
+- [ ] The balance check after the CPI reloads both accounts and compares exact input and minimum output.
+- [ ] `withdraw` and `revoke_agent` require the owner; the agent cannot call them.
+- [ ] Nothing lets the agent change policy, close accounts or set a delegate.
+
+**Tests:**
+
+- [ ] Every case in INTERFACES §8 exists in `tests/program` and asserts unchanged state on rejection.
+- [ ] No test was weakened to pass (search for skipped tests, loosened assertions or commented-out checks).
+
+**Client and demo:**
+
+- [ ] No secret key in the repository, logs or browser bundle (`git grep -i secret`, check `.gitignore`).
+- [ ] Mock mode is labelled everywhere it appears.
+- [ ] `pnpm demo` runs the full story on a fresh `pnpm localnet`.
+- [ ] Agent `injected` and `scripted` modes both show the program rejection.
+
+Record anything found as a follow-up and split the fixes between Alexis and Mariam.

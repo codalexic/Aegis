@@ -40,7 +40,7 @@ Do one task from `CODEX_TASKS.md` at a time. When its "Done when" check passes, 
 - **Keys:** only in `.keys/` (git-ignored). Never commit, log or print a secret key. Never send a key to an AI model. The browser bundle never contains a key.
 - **IDL:** generated only. Never hand-edit files in `artifacts/idl/` or `target/`.
 - **Mock labelling:** anything from `MockAegisClient` is shown as `mock`; never fabricate signatures that look real.
-- **Ownership:** `programs/`, `tests/program/`, `scripts/localnet/`, `deployments/`, `artifacts/` belong to Mariam's track; `packages/sdk/`, `apps/web/`, `scripts/agent/`, `scripts/demo/`, `tests/e2e/` belong to Alexis's track. When working on one track, do not change the other's files; write a note instead.
+- **One operator:** one person runs every task in order (P0–P6, then C0–C7). You may change any file a task needs, but stay within that task's scope and do not refactor unrelated code.
 - Keep code small and readable. No extra abstractions, frameworks or dependencies beyond what a task needs.
 
 ## Layout

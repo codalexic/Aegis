@@ -2,9 +2,9 @@
 
 Updated: 7 October 2026
 
-Team: **Mariam** builds the on-chain programs. **Alexis** builds the SDK, dashboard and AI agent.
+Team: **Alexis** and **Mariam**.
 
-Budget: three days, about eight focused hours per person per day (24 hours each).
+Approach: a coding agent (Codex) builds the whole project first, run by Alexis, task by task from [CODEX_TASKS.md](docs/planning/CODEX_TASKS.md). Then Alexis and Mariam review and improve it together and split the follow-up work.
 
 ## 1 What we show
 
@@ -49,38 +49,30 @@ Funding is a plain token transfer into the vault's token account, so no deposit 
 | Expiry | One hour after creation |
 | Normal swap | 20 testUSDC (20000000 raw) → 0.2 testSOL (200000000 raw) |
 
-## 4 How the team works
+## 4 How we work
 
-Mariam and Alexis work separately and meet **three times**:
+**Phase 1 — Build (Alexis + Codex).** Alexis runs Codex through every task in [CODEX_TASKS.md](docs/planning/CODEX_TASKS.md), one at a time, in order: programs first (P0–P6), then client (C0–C7). Each task ends with its check passing, a commit and a push. Rules for the agent are in [AGENTS.md](AGENTS.md).
 
-| Meeting | When | Purpose |
-| --- | --- | --- |
-| M-1 | Day 1, first hour | Read [INTERFACES.md](docs/planning/INTERFACES.md) together and approve it |
-| M-2 | Day 2, last hour | First real swap from Alexis's SDK against Mariam's program |
-| M-3 | Day 3, hours 5–8 | Fix, freeze, rehearse, record |
+**Meanwhile (Mariam).** Prepares the pitch: slides, the three-minute script, answers to likely judge questions. Can read pushed code at any time but does not change it during Phase 1.
 
-Between meetings, Mariam passes work to Alexis as files in the repository:
+**Phase 2 — Review (both).** When Codex has finished, Alexis and Mariam go through the review checklist at the end of CODEX_TASKS.md, starting with the security checks in `programs/aegis`. Fixes and improvements are then split between them.
 
-| Handoff | When | What |
-| --- | --- | --- |
-| H1 | Day 1, hour 3 | Generated IDL (the program's interface file) with all final instructions and errors |
-| H2 | Day 2, hour 6 | `pnpm localnet` (`scripts/localnet/start.ts`): one command that starts a local chain with programs, tokens, pool and test wallets |
+**Phase 3 — Rehearse.** Clean restart, rehearse the demo three times, record a backup video.
 
-Until H2 arrives, Alexis works against a mock. Questions go in writing; nobody stops work waiting for an answer. Each person posts a three-line status at the end of each day.
-
-**Before Day 1 (required):** both have Node, and Mariam has Rust, Solana CLI and Anchor working in WSL. Run `anchor init` and `anchor test` on a sample project. If this fails on Day 1, the plan fails.
+**Before starting:** Rust, Solana CLI, Anchor, Node and pnpm installed in WSL (Ubuntu). Everything runs in WSL.
 
 ## 5 Schedule
 
-| | Mariam | Alexis |
+| | Alexis + Codex | Mariam |
 | --- | --- | --- |
-| **Day 1** | M-1. Program skeleton and IDL (H1). Create vault, revoke, withdraw, with tests | M-1. SDK types and mock. Dashboard against the mock |
-| **Day 2** | Test exchange and swap with all checks. Local chain script (H2). M-2 | AI agent with attack scenarios. Real SDK from the IDL. Switch to the real chain. M-2 |
-| **Day 3** | Attack tests. Fixes. M-3 | Terminal demo script and end-to-end checks. M-3 |
+| **Day 1** | P0–P4: workspace, both programs, vault lifecycle, swap with all checks | Pitch and slides |
+| **Day 2** | P5–P6: local chain, attack tests. C0–C4: SDK, dashboard, AI agent, real chain | Pitch; reads pushed code |
+| **Day 3 morning** | C5–C7: end-to-end tests, terminal demo, README | Joins review as soon as C-tasks finish |
+| **Day 3 afternoon** | Review together, fix, freeze, rehearse, record | Same |
 
-**Feature freeze: Day 3, hour 5.** After that, only fixes, rehearsal and the backup recording.
+**Feature freeze: Day 3, 15:00.** After that, only fixes, rehearsal and the backup recording.
 
-Detailed tasks: [Mariam](docs/planning/MARIAM_TASKS.md) · [Alexis](docs/planning/ALEXIS_TASKS.md) · [Coding-agent tasks](docs/planning/CODEX_TASKS.md) (with [AGENTS.md](AGENTS.md))
+[MARIAM_TASKS.md](docs/planning/MARIAM_TASKS.md) and [ALEXIS_TASKS.md](docs/planning/ALEXIS_TASKS.md) describe the earlier two-person split; they are kept as reference for dividing work after the build.
 
 ## 6 Plan B decisions
 
@@ -88,10 +80,10 @@ Each decision has a fixed time. Make it at that time; do not keep trying.
 
 | When | If | Then |
 | --- | --- | --- |
-| Day 1, hour 6 | Create vault or withdraw still fails | Mariam stops polishing and asks for help immediately; Alexis continues on the mock |
-| Day 2, hour 4 | The swap through the test exchange does not work | Replace the swap with a **payment**: the agent may pay a fixed merchant account, with the same cap, budget, expiry and revoke. Demo story stays the same. About one hour of work |
-| Day 2, M-2 | SDK cannot run a real swap | Day 3 morning becomes joint integration; Alexis drops dashboard polish |
-| Day 3, hour 5 | Dashboard is not reliable | Present with the terminal demo script |
+| Any task | Codex fails the same check three times | Stop, copy the error, ask for help (Mariam or Claude) before continuing |
+| End of Day 1 | P4 (swap through the test exchange) does not work | Replace the swap with a **payment** to a fixed merchant account, same cap, budget, expiry and revoke (see P4). Demo story stays the same |
+| End of Day 2 | Dashboard cannot use the real chain | Present with the terminal demo script (C6); spend Day 3 morning on C6 first |
+| Day 3, 15:00 | Dashboard is not reliable | Present with the terminal demo script |
 | On stage | AI or internet fails | Agent runs in scripted mode with the same attacks |
 
 Never remove a security check to save time. A smaller demo that is true beats a larger one that is not.

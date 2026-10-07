@@ -26,7 +26,7 @@ The generated IDL is the source of truth. `anchor build` writes it to `target/id
 
 The vault's token accounts (`input_vault`, `output_vault`) are the vault authority's associated token accounts for testUSDC and testSOL. The pool's reserves are the pool authority's associated token accounts for the same two mints.
 
-**Vault fields:** `owner: Pubkey`, `agent: Pubkey`, `vault_id: u64`, `input_mint: Pubkey`, `output_mint: Pubkey`, `input_vault: Pubkey`, `output_vault: Pubkey`, `max_trade_raw: u64`, `budget_raw: u64`, `expiry_unix: i64`, `spent_raw: u64`, `revoked: bool`, `bump: u8`, `authority_bump: u8`.
+**Vault fields:** `owner: Pubkey`, `agent: Pubkey`, `vault_id: u64`, `input_mint: Pubkey`, `output_mint: Pubkey`, `input_vault: Pubkey`, `output_vault: Pubkey`, `max_trade_raw: u64`, `budget_raw: u64`, `expiry_unix: i64`, `spent_raw: u64`, `revoked: bool`, `bump: u8`, `authority_bump: u8`, `pool_bump: u8`.
 
 Only `spent_raw` and `revoked` change after creation.
 

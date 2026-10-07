@@ -24,7 +24,7 @@ describe("vault lifecycle", () => {
       input_vault: f.inputVault, output_vault: f.outputVault,
       max_trade_raw: 50_000_000n, budget_raw: 100_000_000n,
       expiry_unix: NOW + 3_600n, spent_raw: 0n, revoked: false,
-      bump: f.bump, authority_bump: f.authorityBump,
+      bump: f.bump, authority_bump: f.authorityBump, pool_bump: f.poolBump,
     });
     expect(f.svm.getAccount(address(f.vault.toBase58()))).toMatchObject({
       exists: true, programAddress: AEGIS_ID.toBase58(),

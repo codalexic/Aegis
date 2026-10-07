@@ -100,6 +100,7 @@ type RawVault = {
   revoked: boolean;
   bump: number;
   authority_bump: number;
+  pool_bump: number;
 };
 
 export function readVault(f: Fixture) {
@@ -168,8 +169,11 @@ export function createFixture(overrides: Partial<Policy> & { sameMint?: boolean 
   vaultIdBytes.writeBigUInt64LE(policy.vaultId);
   const [vault, bump] = PublicKey.findProgramAddressSync([Buffer.from("vault"), owner.publicKey.toBuffer(), vaultIdBytes], AEGIS_ID);
   const [authority, authorityBump] = PublicKey.findProgramAddressSync([Buffer.from("authority"), vault.toBuffer()], AEGIS_ID);
+  const [, poolBump] = PublicKey.findProgramAddressSync(
+    [Buffer.from("pool"), inputMint.toBuffer(), outputMint.toBuffer()], DEMO_DEX_ID,
+  );
   return {
-    svm, owner, agent, inputMint, outputMint, policy, vault, bump, authority, authorityBump,
+    svm, owner, agent, inputMint, outputMint, policy, vault, bump, authority, authorityBump, poolBump,
     inputVault: getAssociatedTokenAddressSync(inputMint, authority, true),
     outputVault: getAssociatedTokenAddressSync(outputMint, authority, true),
     ownerInput: getAssociatedTokenAddressSync(inputMint, owner.publicKey),

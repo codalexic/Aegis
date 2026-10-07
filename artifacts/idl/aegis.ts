@@ -625,6 +625,10 @@ export type Aegis = {
           {
             "name": "authorityBump",
             "type": "u8"
+          },
+          {
+            "name": "poolBump",
+            "type": "u8"
           }
         ]
       }

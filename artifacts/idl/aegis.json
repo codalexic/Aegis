@@ -619,6 +619,10 @@
           {
             "name": "authority_bump",
             "type": "u8"
+          },
+          {
+            "name": "pool_bump",
+            "type": "u8"
           }
         ]
       }

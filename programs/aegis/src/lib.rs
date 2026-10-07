@@ -23,6 +23,14 @@ pub mod aegis {
         budget_raw: u64,
         expiry_unix: i64,
     ) -> Result<()> {
+        let (_, pool_bump) = Pubkey::find_program_address(
+            &[
+                b"pool",
+                ctx.accounts.input_mint.key().as_ref(),
+                ctx.accounts.output_mint.key().as_ref(),
+            ],
+            &demo_dex::ID,
+        );
         ctx.accounts.vault.set_inner(Vault {
             owner: ctx.accounts.owner.key(),
             agent,
@@ -38,6 +46,7 @@ pub mod aegis {
             revoked: false,
             bump: ctx.bumps.vault,
             authority_bump: ctx.bumps.vault_authority,
+            pool_bump,
         });
         Ok(())
     }
@@ -86,14 +95,17 @@ pub mod aegis {
             vault.output_vault,
             AegisError::AccountMismatch
         );
-        let (pool_key, pool_bump) = Pubkey::find_program_address(
+        let pool_bump = vault.pool_bump;
+        let pool_key = Pubkey::create_program_address(
             &[
                 b"pool",
                 vault.input_mint.as_ref(),
                 vault.output_mint.as_ref(),
+                &[pool_bump],
             ],
             &demo_dex::ID,
-        );
+        )
+        .map_err(|_| error!(AegisError::AccountMismatch))?;
         require_keys_eq!(
             ctx.accounts.pool.key(),
             pool_key,
@@ -392,6 +404,7 @@ pub struct Vault {
     pub revoked: bool,
     pub bump: u8,
     pub authority_bump: u8,
+    pub pool_bump: u8,
 }
 
 #[error_code]

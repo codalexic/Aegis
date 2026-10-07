@@ -60,7 +60,7 @@ export function send(svm: LiteSVM, instructions: TransactionInstruction[], signe
   return result;
 }
 
-export function assertSuccess(result: TransactionMetadata | FailedTransactionMetadata | null) {
+export function assertSuccess(result: TransactionMetadata | FailedTransactionMetadata | null): asserts result is TransactionMetadata {
   if (result === null) throw new Error("Transaction returned no metadata");
   if (result instanceof FailedTransactionMetadata) {
     throw new Error(`Transaction failed: ${result.err()}\n${result.meta().logs().join("\n")}`);

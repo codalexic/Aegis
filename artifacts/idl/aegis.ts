@@ -350,12 +350,10 @@ export type Aegis = {
           "writable": true
         },
         {
-          "name": "demoDexProgram",
-          "address": "BWsLwF3o7fzMmtGwp1qA2fC4sSTYt4BjzKQXCXHoEyNz"
+          "name": "demoDexProgram"
         },
         {
-          "name": "tokenProgram",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "name": "tokenProgram"
         }
       ],
       "args": [
@@ -567,38 +565,6 @@ export type Aegis = {
     }
   ],
   "types": [
-    {
-      "name": "pool",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "inputMint",
-            "type": "pubkey"
-          },
-          {
-            "name": "outputMint",
-            "type": "pubkey"
-          },
-          {
-            "name": "inputReserve",
-            "type": "pubkey"
-          },
-          {
-            "name": "outputReserve",
-            "type": "pubkey"
-          },
-          {
-            "name": "bump",
-            "type": "u8"
-          },
-          {
-            "name": "authorityBump",
-            "type": "u8"
-          }
-        ]
-      }
-    },
     {
       "name": "vault",
       "type": {

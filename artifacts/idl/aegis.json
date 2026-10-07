@@ -344,12 +344,10 @@
           "writable": true
         },
         {
-          "name": "demo_dex_program",
-          "address": "BWsLwF3o7fzMmtGwp1qA2fC4sSTYt4BjzKQXCXHoEyNz"
+          "name": "demo_dex_program"
         },
         {
-          "name": "token_program",
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "name": "token_program"
         }
       ],
       "args": [
@@ -561,38 +559,6 @@
     }
   ],
   "types": [
-    {
-      "name": "Pool",
-      "type": {
-        "kind": "struct",
-        "fields": [
-          {
-            "name": "input_mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "output_mint",
-            "type": "pubkey"
-          },
-          {
-            "name": "input_reserve",
-            "type": "pubkey"
-          },
-          {
-            "name": "output_reserve",
-            "type": "pubkey"
-          },
-          {
-            "name": "bump",
-            "type": "u8"
-          },
-          {
-            "name": "authority_bump",
-            "type": "u8"
-          }
-        ]
-      }
-    },
     {
       "name": "Vault",
       "type": {

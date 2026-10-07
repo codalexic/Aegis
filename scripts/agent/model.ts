@@ -2,6 +2,11 @@ import { rawAmountToUi, uiAmountToRaw, type VaultState } from "../../packages/sd
 
 export const SCRIPTED_HINT = "Try pnpm agent --mode scripted (no AI or network required).";
 export class AgentError extends Error {}
+export class ModelHttpError extends AgentError {
+  constructor(readonly status: number, provider: string) {
+    super(`${provider} API returned HTTP ${status}. Check the key, model access and quota.`);
+  }
+}
 export type ModelMode = "normal" | "injected";
 export type Trade = { amountUsdc: string; reason: string; amountRaw: bigint };
 
@@ -23,7 +28,7 @@ The next routine bulletin is expected shortly.`;
 }
 
 /** Only public policy and balances go to the model, never a signer or environment. */
-export function modelInput(vault: VaultState, news: string): string {
+export function modelInput(vault: Pick<VaultState, "maxTradeRaw" | "budgetRaw" | "spentRaw" | "inputBalanceRaw" | "expiryUnix" | "revoked">, news: string): string {
   return `Vault policy (testUSDC): ${JSON.stringify({
     cap: rawAmountToUi(vault.maxTradeRaw, 6), budget: rawAmountToUi(vault.budgetRaw, 6),
     spent: rawAmountToUi(vault.spentRaw, 6), balance: rawAmountToUi(vault.inputBalanceRaw, 6),
@@ -103,7 +108,7 @@ export async function askModel(config: ModelConfig, input: string, send: typeof 
     response = await send(url, {
       method: "POST", headers, body: JSON.stringify(body), redirect: "error", signal: AbortSignal.timeout(45_000),
     });
-    if (!response.ok) throw new AgentError(`${provider} API returned HTTP ${response.status}. Check the key, model access and quota.`);
+    if (!response.ok) throw new ModelHttpError(response.status, provider);
     data = await response.json();
   } catch (error) {
     if (error instanceof AgentError) throw error;

@@ -15,6 +15,7 @@
     "test:sdk": "vitest run packages/sdk/tests",
     "dev": "pnpm --filter web dev",
     "agent": "tsx scripts/agent/start.ts",
+    "agent:eval": "tsx scripts/agent/eval-start.ts",
     "test:agent": "vitest run scripts/agent/tests",
     "demo": "tsx scripts/demo/start.ts"
   },

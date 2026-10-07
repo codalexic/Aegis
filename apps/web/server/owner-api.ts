@@ -17,13 +17,13 @@ export function json(response: ServerResponse, status: number, value: unknown) {
 }
 
 /** Signing is restricted to requests from this loopback dashboard, including before Vite's own middleware. */
-export function requireDashboardRequest(request: IncomingMessage, write: boolean, actor: "owner" | "agent" = "owner") {
+export function requireDashboardRequest(request: IncomingMessage, write: boolean, actor: "owner" | "agent" | "faucet" = "owner", environment = "localnet") {
   const peer = request.socket.remoteAddress;
   const host = request.headers.host;
   if (!["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(peer ?? "") ||
       !host || !/^(localhost|127\.0\.0\.1|\[::1\]):\d+$/.test(host) ||
       new URL(`http://${host}`).port !== String(request.socket.localPort)) throw new ApiError(403, "Loopback dashboard requests only.");
-  if (write && (request.headers.origin !== `http://${host}` || request.headers[`x-aegis-${actor}`] !== "localnet" ||
+  if (write && (request.headers.origin !== `http://${host}` || request.headers[`x-aegis-${actor}`] !== environment ||
       request.headers["content-type"]?.split(";")[0] !== "application/json")) throw new ApiError(403, "Same-origin dashboard JSON requests only.");
 }
 

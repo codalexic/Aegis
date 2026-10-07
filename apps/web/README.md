@@ -64,3 +64,53 @@ pnpm --filter web test
 pnpm --filter web build
 grep -rE "AIza|secretKey|GEMINI" apps/web/dist
 ```
+
+## Wallet owner signing (D2)
+
+The usual `pnpm start:demo` / `AEGIS_ENV=localnet pnpm dev` flow still uses the
+local owner API. To exercise browser wallet signing against the same local chain:
+
+```sh
+pnpm localnet # if it is not already running
+AEGIS_ENV=localnet AEGIS_SIGNING=wallet pnpm dev
+```
+
+Once D1 is deployed, `AEGIS_ENV=devnet pnpm dev` selects wallet signing automatically
+and reads `deployments/devnet.json`. No devnet manifest is fabricated before deployment.
+Connect Phantom on the selected cluster; the connected wallet needs SOL there for
+fees and account rent. Get 1,000 testUSDC, then New demo vault requests two wallet
+approvals (create and fund). Revoke and each nonempty withdrawal request another
+approval. If funding is declined, the created vault stays selected for Fund 1,000.
+Disconnecting or changing wallets clears the selected vault.
+
+`@aegis/sdk/wallet` exports `WalletAegisClient` and `WalletSigner`. Pass the adapter's
+public key and `signTransaction`. It builds v0 owner transactions locally, simulates,
+asks the wallet to sign, verifies the unchanged message and owner signature, sends,
+and confirms. A small public-only transaction envelope supplies Phantom's web3
+serialization shape; it cannot sign with local keys. The React integration uses the
+pinned wallet-adapter-react base provider and hooks without mobile auto-discovery.
+
+The faucet creates the wallet's input-token ATA and mints exactly 1,000 testUSDC in
+one server-signed transaction. Limits are one claim per wallet per ten minutes and
+ten claims total per rolling hour. Allowances are reserved before RPC awaits and
+retained on uncertain failures. Limits live in the server process and reset when it
+restarts. All endpoints remain restricted to this loopback dashboard; public hosting
+and distributed abuse controls belong to D3. Agent requests in wallet mode identify
+the selected vault, and the server verifies that it authorizes the server's agent.
+
+Checks:
+
+```sh
+pnpm --filter web test
+pnpm --filter web test:localnet # requires pnpm localnet; uses an in-memory mock wallet signer
+pnpm --filter web build
+grep -rE "AIza|secretKey" apps/web/dist # expected: no matches (exit 1)
+```
+
+The localnet integration uses the actual faucet endpoint/mint, browser client, and
+all three agent endpoints with Scripted replies. It asserts successful normal trading,
+on-chain `CapExceeded` and `AccountMismatch` rejections with unchanged vault balances,
+revocation and both withdrawals. Private test signing material stays in Node.
+
+Pending: the manual Phantom-on-devnet walkthrough after D1 has sufficient SOL and
+the programs are deployed. Automated localnet signing does not replace that extension check.

@@ -5,6 +5,8 @@ import { LocalnetReader } from "./localnet-reader";
 import { actionDetail, type ActionDetail } from "./activity";
 
 export interface DashboardConnection {
+  walletMode?: boolean;
+  faucet?(): Promise<string>;
   environment: AegisEnvironment;
   client: Pick<AegisClient, "getVault" | "listActivity">;
   owner: PublicKey;

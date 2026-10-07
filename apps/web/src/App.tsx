@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { PublicKey } from "@solana/web3.js";
-import type { Activity, TxResult, VaultState } from "@aegis/sdk";
+import type { AegisEnvironment, Activity, TxResult, VaultState } from "@aegis/sdk";
 import { rawAmountToUi, uiAmountToRaw } from "../../../packages/sdk/src/amounts";
 import { connectDashboard, type DashboardConnection } from "./client";
 import type { ActionDetail } from "./activity";
 import { AgentConsole, rejectionReason } from "./AgentConsole";
+import { useWallet } from "./wallet-react";
+import { connectWalletDashboard } from "./wallet-client";
+import { explorerTransactionUrl } from "../../../packages/sdk/src/explorer";
 const nowUnix = () => BigInt(Math.floor(Date.now() / 1000));
 const shorten = (value: string) => `${value.slice(0, 4)}…${value.slice(-4)}`;
 
@@ -23,24 +26,40 @@ function timeLabel(unix?: bigint): string {
 }
 
 export function App() {
-  const environment = import.meta.env.AEGIS_ENV as "mock" | "localnet";
+  const environment = import.meta.env.AEGIS_ENV as AegisEnvironment;
+  const wallet = useWallet();
+  const walletMode = import.meta.env.AEGIS_WALLET === true;
+  const walletAddress = wallet.publicKey?.toBase58();
+  const activeWallet = useRef(walletAddress);
+  activeWallet.current = walletAddress;
   const [connection, setConnection] = useState<DashboardConnection | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
-    void connectDashboard(environment).then((value) => { if (active) setConnection(value); })
+    setConnection(null); setError(null);
+    if (walletMode && (!wallet.publicKey || !wallet.signTransaction)) return;
+    const pending = walletMode ? connectWalletDashboard(environment as "localnet" | "devnet", {
+      publicKey: wallet.publicKey!, signTransaction: async (transaction) => {
+        if (activeWallet.current !== walletAddress) throw new Error("Wallet changed.");
+        const signed = await wallet.signTransaction!(transaction);
+        if (activeWallet.current !== walletAddress) throw new Error("Wallet changed.");
+        return signed;
+      },
+    }) : connectDashboard(environment);
+    void pending.then((value) => { if (active) setConnection(value); })
       .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : "Connection failed."); });
     return () => { active = false; };
-  }, [environment]);
+  }, [environment, walletMode, walletAddress, wallet.signTransaction]);
   return <>
     <header className="site-header">
       <div className="header-inner">
         <a className="brand" href="/" aria-label="Aegis home"><img src="/favicon.svg" alt="" />Aegis</a>
         <span className="header-caption">Agent vault</span>
-        <div className="environment" title={environment === "localnet" ? "Real transactions on your local Solana chain. Test tokens only · test key · localnet only" : "Simulated funds and transactions. Refreshing the page starts a new session."}><span className="environment-dot" />{environment}</div>
+        {walletMode && <button disabled={wallet.connecting || wallet.disconnecting} onClick={() => void (wallet.connected ? wallet.disconnect() : wallet.connect()).catch(() => {})}>{wallet.connected ? "Disconnect wallet" : "Connect wallet"}</button>}
+        <div className="environment" title={environment === "devnet" ? "Solana devnet · Test tokens only · Set Phantom to devnet" : environment === "localnet" ? "Real transactions on your local Solana chain. Test tokens only · test key · localnet only" : "Simulated funds and transactions. Refreshing the page starts a new session."}><span className="environment-dot" />{environment}</div>
       </div>
     </header>
-    {connection ? <Dashboard connection={connection} /> : <main><p role={error ? "alert" : "status"}>{error ?? "Connecting to the vault…"}</p></main>}
+    {connection ? <Dashboard key={`${environment}:${connection.owner.toBase58()}`} connection={connection} /> : <main><p role={error ? "alert" : "status"}>{error ?? (walletMode && !wallet.connected ? `Connect Phantom on ${environment}. Your wallet needs SOL on this cluster for fees.` : "Connecting to the vault…")}</p></main>}
   </>;
 }
 
@@ -56,7 +75,7 @@ function Dashboard({ connection }: { connection: DashboardConnection }) {
   const [agentBusy, setAgentBusy] = useState(false);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const [tradeAmount, setTradeAmount] = useState("20");
-  const [ready, setReady] = useState(environment === "mock");
+  const [ready, setReady] = useState(environment === "mock" || !connection.initialVault);
   const refreshing = useRef(false);
 
   const refresh = useCallback(async () => {
@@ -84,7 +103,7 @@ function Dashboard({ connection }: { connection: DashboardConnection }) {
   }, [client, connection]);
 
   useEffect(() => {
-    void refresh().catch(() => setNotice({ ok: false, text: "Could not refresh vault state. Check that localnet is running." }));
+    void refresh().catch(() => setNotice({ ok: false, text: "Could not refresh vault state. Check the cluster connection." }));
     const timer = window.setInterval(() => {
       void refresh().catch(() => setNotice({ ok: false, text: "Could not refresh vault state." }));
     }, 2_000);
@@ -180,18 +199,19 @@ function Dashboard({ connection }: { connection: DashboardConnection }) {
   return <main>
     <div className="page-heading">
       <h1>AI agents can be tricked. Aegis enforces the limits on-chain.</h1>
+      {connection.faucet && <button disabled={!!busy || agentBusy} onClick={() => void run("Get testUSDC", connection.faucet!)}>Get 1,000 testUSDC</button>}
       <button className="primary" disabled={!ready || !!busy || agentBusy} onClick={() => void newDemo()}>New demo vault</button>
     </div>
 
-    <div className={`mock-note ${environment === "localnet" ? "localnet-note" : ""}`}><span className="note-icon" aria-hidden="true">i</span>{environment === "mock"
+    <div className={`mock-note ${environment !== "mock" ? "localnet-note" : ""}`}><span className="note-icon" aria-hidden="true">i</span>{environment === "mock"
       ? <span><strong>Mock environment</strong> · Simulated funds and transactions. Refreshing the page starts a new session.</span>
-      : <span><strong>Localnet environment</strong> · Real transactions on your local Solana chain. Test tokens only.</span>}</div>
+      : <span><strong>{environment === "devnet" ? "Devnet" : "Localnet"} environment</strong> · Real transactions on {environment === "devnet" ? "Solana devnet" : "your local Solana chain"}. Test tokens only.</span>}</div>
     <div className="dashboard-notice">
       {busy ? <p className="notice" role="status">{busy}…</p>
         : notice && <p className={`notice ${notice.ok ? "success" : "error"}`} role={notice.ok ? "status" : "alert"}>{notice.text}</p>}
     </div>
 
-    <div className={environment === "localnet" ? "dashboard-panels" : undefined}>
+    <div className={environment !== "mock" ? "dashboard-panels" : undefined}>
     <section className={`vault-card ${vault ? "" : "is-empty"}`} aria-labelledby="vault-title">
       <div className="card-heading">
         <h2 id="vault-title">Trading vault</h2>
@@ -227,7 +247,7 @@ function Dashboard({ connection }: { connection: DashboardConnection }) {
         <button disabled={!hasBalance || !!busy || agentBusy} onClick={() => void withdraw()}>Withdraw all</button>
       </div>
     </section>
-    {environment === "localnet" && <AgentConsole key={address.current?.toBase58()} vault={vault} disabled={!!busy} onBusy={setAgentBusy} onComplete={refresh} />}
+    {environment !== "mock" && <AgentConsole environment={environment} walletMode={connection.walletMode} key={address.current?.toBase58()} vault={vault} disabled={!!busy} onBusy={setAgentBusy} onComplete={refresh} />}
     </div>
 
     {environment === "mock" ? <section className="trade-card" aria-labelledby="trade-title">
@@ -245,8 +265,8 @@ function Dashboard({ connection }: { connection: DashboardConnection }) {
         <tbody>{activity.map((item) => <tr key={item.signature}>
           <td><time>{timeLabel(item.blockTime)}</time></td>
           <td><span className="action-name">{details.current.get(item.signature)?.label ?? "Transaction"}</span>
-            {environment === "localnet" ? <a className="signature" title={`${item.signature} · Explorer uses your local chain. Allow local network access if prompted.`} aria-label={`View transaction ${item.signature} on Solana Explorer`}
-              href={`https://explorer.solana.com/tx/${encodeURIComponent(item.signature)}?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899`} target="_blank" rel="noopener noreferrer"><code>{shorten(item.signature)}</code></a>
+            {environment !== "mock" ? <a className="signature" title={`${item.signature}${environment === "localnet" ? " · Explorer uses your local chain. Allow local network access if prompted." : " · Solana devnet"}`} aria-label={`View transaction ${item.signature} on Solana Explorer`}
+              href={explorerTransactionUrl(item.signature, environment)} target="_blank" rel="noopener noreferrer"><code>{shorten(item.signature)}</code></a>
               : <code className="signature">{item.signature}</code>}</td>
           <td className="activity-amount">{details.current.get(item.signature)?.amount ?? "—"}</td>
           <td><span className={`result ${item.ok ? "ok" : "blocked"}`}><span aria-hidden="true">{item.ok ? "✓" : "✗"}</span> {item.ok ? "Success" : item.error ?? "Failed"}</span>
@@ -255,6 +275,6 @@ function Dashboard({ connection }: { connection: DashboardConnection }) {
         </tr>)}</tbody>
       </table></div>}
     </section>
-    <footer><span>Aegis · Bounded autonomy</span><span>{environment === "mock" ? "Mock session" : "Localnet chain"} · Test tokens only</span></footer>
+    <footer><span>Aegis · Bounded autonomy</span><span>{environment === "mock" ? "Mock session" : environment === "devnet" ? "Devnet chain" : "Localnet chain"} · Test tokens only</span></footer>
   </main>;
 }

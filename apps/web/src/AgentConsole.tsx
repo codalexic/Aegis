@@ -28,7 +28,8 @@ function News({ step }: { step: Extract<Step, { type: "news" }> }) {
   return <p className="agent-news">{at < 0 ? step.text : <>{step.text.slice(0, at)}<mark>{step.injection}</mark>{step.text.slice(at + step.injection!.length)}</>}</p>;
 }
 
-export function AgentConsole({ vault, disabled, onBusy, onComplete }: {
+export function AgentConsole({ vault, disabled, onBusy, onComplete, environment = "localnet", walletMode = false }: {
+  environment?: "localnet" | "devnet"; walletMode?: boolean;
   vault: VaultState | null; disabled: boolean; onBusy(busy: boolean): void; onComplete(): Promise<void>;
 }) {
   const [live, setLive] = useState(true);
@@ -53,8 +54,8 @@ export function AgentConsole({ vault, disabled, onBusy, onComplete }: {
     setBusy(true); onBusy(true); setError(null); setSteps([]);
     try {
       const response = await fetch(`/api/agent/${scenario}`, {
-        method: "POST", headers: { "content-type": "application/json", "x-aegis-agent": "localnet" },
-        body: JSON.stringify({ live: useLive }),
+        method: "POST", headers: { "content-type": "application/json", "x-aegis-agent": environment },
+        body: JSON.stringify({ live: useLive, ...(walletMode && { vault: vault.address.toBase58() }) }),
       });
       const value = await response.json();
       if (!response.ok) {

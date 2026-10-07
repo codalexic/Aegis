@@ -1,7 +1,8 @@
 import { join } from "node:path";
 import { loadEnvFile } from "node:process";
 import type { Connect, Plugin } from "vite";
-import { createLocalnetContext } from "../../../scripts/agent/context";
+import { createChainContext, createLocalnetContext } from "../../../scripts/agent/context";
+import { PublicKey } from "@solana/web3.js";
 import { AgentError, askModel, modelConfig } from "../../../scripts/agent/model";
 import { runAgent, type Step } from "../../../scripts/agent/run";
 import { ApiError, json, readBody, requireDashboardRequest } from "./owner-api";
@@ -13,7 +14,7 @@ function configuration(root: string) {
   return modelConfig(process.env);
 }
 
-export function agentApiMiddleware(root: string): Connect.NextHandleFunction {
+export function agentApiMiddleware(root: string, environment: "localnet" | "devnet" = "localnet", walletMode = false): Connect.NextHandleFunction {
   let busy = false;
   return (request, response, next) => {
     const path = request.url?.split("?")[0];
@@ -21,7 +22,7 @@ export function agentApiMiddleware(root: string): Connect.NextHandleFunction {
     void (async () => {
       const action = path.slice("/api/agent/".length);
       const read = action === "info";
-      requireDashboardRequest(request, !read, "agent");
+      requireDashboardRequest(request, !read, "agent", environment);
       if (request.method !== (read ? "GET" : "POST")) throw new ApiError(405, "Method not allowed.");
       if (read) {
         // The model ID is the only public setting; never serialize the config or environment.
@@ -30,12 +31,18 @@ export function agentApiMiddleware(root: string): Connect.NextHandleFunction {
       }
       if (action !== "normal" && action !== "injected" && action !== "attacker") throw new ApiError(404, "Unknown agent action.");
       const body = await readBody(request);
-      if (Object.keys(body).length !== 1 || typeof body.live !== "boolean") throw new ApiError(400, "Expected only a boolean live field.");
+      if (typeof body.live !== "boolean" || Object.keys(body).some((field) => !["live", ...(walletMode ? ["vault"] : [])].includes(field))) throw new ApiError(400, "Unexpected agent request fields.");
+      if (walletMode) {
+        try { if (typeof body.vault !== "string") throw new Error(); new PublicKey(body.vault); }
+        catch { throw new ApiError(400, "Expected a valid vault address."); }
+      }
       if (busy) throw new ApiError(409, "An agent request is already running. Wait for its result.");
       busy = true;
       const steps: Step[] = [];
       try {
-        const context = await createLocalnetContext();
+        const context = walletMode ? await createChainContext(environment, body.vault as string) : await createLocalnetContext();
+        const state = await context.client.getVault(context.vault);
+        if (!state.agent.equals(context.agent.publicKey)) throw new AgentError("This vault does not authorize the server's agent.");
         const config = body.live && action !== "attacker" ? configuration(root) : undefined;
         await runAgent(context, action, async (input) => {
           if (!config) throw new AgentError("Live AI is unavailable. Use Scripted or check the server configuration.");
@@ -57,8 +64,8 @@ export function agentApiMiddleware(root: string): Connect.NextHandleFunction {
   };
 }
 
-export function agentApiPlugin(root: string): Plugin {
+export function agentApiPlugin(root: string, environment: "localnet" | "devnet" = "localnet", walletMode = false): Plugin {
   return { name: "aegis-localnet-agent", apply: "serve", configureServer(server) {
-    server.middlewares.use(agentApiMiddleware(root));
+    server.middlewares.use(agentApiMiddleware(root, environment, walletMode));
   } };
 }

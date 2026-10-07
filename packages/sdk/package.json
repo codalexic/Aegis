@@ -3,11 +3,21 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
-  "scripts": { "typecheck": "tsc --noEmit" },
+  "exports": {
+    ".": "./src/index.ts",
+    "./wallet": "./src/wallet.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
     "@coral-xyz/anchor": "npm:@anchor-lang/core@1.1.2",
     "@solana/spl-token": "0.4.15",
-    "@solana/web3.js": "1.99.0"
+    "@solana/web3.js": "1.99.0",
+    "bn.js": "5.2.2",
+    "buffer": "6.0.3"
+  },
+  "devDependencies": {
+    "@types/bn.js": "5.2.0"
   }
 }

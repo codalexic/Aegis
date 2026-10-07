@@ -1,1 +1,1 @@
-export { PublicKey, VersionedMessage } from "@solana/web3.js";
+export { PublicKey, VersionedMessage, MessageV0 } from "@solana/web3.js";

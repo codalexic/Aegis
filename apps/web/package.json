@@ -7,10 +7,13 @@
     "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
-    "test": "vitest run --config tests/vitest.config.ts"
+    "test": "vitest run --config tests/vitest.config.ts",
+    "test:localnet": "vitest run --config tests/localnet.config.ts"
   },
   "dependencies": {
     "@aegis/sdk": "workspace:*",
+    "@solana/wallet-adapter-phantom": "0.9.29",
+    "@solana/wallet-adapter-react": "0.15.40",
     "@solana/web3.js": "1.99.0",
     "buffer": "6.0.3",
     "react": "19.3.0",

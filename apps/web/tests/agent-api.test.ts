@@ -56,6 +56,16 @@ describe("agent endpoints", () => {
     expect(createLocalnetContext).not.toHaveBeenCalled();
   });
 
+  it("refuses vaults that do not authorize the server agent before any model call or transaction", async () => {
+    const state = await context.client.getVault(context.vault);
+    vi.spyOn(context.client, "getVault").mockResolvedValue({ ...state, agent: state.owner });
+    const swap = vi.spyOn(context.client, "swap");
+    const { steps } = await (await post("normal", { live: true })).json();
+    expect(steps).toEqual([{ type: "notice", code: "error", message: "This vault does not authorize the server's agent." }]);
+    expect(swap).not.toHaveBeenCalled();
+    expect(askModel).not.toHaveBeenCalled();
+  });
+
   it.each([{}, { live: "false" }, { live: false, vault: "chosen-by-caller" }, [], null])("rejects invalid input %j before loading keys", async (body) => {
     expect((await post("normal", body)).status).toBe(400);
     expect(createLocalnetContext).not.toHaveBeenCalled(); expect(loadEnvFile).not.toHaveBeenCalled();

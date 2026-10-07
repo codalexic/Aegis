@@ -14,7 +14,8 @@
     "test:e2e": "node -e \"console.error('End-to-end tests are implemented in C5'); process.exit(1)\"",
     "test:sdk": "vitest run packages/sdk/tests",
     "dev": "pnpm --filter web dev",
-    "agent": "node -e \"console.error('The agent is implemented in C2'); process.exit(1)\" --",
+    "agent": "tsx scripts/agent/start.ts",
+    "test:agent": "vitest run scripts/agent/tests",
     "demo": "node -e \"console.error('The demo is implemented in C6'); process.exit(1)\""
   },
   "devDependencies": {
@@ -22,6 +23,7 @@
     "@solana/kit": "8.4.0",
     "@solana/spl-token": "0.4.15",
     "@solana/web3.js": "1.99.0",
+    "@types/node": "26.6.4",
     "litesvm": "1.5.0",
     "tsx": "4.23.15",
     "typescript": "5.9.3",

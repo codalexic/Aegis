@@ -271,3 +271,61 @@ The build is complete. These tasks make the demo reliable and easy to present fr
 Run, in order, and report each result: `anchor build`, `pnpm test:program`, `pnpm test:sdk`, `pnpm test:agent`, web tests, `pnpm start:demo` + `pnpm test:e2e`, `pnpm demo` twice, `pnpm --filter web build`, a secret scan (`git grep -nE "AIza|BEGIN .*PRIVATE|secretKey" -- . ':!pnpm-lock.yaml'` and `git ls-files | grep -E "\.keys/|\.env$"`). Fix only real defects; do not change `programs/` without stopping to report first.
 
 **Done when:** every command above passes and the report is in the final message.
+
+---
+
+# Review fixes (Mariam's contract review, Day 2)
+
+Do these one at a time, in order. Before F1, create a rollback point: `git tag pre-review-fixes && git push origin pre-review-fixes`. Every task: `git pull` first; keep every existing check in `programs/aegis`; never weaken or delete a test; commit and push only when the check passes. Do not touch the dashboard in F1–F5.
+
+## F1 Reject invalid agent at vault creation
+
+**Files:** `programs/aegis/src/lib.rs`, `tests/program/`, `docs/planning/INTERFACES.md`.
+
+- `create_vault`: reject `agent == Pubkey::default()` and `agent == owner` with `InvalidAmount`, alongside the existing policy constraints.
+- Tests: both rejections, and that nothing is created (vault and token accounts absent).
+- INTERFACES §3 `create_vault` rules: add "agent is not the default key or the owner".
+
+**Done when:** `anchor build && pnpm idl:sync && pnpm test:program` pass.
+
+## F2 Aegis-owned exchange rate
+
+**Files:** `programs/aegis/src/lib.rs`, `tests/program/`, `docs/planning/INTERFACES.md`.
+
+- Add `pub const EXPECTED_RATE_MULTIPLIER: u64 = 10;` in `aegis` and use it in step 6 of `execute_swap` instead of `demo_dex::RATE_MULTIPLIER`.
+- Add a test asserting `EXPECTED_RATE_MULTIPLIER == demo_dex::RATE_MULTIPLIER` (a Rust unit test in `programs/aegis` is fine), so a DEX rate change fails tests instead of silently changing the Aegis guard.
+- INTERFACES §3 step 6: say the expected output uses Aegis's own rate constant.
+
+**Done when:** `anchor build && pnpm test:program` pass, plus the new Rust test (`cargo test -p aegis` or the equivalent).
+
+## F3 Store the pool bump in the vault
+
+**Files:** `programs/aegis/src/lib.rs`, `tests/program/`, `docs/planning/INTERFACES.md`.
+
+- Add `pool_bump: u8` to `Vault`. In `create_vault`, derive the pool PDA for the two mints under `demo_dex` once and store its bump.
+- In `execute_swap`, replace `find_program_address` for the pool with `create_program_address` using the stored bump; keep the same `AccountMismatch` behaviour and every other account check.
+- INTERFACES §2 vault fields: add `pool_bump`.
+
+**Done when:** `anchor build && pnpm idl:sync && pnpm test:program` pass with no test changes other than new or updated fixtures for the added field.
+
+## F4 Owner-only agent rotation (program)
+
+**Files:** `programs/aegis/src/lib.rs`, `tests/program/`, `docs/planning/INTERFACES.md`.
+
+- New instruction `rotate_agent(new_agent: Pubkey)`, accounts `owner` (signer) and `vault` (mut, same seeds and `has_one = owner @ Unauthorized` as `revoke_agent`).
+- Rules: `new_agent` is not the default key, not the owner, and not the current agent (`InvalidAmount`). Sets `agent = new_agent` and `revoked = false`. `spent_raw`, cap, budget and expiry do not change.
+- Tests: owner rotates; old agent's swap then fails with `Unauthorized`; new agent swaps within the remaining budget; spent is not reset (budget still enforced across both agents); agent calling `rotate_agent` fails with `Unauthorized`; rotating a revoked vault re-enables trading for the new agent only; invalid `new_agent` values rejected.
+- INTERFACES: add `rotate_agent` to §3 and update "Only `spent_raw` and `revoked` change after creation" to include `agent` via `rotate_agent`.
+
+**Done when:** `anchor build && pnpm idl:sync && pnpm test:program` pass. Stop and report; Claude reviews this instruction before F5.
+
+## F5 SDK support and full verification
+
+**Files:** `packages/sdk/`, `tests/e2e/`.
+
+- Add `rotateAgent(owner, vault, newAgent)` to `AegisClient`, `MockAegisClient` (same rules) and `AnchorAegisClient`, with unit tests. Map errors as for other instructions. Not added to the dashboard.
+- One e2e test: rotate, old agent rejected, new agent succeeds.
+- Restart localnet with the new programs (old vaults are incompatible with the new `Vault` layout).
+- Run and report: `anchor build`, `pnpm test:program`, `pnpm test:sdk`, `pnpm test:agent`, `pnpm --filter web test`, `pnpm --filter web build`, `pnpm start:demo` + `pnpm test:e2e`, `pnpm demo` twice.
+
+**Done when:** every command passes.

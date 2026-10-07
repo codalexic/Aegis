@@ -1,0 +1,29 @@
+{
+  "name": "aegis",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@12.9.1",
+  "engines": {
+    "node": "24.10.0"
+  },
+  "scripts": {
+    "build": "anchor build",
+    "idl:sync": "node -e \"console.error('idl:sync is implemented in P1'); process.exit(1)\"",
+    "test:program": "node -e \"console.error('Program tests are implemented in P2'); process.exit(1)\"",
+    "localnet": "node -e \"console.error('localnet is implemented in P5'); process.exit(1)\"",
+    "test:e2e": "node -e \"console.error('End-to-end tests are implemented in C5'); process.exit(1)\"",
+    "test:sdk": "node -e \"console.error('SDK tests are implemented in C0'); process.exit(1)\"",
+    "dev": "node -e \"console.error('The dashboard is implemented in C1'); process.exit(1)\"",
+    "agent": "node -e \"console.error('The agent is implemented in C2'); process.exit(1)\" --",
+    "demo": "node -e \"console.error('The demo is implemented in C6'); process.exit(1)\""
+  },
+  "devDependencies": {
+    "@coral-xyz/anchor": "npm:@anchor-lang/core@1.1.2",
+    "@solana/spl-token": "0.4.15",
+    "@solana/web3.js": "1.99.0",
+    "litesvm": "1.5.0",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3",
+    "vitest": "5.0.3"
+  }
+}

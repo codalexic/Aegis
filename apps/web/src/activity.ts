@@ -1,5 +1,7 @@
 import type { VersionedTransactionResponse } from "@solana/web3.js";
-import { AEGIS_PROGRAM_ID, deriveSwapAccounts, rawAmountToUi, type VaultState } from "@aegis/sdk";
+import type { VaultState } from "@aegis/sdk";
+import { AEGIS_PROGRAM_ID, deriveSwapAccounts } from "../../../packages/sdk/src/addresses";
+import { rawAmountToUi } from "../../../packages/sdk/src/amounts";
 import idl from "../../../artifacts/idl/aegis.json";
 
 export type ActionDetail = { label: string; amount: string };

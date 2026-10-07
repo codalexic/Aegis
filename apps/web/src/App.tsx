@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { PublicKey } from "@solana/web3.js";
-import { rawAmountToUi, uiAmountToRaw, type Activity, type TxResult, type VaultState } from "@aegis/sdk";
+import type { Activity, TxResult, VaultState } from "@aegis/sdk";
+import { rawAmountToUi, uiAmountToRaw } from "../../../packages/sdk/src/amounts";
 import { connectDashboard, type DashboardConnection } from "./client";
 import type { ActionDetail } from "./activity";
+import { AgentConsole } from "./AgentConsole";
 const nowUnix = () => BigInt(Math.floor(Date.now() / 1000));
 
 function amount(raw: bigint, decimals = 6): string {
@@ -51,6 +53,7 @@ function Dashboard({ connection }: { connection: DashboardConnection }) {
   const [activity, setActivity] = useState<Activity[]>([]);
   const [now, setNow] = useState(nowUnix);
   const [busy, setBusy] = useState<string | null>(null);
+  const [agentBusy, setAgentBusy] = useState(false);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const [tradeAmount, setTradeAmount] = useState("20");
   const [ready, setReady] = useState(environment === "mock");
@@ -92,7 +95,7 @@ function Dashboard({ connection }: { connection: DashboardConnection }) {
   }
 
   async function run(label: string, action: () => Promise<string>) {
-    if (running.current) return;
+    if (running.current || agentBusy) return;
     running.current = true;
     setBusy(label);
     setNotice(null);
@@ -166,6 +169,7 @@ function Dashboard({ connection }: { connection: DashboardConnection }) {
     {busy && <p className="notice" role="status">{busy}…</p>}
     {notice && <p className={`notice ${notice.ok ? "success" : "error"}`} role={notice.ok ? "status" : "alert"}>{notice.text}</p>}
 
+    <div className={environment === "localnet" ? "dashboard-panels" : undefined}>
     <section className="vault-card" aria-labelledby="vault-title">
       <div className="card-heading">
         <div><p className="eyebrow">YOUR VAULT</p><h2 id="vault-title">Trading vault</h2></div>
@@ -192,12 +196,14 @@ function Dashboard({ connection }: { connection: DashboardConnection }) {
       </div>
       {vault && <p className="vault-address">Vault <code>{vault.address.toBase58()}</code></p>}
       <div className="actions">
-        <button className="primary" disabled={!ready || !!vault || !!busy} onClick={() => void create()}>Create vault</button>
-        <button disabled={!vault || !!busy} onClick={() => void fund()}>Fund 1,000</button>
-        <button className="danger" disabled={!vault || vault.revoked || !!busy} onClick={() => void revoke()}>Revoke agent</button>
-        <button disabled={!hasBalance || !!busy} onClick={() => void withdraw()}>Withdraw all <span aria-hidden="true">↗</span></button>
+        <button className="primary" disabled={!ready || !!vault || !!busy || agentBusy} onClick={() => void create()}>Create vault</button>
+        <button disabled={!vault || !!busy || agentBusy} onClick={() => void fund()}>Fund 1,000</button>
+        <button className="danger" disabled={!vault || vault.revoked || !!busy || agentBusy} onClick={() => void revoke()}>Revoke agent</button>
+        <button disabled={!hasBalance || !!busy || agentBusy} onClick={() => void withdraw()}>Withdraw all <span aria-hidden="true">↗</span></button>
       </div>
     </section>
+    {environment === "localnet" && <AgentConsole vault={vault} disabled={!!busy} onBusy={setAgentBusy} onComplete={refresh} />}
+    </div>
 
     {environment === "mock" ? <section className="trade-card" aria-labelledby="trade-title">
       <div><h2 id="trade-title">Try an agent trade</h2><p className="muted">20 testUSDC fits the policy. Try 60 to see the cap reject a trade.</p></div>
@@ -205,11 +211,7 @@ function Dashboard({ connection }: { connection: DashboardConnection }) {
         <label htmlFor="trade-amount">Amount <span>testUSDC</span></label>
         <div className="trade-controls"><input id="trade-amount" inputMode="decimal" value={tradeAmount} onChange={(event) => setTradeAmount(event.target.value)} disabled={!vault || !!busy} autoComplete="off" /><button className="primary" disabled={!vault || !!busy} type="submit">Swap</button></div>
       </form>
-    </section> : <section className="trade-card" aria-labelledby="trade-title">
-      <div><h2 id="trade-title">Run the agent</h2><p className="muted">Agent trades and blocked attempts appear below automatically.</p>
-        <code className="agent-command">AEGIS_ENV=localnet pnpm agent --mode normal</code>
-        <p className="muted">Modes: normal · injected · attacker · scripted</p></div>
-    </section>}
+    </section> : null}
 
     <section className="activity-card" aria-labelledby="activity-title">
       <div className="card-heading"><div><p className="eyebrow">HISTORY</p><h2 id="activity-title">Vault activity</h2></div><span className="activity-count">{activity.length} {activity.length === 1 ? "event" : "events"}</span></div>

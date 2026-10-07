@@ -1,5 +1,7 @@
 import { PublicKey, type Signer } from "@solana/web3.js";
-import { AnchorAegisClient, MockAegisClient, type AegisClient, type AegisEnvironment, type LocalnetDeployment, type TxResult, type VaultState } from "@aegis/sdk";
+import type { AegisClient, AegisEnvironment, LocalnetDeployment, TxResult, VaultState } from "@aegis/sdk";
+import { MockAegisClient } from "../../../packages/sdk/src/mock";
+import { LocalnetReader } from "./localnet-reader";
 import { actionDetail, type ActionDetail } from "./activity";
 
 export interface DashboardConnection {
@@ -17,8 +19,12 @@ export interface DashboardConnection {
 }
 
 function mockIdentity(byte: number): Signer {
-  return { publicKey: new PublicKey(new Uint8Array(32).fill(byte)),
-    get secretKey(): Uint8Array { throw new Error("Mock identities cannot sign transactions."); } };
+  // MockAegisClient reads only the public identity. Every other access fails closed.
+  const identity = { publicKey: new PublicKey(new Uint8Array(32).fill(byte)) };
+  return new Proxy(identity, { get(target, property) {
+    if (property === "publicKey") return target.publicKey;
+    throw new Error("Mock identities cannot sign transactions.");
+  } }) as Signer;
 }
 
 async function ownerAction(action: string, body: object = {}): Promise<TxResult & { vault?: string }> {
@@ -47,7 +53,7 @@ export async function connectDashboard(environment: AegisEnvironment): Promise<D
   const response = await fetch("/api/localnet", { cache: "no-store" });
   if (!response.ok) throw new Error("Cannot connect to localnet. Start pnpm localnet and AEGIS_ENV=localnet pnpm dev.");
   const deployment: LocalnetDeployment & { lastVault: string } = await response.json();
-  const client = new AnchorAegisClient({ deployment });
+  const client = new LocalnetReader(deployment);
   return {
     environment, client, owner: new PublicKey(deployment.owner), agent: new PublicKey(deployment.agent), initialVault: new PublicKey(deployment.lastVault),
     create: async () => {
@@ -57,7 +63,7 @@ export async function connectDashboard(environment: AegisEnvironment): Promise<D
     fund: () => ownerAction("fund"), revoke: () => ownerAction("revoke"),
     withdraw: (_vault, mint, amount) => ownerAction("withdraw", { mint: mint.toBase58(), amountRaw: amount.toString() }),
     readDetail: async (signature, vault) => {
-      const transaction = await client.connection.getTransaction(signature, { commitment: "confirmed", maxSupportedTransactionVersion: 1 });
+      const transaction = await client.getTransaction(signature);
       return transaction ? actionDetail(transaction, vault) : undefined;
     },
   };

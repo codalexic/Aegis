@@ -36,14 +36,31 @@ directly over RPC every two seconds, including real signatures and the requested
 amounts on rejected transactions. `--mode scripted` exercises the same scenarios
 without calling an AI provider. Revoke agent and Withdraw all use the owner.
 
-The localnet Vite development plugin handles only create, fund, revoke and
-withdraw owner actions. It loads `.keys/owner.json` in Node; keys and environment
-contents never go to the browser. Signing requires a loopback, same-origin JSON
+The Agent console runs these scenarios from the dashboard. Live AI is selected
+by default and shows the configured model name. Scripted uses fixed replies;
+Hacker redirect always skips the model. News, the highlighted injection, model
+JSON, requests and outcomes are shown separately. If the model resists, **Retry
+scripted** sends the fixed attack with one click. Valid model proposals are
+always submitted unchanged, even when they resist the injection.
+
+The localnet Vite development plugins handle owner actions and
+`POST /api/agent/{normal,injected,attacker}` with `{ "live": boolean }`.
+Agent responses contain public structured `steps`: news, model_reply, request,
+result, balances and notice. `GET /api/agent/info` exposes only the model name.
+Owner and agent signing keys and AI configuration stay in Node. Signing requires a loopback, same-origin JSON
 request with the dashboard header. The browser cannot choose a signer, vault,
-policy or withdrawal destination. The plugin is absent in mock mode and the
+policy or withdrawal destination. The plugins are absent in mock mode and the
 production preview; localnet signing requires the development server.
+
+The browser uses a read-only RPC adapter with the generated IDL coder, public
+address/message modules and original SPL Token account reads. Vite limits the
+browser's SDK imports to those operations; the full signing SDK stays in Node.
+Curve validation uses the already-pinned Kit address utilities. Token amounts
+remain `bigint`. The adapters are checked against the SDK's addresses, balances
+and activity, and the bundle scan below must have no matches.
 
 ```bash
 pnpm --filter web test
 pnpm --filter web build
+grep -rE "AIza|secretKey|GEMINI" apps/web/dist
 ```

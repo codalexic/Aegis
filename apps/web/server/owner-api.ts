@@ -6,27 +6,27 @@ import { AnchorAegisClient, deriveVaultPda, parseRawAmount, type LocalnetDeploym
 import { Keypair, PublicKey } from "@solana/web3.js";
 import type { Connect, Plugin } from "vite";
 
-class ApiError extends Error {
+export class ApiError extends Error {
   constructor(readonly status: number, message: string) { super(message); }
 }
 
-function json(response: ServerResponse, status: number, value: unknown) {
+export function json(response: ServerResponse, status: number, value: unknown) {
   response.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" });
   response.end(JSON.stringify(value));
 }
 
 /** Signing is restricted to requests from this loopback dashboard, including before Vite's own middleware. */
-export function requireDashboardRequest(request: IncomingMessage, write: boolean) {
+export function requireDashboardRequest(request: IncomingMessage, write: boolean, actor: "owner" | "agent" = "owner") {
   const peer = request.socket.remoteAddress;
   const host = request.headers.host;
   if (!["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(peer ?? "") ||
       !host || !/^(localhost|127\.0\.0\.1|\[::1\]):\d+$/.test(host) ||
       new URL(`http://${host}`).port !== String(request.socket.localPort)) throw new ApiError(403, "Loopback dashboard requests only.");
-  if (write && (request.headers.origin !== `http://${host}` || request.headers["x-aegis-owner"] !== "localnet" ||
+  if (write && (request.headers.origin !== `http://${host}` || request.headers[`x-aegis-${actor}`] !== "localnet" ||
       request.headers["content-type"]?.split(";")[0] !== "application/json")) throw new ApiError(403, "Same-origin dashboard JSON requests only.");
 }
 
-async function readBody(request: IncomingMessage): Promise<Record<string, unknown>> {
+export async function readBody(request: IncomingMessage): Promise<Record<string, unknown>> {
   let size = 0;
   const chunks: Buffer[] = [];
   for await (const chunk of request) {

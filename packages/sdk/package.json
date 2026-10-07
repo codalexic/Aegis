@@ -6,6 +6,7 @@
   "exports": { ".": "./src/index.ts" },
   "scripts": { "typecheck": "tsc --noEmit" },
   "dependencies": {
+    "@coral-xyz/anchor": "npm:@anchor-lang/core@1.1.2",
     "@solana/spl-token": "0.4.15",
     "@solana/web3.js": "1.99.0"
   }

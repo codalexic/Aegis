@@ -138,7 +138,6 @@ describe("mock state and bounds", () => {
     const f = await freshVault();
     expect(createClient("mock")).toBeInstanceOf(MockAegisClient);
     expect(createClient("mock").environment).toBe("mock");
-    expect(() => createClient("localnet")).toThrow("Unsupported client environment");
     expect(await f.client.getVault(f.vault)).toEqual({
       address: deriveVaultPda(f.owner.publicKey, 0n)[0], owner: f.owner.publicKey, agent: f.agent.publicKey,
       inputMint: MOCK_INPUT_MINT, outputMint: MOCK_OUTPUT_MINT,

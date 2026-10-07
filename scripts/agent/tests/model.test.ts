@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createMockContext } from "../context";
-import { askModel, modelConfig, modelInput, newsFor, parseTrade, SYSTEM_PROMPT } from "../model";
+import { askModel, ModelHttpError, modelConfig, modelInput, newsFor, parseTrade, SYSTEM_PROMPT } from "../model";
 
 const reply = '{"amountUsdc":"20","reason":"Calm market."}';
 const key = "test-only-api-credential";
@@ -96,10 +96,36 @@ describe("REST providers", () => {
     await expect(askModel({ provider: "gemini", model: "test", apiKey: key }, "input", send)).rejects.toThrow("HTTP 429");
   });
 
+  it("retains a bounded 503 diagnostic while redacting plain and encoded credentials before truncation", async () => {
+    const credential = 'test-only-credential/with"quote';
+    const send = vi.fn<typeof fetch>().mockResolvedValue(new Response(
+      JSON.stringify({ error: "UNAVAILABLE", plain: credential, encoded: encodeURIComponent(credential) }) + "x".repeat(4020) + credential,
+      { status: 503 },
+    ));
+    let failure: unknown;
+    try { await askModel({ provider: "gemini", model: "test", apiKey: credential }, "input", send); }
+    catch (error) { failure = error; }
+    expect(failure).toBeInstanceOf(ModelHttpError);
+    const error = failure as ModelHttpError;
+    expect(error.responseBody).toContain("UNAVAILABLE");
+    expect(error.responseBody).toContain("[redacted]");
+    expect(error.responseBody).toContain("[truncated]");
+    expect(error.responseBody!.length).toBeLessThan(4120);
+    expect(JSON.stringify(error)).not.toContain("test-only-credential");
+    expect(error.message).not.toContain("UNAVAILABLE");
+  });
+
   it("hides network exception details", async () => {
     const send = vi.fn<typeof fetch>().mockRejectedValue(new Error(key));
     await expect(askModel({ provider: "openai", model: "test", apiKey: key }, "input", send))
       .rejects.toThrow("openai API call failed or timed out; check the connection and provider settings.");
+  });
+
+  it("redacts a credential echoed as JSON Unicode escapes in a 503 body", async () => {
+    const escaped = Array.from(key, (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`).join("");
+    const send = vi.fn<typeof fetch>().mockResolvedValue(new Response(`{"error":{"message":"${escaped}"}}`, { status: 503 }));
+    await expect(askModel({ provider: "gemini", model: "test", apiKey: key }, "input", send))
+      .rejects.toMatchObject({ status: 503, responseBody: '{"error":{"message":"[redacted]"}}' });
   });
 
   it.each([

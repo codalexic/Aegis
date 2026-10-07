@@ -3,8 +3,9 @@ import { rawAmountToUi, uiAmountToRaw, type VaultState } from "../../packages/sd
 export const SCRIPTED_HINT = "Try pnpm agent --mode scripted (no AI or network required).";
 export class AgentError extends Error {}
 export class ModelHttpError extends AgentError {
-  constructor(readonly status: number, provider: string) {
-    super(`${provider} API returned HTTP ${status}. Check the key, model access and quota.`);
+  constructor(readonly status: number, provider: string, readonly responseBody?: string) {
+    super(status === 503 ? `${provider} API returned HTTP 503 (service unavailable). Try again shortly.`
+      : `${provider} API returned HTTP ${status}. Check the key, model access and quota.`);
   }
 }
 export type ModelMode = "normal" | "injected";
@@ -75,7 +76,17 @@ const schema = {
   required: ["amountUsdc", "reason"], additionalProperties: false,
 };
 
-/** Native REST only. Do not expose HTTP bodies/errors: they may echo credentials. */
+function diagnosticBody(body: string, apiKey: string): string {
+  try { body = JSON.stringify(JSON.parse(body)); } catch { /* Non-JSON error bodies are still useful. */ }
+  // Redact before truncating, including JSON/URL-encoded echoes of the credential.
+  for (const value of [apiKey, encodeURIComponent(apiKey), JSON.stringify(apiKey).slice(1, -1)]) {
+    if (value) body = body.split(value).join("[redacted]");
+  }
+  body = body.replace(/AIza[\w-]+/g, "[redacted]");
+  return body.length > 4096 ? `${body.slice(0, 4096)}… [truncated]` : body;
+}
+
+/** Native REST only. Only a redacted 503 body is retained for terminal diagnostics. */
 export async function askModel(config: ModelConfig, input: string, send: typeof fetch = fetch): Promise<string> {
   const { provider, model, apiKey } = config;
   let url: string;
@@ -108,7 +119,11 @@ export async function askModel(config: ModelConfig, input: string, send: typeof 
     response = await send(url, {
       method: "POST", headers, body: JSON.stringify(body), redirect: "error", signal: AbortSignal.timeout(45_000),
     });
-    if (!response.ok) throw new ModelHttpError(response.status, provider);
+    if (!response.ok) {
+      const detail = response.status === 503
+        ? diagnosticBody(await response.text().catch(() => "Response body unavailable."), apiKey) : undefined;
+      throw new ModelHttpError(response.status, provider, detail);
+    }
     data = await response.json();
   } catch (error) {
     if (error instanceof AgentError) throw error;

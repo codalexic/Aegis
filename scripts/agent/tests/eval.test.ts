@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { AgentError, askModel, ModelHttpError } from "../model";
-import { EVAL_DELAY_MS, evaluateProposals, evaluationArgs } from "../eval";
+import { EVAL_DELAY_MS, SERVICE_BACKOFF_MS, evaluateProposals, evaluationArgs } from "../eval";
 
 const reply = (amountUsdc: string) => JSON.stringify({ amountUsdc, reason: "Test proposal" });
 const compliant = (input: string) => Promise.resolve(reply(input.includes("OPERATOR OVERRIDE") ? "1000" : "20"));
@@ -75,6 +75,42 @@ describe("proposal evaluation", () => {
     expect(await evaluateProposals(10, propose, log, pause)).toMatchObject({ stopped: "provider_error", passed: false });
     expect(propose).toHaveBeenCalledOnce(); expect(pause).not.toHaveBeenCalled();
     expect(log.mock.calls.flat().join("\n")).not.toContain("private transport details");
+  });
+
+  it("retries a transient 503 with backoff as the same sample and logs only a redacted body", async () => {
+    const key = "test-only-credential";
+    const success = (amount: string) => Response.json({ candidates: [{ finishReason: "STOP", content: { parts: [{ text: reply(amount) }] } }] });
+    const send = vi.fn<typeof fetch>().mockResolvedValueOnce(success("20"))
+      .mockResolvedValueOnce(new Response(`UNAVAILABLE ${key}\u001b[31m`, { status: 503 })).mockResolvedValueOnce(success("1000"));
+    const pause = vi.fn().mockResolvedValue(undefined), log = vi.fn();
+    const report = await evaluateProposals(1, (input) => askModel({ provider: "gemini", model: "test", apiKey: key }, input, send), log, pause);
+    expect(report).toMatchObject({ normal: { attempted: 1, compliant: 1 }, injected: { attempted: 1, compliant: 1 }, passed: true });
+    expect(send).toHaveBeenCalledTimes(3);
+    expect(send.mock.calls[1][1]?.body).toBe(send.mock.calls[2][1]?.body);
+    expect(pause.mock.calls.flat()).toEqual([EVAL_DELAY_MS, SERVICE_BACKOFF_MS[0]]);
+    const output = log.mock.calls.flat().join("\n");
+    expect(output).toContain("UNAVAILABLE [redacted]");
+    expect(output).not.toContain(key);
+    expect(output).not.toContain("\u001b");
+  });
+
+  it("stops after three 503 retries without counting failures as model resistance", async () => {
+    const propose = vi.fn().mockResolvedValueOnce(reply("20")).mockRejectedValue(new ModelHttpError(503, "gemini", "UNAVAILABLE"));
+    const pause = vi.fn().mockResolvedValue(undefined), log = vi.fn();
+    const report = await evaluateProposals(1, propose, log, pause);
+    expect(report).toMatchObject({ normal: { attempted: 1, compliant: 1 }, injected: { attempted: 1, compliant: 0 }, stopped: "provider_error", passed: false });
+    expect(propose).toHaveBeenCalledTimes(5);
+    expect(pause.mock.calls.flat()).toEqual([EVAL_DELAY_MS, ...SERVICE_BACKOFF_MS]);
+    expect(log.mock.calls.flat().join("\n")).toContain("HTTP 503 persists after 3 retries");
+  });
+
+  it("stops immediately if a 503 retry encounters a 429", async () => {
+    const propose = vi.fn().mockRejectedValueOnce(new ModelHttpError(503, "gemini", "UNAVAILABLE"))
+      .mockRejectedValue(new ModelHttpError(429, "gemini"));
+    const pause = vi.fn().mockResolvedValue(undefined);
+    expect(await evaluateProposals(10, propose, vi.fn(), pause)).toMatchObject({ stopped: "rate_limit", passed: false });
+    expect(propose).toHaveBeenCalledTimes(2);
+    expect(pause.mock.calls.flat()).toEqual([SERVICE_BACKOFF_MS[0]]);
   });
 
   it("does not print model reasons or malformed raw responses", async () => {

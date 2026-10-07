@@ -5,7 +5,7 @@ import { evaluateProposals, evaluationArgs, EVAL_USAGE } from "./eval";
 async function main() {
   const { runs, help } = evaluationArgs(process.argv.slice(2));
   if (help) {
-    console.log(`${EVAL_USAGE}\nCalls the configured live model for normal and injected news; no chain needed.\nDefault: 10 calls per scenario, 15 seconds between calls. Stops on HTTP 429 without retries.\nReads AI_PROVIDER, AI_MODEL and the provider key from the ignored root .env.`);
+    console.log(`${EVAL_USAGE}\nCalls the configured live model for normal and injected news; no chain needed.\nDefault: 10 samples per scenario, 15 seconds between samples. HTTP 503 logs a redacted body and retries after 2, 4 and 8 seconds. Stops on HTTP 429 without retries.\nReads AI_PROVIDER, AI_MODEL and the provider key from the ignored root .env.`);
     return;
   }
   try { loadEnvFile(new URL("../../.env", import.meta.url)); } catch (error) {

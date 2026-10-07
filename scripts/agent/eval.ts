@@ -3,7 +3,24 @@ import { parseArgs } from "node:util";
 import { AgentError, ModelHttpError, modelInput, newsFor, parseTrade, type ModelMode } from "./model";
 
 export const EVAL_DELAY_MS = 15_000;
+export const SERVICE_BACKOFF_MS = [2_000, 4_000, 8_000] as const;
 export const EVAL_USAGE = "Usage: pnpm agent:eval [--runs 10] [--help]";
+
+export async function proposeWithBackoff(propose: () => Promise<string>, log: (message: string) => void,
+  pause: (ms: number) => Promise<unknown> = setTimeout): Promise<string> {
+  for (let attempt = 0; ; attempt++) {
+    try { return await propose(); }
+    catch (error) {
+      if (!(error instanceof ModelHttpError) || error.status !== 503) throw error;
+      // askModel redacts credentials; JSON encoding also escapes terminal control characters.
+      log(`HTTP 503 response body (redacted): ${JSON.stringify(error.responseBody ?? "Response body unavailable.")}`);
+      if (attempt === SERVICE_BACKOFF_MS.length) { log("HTTP 503 persists after 3 retries."); throw error; }
+      const backoff = SERVICE_BACKOFF_MS[attempt];
+      log(`HTTP 503: retry ${attempt + 1}/3 in ${backoff / 1000}s.`);
+      await pause(backoff);
+    }
+  }
+}
 
 export function evaluationArgs(args: string[]) {
   try {
@@ -33,7 +50,7 @@ export async function evaluateProposals(runs: number, propose: (input: string) =
     inputBalanceRaw: 1_000_000_000n, expiryUnix: BigInt(Math.floor(Date.now() / 1000)) + 3600n, revoked: false };
   const modes: ModelMode[] = ["normal", "injected"];
   let first = true;
-  log(`[eval] Live model proposals only; no chain or transactions. ${runs} calls per scenario; ${EVAL_DELAY_MS / 1000}s pause between calls.`);
+  log(`[eval] Live model proposals only; no chain or transactions. ${runs} samples per scenario; ${EVAL_DELAY_MS / 1000}s pause between samples.`);
   scenarios: for (const mode of modes) {
     // Every sample gets the same fresh-vault policy, not accumulated trades.
     const input = modelInput(policy, newsFor(mode));
@@ -42,7 +59,7 @@ export async function evaluateProposals(runs: number, propose: (input: string) =
       first = false;
       report[mode].attempted++;
       let reply: string;
-      try { reply = await propose(input); }
+      try { reply = await proposeWithBackoff(() => propose(input), (message) => log(`[eval] ${mode} ${sample}/${runs}: ${message}`), pause); }
       catch (error) {
         if (error instanceof ModelHttpError && error.status === 429) {
           report.stopped = "rate_limit";
@@ -54,8 +71,8 @@ export async function evaluateProposals(runs: number, propose: (input: string) =
           continue;
         }
         report.stopped = "provider_error";
-        // Never print provider exception details, response bodies, config or credentials.
-        log("[eval] Provider call failed. Stopping; check the connection, model access and configuration.");
+        // Other bodies and arbitrary exception details may include credentials.
+        log(`[eval] Provider call failed${error instanceof ModelHttpError ? ` (HTTP ${error.status})` : ""}. Stopping; check the connection, model access and configuration.`);
         break scenarios;
       }
       try {

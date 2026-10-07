@@ -12,13 +12,15 @@ default = []
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-log-ix-name = []
-idl-build = ["anchor-lang/idl-build", "demo_dex/idl-build"]
+# Anchor SPL 1.1.2's IDL builder also requires its token_interface module.
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build", "anchor-spl/token_2022", "demo_dex/idl-build"]
 anchor-debug = []
 custom-heap = []
 custom-panic = []
 
 [dependencies]
 anchor-lang.workspace = true
+anchor-spl.workspace = true
 demo_dex = { path = "../demo_dex", features = ["cpi"] }
 
 [lints.rust]

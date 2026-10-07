@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "anchor build",
-    "idl:sync": "node -e \"console.error('idl:sync is implemented in P1'); process.exit(1)\"",
+    "idl:sync": "node scripts/idl-sync.mjs",
     "test:program": "node -e \"console.error('Program tests are implemented in P2'); process.exit(1)\"",
     "localnet": "node -e \"console.error('localnet is implemented in P5'); process.exit(1)\"",
     "test:e2e": "node -e \"console.error('End-to-end tests are implemented in C5'); process.exit(1)\"",

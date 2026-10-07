@@ -9,6 +9,7 @@ Aegis is a three-day Solana demo: an AI agent trades from a vault, and an on-cha
 1. [AEGIS_PLAN.md](AEGIS_PLAN.md) — what we build and what we do not.
 2. [docs/planning/INTERFACES.md](docs/planning/INTERFACES.md) — exact accounts, instructions, errors, SDK types. **This is the spec.**
 3. [docs/planning/CODEX_TASKS.md](docs/planning/CODEX_TASKS.md) — ordered tasks with completion checks.
+4. [docs/planning/DEVNET_TASKS.md](docs/planning/DEVNET_TASKS.md) — Phase 2: public devnet demo (D1–D5).
 
 Do one task from `CODEX_TASKS.md` at a time. When its "Done when" check passes, stop and report what you did and the command output.
 
@@ -34,7 +35,7 @@ Do one task from `CODEX_TASKS.md` at a time. When its "Done when" check passes, 
 
 ## Rules
 
-- **Scope:** build only what `AEGIS_PLAN.md` §2 lists. No ZK, Jupiter, devnet, nonces, slippage settings, backend server, database or browser wallet.
+- **Scope:** build only what `AEGIS_PLAN.md` §2 lists. No ZK, Jupiter, nonces, slippage settings, database. Exception: tasks in [docs/planning/DEVNET_TASKS.md](docs/planning/DEVNET_TASKS.md) (Phase 2) allow devnet, Phantom wallet signing, Vercel serverless functions and Solana Actions, exactly as each task describes.
 - **Security checks are the product.** Never remove, weaken or skip a check in `programs/aegis` to make a test pass. If a test fails, fix the code or report the problem.
 - **Amounts:** `u64` with checked arithmetic in Rust; `bigint` in TypeScript. Never pass token amounts through JavaScript `number`.
 - **Keys:** only in `.keys/` (git-ignored). Never commit, log or print a secret key. Never send a key to an AI model. The browser bundle never contains a key.

@@ -62,18 +62,21 @@ function Dashboard({ connection }: { connection: DashboardConnection }) {
   const refresh = useCallback(async () => {
     setNow(nowUnix());
     if (!address.current || refreshing.current) return;
+    const selected = address.current;
     refreshing.current = true;
     try {
       let state: VaultState;
-      try { state = await client.getVault(address.current); } catch (error) {
+      try { state = await client.getVault(selected); } catch (error) {
+        if (address.current !== selected) return;
         if (error instanceof Error && error.message === "VaultNotFound") { setVault(null); setActivity([]); setReady(true); return; }
         throw error;
       }
-      const history = await client.listActivity(address.current);
+      const history = await client.listActivity(selected);
       if (connection.readDetail) await Promise.all(history.filter((item) => !details.current.has(item.signature)).map(async (item) => {
         const detail = await connection.readDetail!(item.signature, state);
         if (detail) details.current.set(item.signature, detail);
       }));
+      if (address.current !== selected) return;
       setVault(state);
       setActivity(history);
       setReady(true);
@@ -122,6 +125,21 @@ function Dashboard({ connection }: { connection: DashboardConnection }) {
     return `Added 1,000 testUSDC to your ${environment} vault.`;
   });
 
+  const newDemo = () => run("New demo vault", async () => {
+    const result = await connection.newDemo();
+    if (result.vault) {
+      address.current = result.vault;
+      details.current.clear();
+      setVault(null);
+      setActivity([]);
+      setReady(false);
+    }
+    if (result.createSignature) track({ ok: true, signature: result.createSignature }, { label: "Create vault", amount: "—" });
+    track(result, { label: "Fund vault", amount: "1,000 testUSDC" });
+    if (!result.vault) throw new Error("No vault address was returned.");
+    return `New ${environment} vault funded with 1,000 testUSDC. Spent: 0.`;
+  });
+
   const revoke = () => run("Revoke agent", async () => {
     track(await connection.revoke(address.current!), { label: "Revoke agent", amount: "—" });
     return "Agent revoked. You can still withdraw your funds.";
@@ -160,7 +178,7 @@ function Dashboard({ connection }: { connection: DashboardConnection }) {
   return <main>
     <div className="page-heading">
       <div><p className="eyebrow">CONTROL CENTER</p><h1>Vault overview</h1><p className="muted">An agent can trade. You set the boundaries.</p></div>
-      <span className="refresh-note"><span className="small-dot" />Updates every 2 seconds</span>
+      <button className="primary" disabled={!ready || !!busy || agentBusy} onClick={() => void newDemo()}>New demo vault</button>
     </div>
 
     <div className="mock-note"><span className="note-icon" aria-hidden="true">i</span>{environment === "mock"
@@ -202,7 +220,7 @@ function Dashboard({ connection }: { connection: DashboardConnection }) {
         <button disabled={!hasBalance || !!busy || agentBusy} onClick={() => void withdraw()}>Withdraw all <span aria-hidden="true">↗</span></button>
       </div>
     </section>
-    {environment === "localnet" && <AgentConsole vault={vault} disabled={!!busy} onBusy={setAgentBusy} onComplete={refresh} />}
+    {environment === "localnet" && <AgentConsole key={address.current?.toBase58()} vault={vault} disabled={!!busy} onBusy={setAgentBusy} onComplete={refresh} />}
     </div>
 
     {environment === "mock" ? <section className="trade-card" aria-labelledby="trade-title">

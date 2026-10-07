@@ -11,6 +11,7 @@ export interface DashboardConnection {
   agent: PublicKey;
   initialVault: PublicKey | null;
   create(): Promise<TxResult & { vault?: PublicKey }>;
+  newDemo(): Promise<TxResult & { vault?: PublicKey; createSignature?: string }>;
   fund(vault: PublicKey): Promise<TxResult>;
   revoke(vault: PublicKey): Promise<TxResult>;
   withdraw(vault: PublicKey, mint: PublicKey, amount: bigint): Promise<TxResult>;
@@ -27,7 +28,7 @@ function mockIdentity(byte: number): Signer {
   } }) as Signer;
 }
 
-async function ownerAction(action: string, body: object = {}): Promise<TxResult & { vault?: string }> {
+async function ownerAction(action: string, body: object = {}): Promise<TxResult & { vault?: string; createSignature?: string }> {
   const response = await fetch(`/api/owner/${action}`, {
     method: "POST", headers: { "content-type": "application/json", "x-aegis-owner": "localnet" }, body: JSON.stringify(body),
   });
@@ -41,10 +42,17 @@ export async function connectDashboard(environment: AegisEnvironment): Promise<D
     const client = new MockAegisClient();
     const owner = mockIdentity(3);
     const agent = mockIdentity(4);
+    let nextVaultId = 1n;
     return {
       environment, client, owner: owner.publicKey, agent: agent.publicKey, initialVault: null,
       create: () => client.createVault(owner, { vaultId: 0n, agent: agent.publicKey, maxTradeRaw: 50_000_000n,
         budgetRaw: 100_000_000n, expiryUnix: BigInt(Math.floor(Date.now() / 1000)) + 3600n }),
+      newDemo: async () => {
+        const created = await client.createVault(owner, { vaultId: nextVaultId++, agent: agent.publicKey, maxTradeRaw: 50_000_000n,
+          budgetRaw: 100_000_000n, expiryUnix: BigInt(Math.floor(Date.now() / 1000)) + 3600n });
+        if (!created.ok || !created.vault) return created;
+        return { ...await client.fundVault(owner, created.vault, 1_000_000_000n), vault: created.vault, createSignature: created.signature };
+      },
       fund: (vault) => client.fundVault(owner, vault, 1_000_000_000n), revoke: (vault) => client.revoke(owner, vault),
       withdraw: (vault, mint, amount) => client.withdraw(owner, vault, mint, amount),
       trade: (vault, amount) => client.swap(agent, vault, amount),
@@ -59,6 +67,10 @@ export async function connectDashboard(environment: AegisEnvironment): Promise<D
     create: async () => {
       const result = await ownerAction("create");
       return { ...result, ...(result.vault ? { vault: new PublicKey(result.vault) } : { vault: undefined }) };
+    },
+    newDemo: async () => {
+      const result = await ownerAction("new-demo");
+      return { ...result, vault: result.vault ? new PublicKey(result.vault) : undefined };
     },
     fund: () => ownerAction("fund"), revoke: () => ownerAction("revoke"),
     withdraw: (_vault, mint, amount) => ownerAction("withdraw", { mint: mint.toBase58(), amountRaw: amount.toString() }),

@@ -1,4 +1,5 @@
 import { readFile, rename, writeFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { join } from "node:path";
 // A relative import lets Vite bundle the workspace's TypeScript SDK into its Node config.
@@ -63,7 +64,7 @@ export function ownerApiMiddleware(root: string): Connect.NextHandleFunction {
       requireDashboardRequest(request, !read);
       if (request.method !== (read ? "GET" : "POST")) throw new ApiError(405, "Method not allowed.");
       const action = path?.slice("/api/owner/".length);
-      if (!read && !["create", "fund", "revoke", "withdraw"].includes(action ?? "")) throw new ApiError(404, "Unknown owner action.");
+      if (!read && !["create", "new-demo", "fund", "revoke", "withdraw"].includes(action ?? "")) throw new ApiError(404, "Unknown owner action.");
       if (!read && busy) throw new ApiError(409, "An owner action is already running.");
       if (!read) busy = true;
       try {
@@ -71,7 +72,7 @@ export function ownerApiMiddleware(root: string): Connect.NextHandleFunction {
         const client = new AnchorAegisClient({ deployment });
         const ownerAddress = new PublicKey(deployment.owner);
         const agentAddress = new PublicKey(deployment.agent);
-        const [vault] = deriveVaultPda(ownerAddress, 0n);
+        const vault = deployment.lastVault ? new PublicKey(deployment.lastVault) : deriveVaultPda(ownerAddress, 0n)[0];
         if (read) {
           // Project only public deployment fields. No key-file or environment contents reach the browser.
           const { environment, rpcUrl, wsUrl, inputMint, outputMint, pool, poolAuthority, inputReserve, outputReserve, ownerInput, ownerOutput } = deployment;
@@ -83,16 +84,25 @@ export function ownerApiMiddleware(root: string): Connect.NextHandleFunction {
         const allowed = action === "withdraw" ? ["mint", "amountRaw"] : [];
         if (Object.keys(body).some((key) => !allowed.includes(key))) throw new ApiError(400, "Unexpected request fields.");
         const owner = await loadOwner(root, deployment.owner);
-        if (action === "create") {
+        if (action === "create" || action === "new-demo") {
           const chainTime = await client.connection.getBlockTime(await client.connection.getSlot("confirmed"));
           if (chainTime === null) throw new ApiError(503, "Localnet clock is unavailable.");
           const result = await client.createVault(owner, {
-            vaultId: 0n, agent: agentAddress, maxTradeRaw: 50_000_000n, budgetRaw: 100_000_000n, expiryUnix: BigInt(chainTime) + 3600n,
+            vaultId: action === "new-demo" ? randomBytes(8).readBigUInt64LE() | 1n : 0n,
+            agent: agentAddress, maxTradeRaw: 50_000_000n, budgetRaw: 100_000_000n, expiryUnix: BigInt(chainTime) + 3600n,
           });
           if (result.ok && result.vault) {
             const temporary = `${deploymentPath}.tmp`;
             await writeFile(temporary, `${JSON.stringify({ ...deployment, lastVault: result.vault.toBase58() }, null, 2)}\n`);
             await rename(temporary, deploymentPath);
+            if (action === "new-demo") {
+              // Keep a created vault selected even if funding fails, so the owner can retry funding it.
+              let funding;
+              try { funding = await client.fundVault(owner, result.vault, 1_000_000_000n); }
+              catch { funding = { ok: false, error: "Localnet funding request failed", origin: "rpc" }; }
+              return json(response, 200, { ...funding, vault: result.vault.toBase58(), createSignature: result.signature,
+                ...(!funding.ok && { error: `Vault created, but funding failed: ${funding.error}. Use Fund 1,000 to retry.` }) });
+            }
           }
           return json(response, 200, { ...result, ...(result.vault && { vault: result.vault.toBase58() }) });
         }

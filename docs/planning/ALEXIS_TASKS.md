@@ -1,73 +1,44 @@
-# Alexis Four Day SDK Dashboard and Agent Plan
+# Alexis: SDK, Dashboard and AI Agent (24 hours)
 
-Alexis owns the client work; Mariam owns the contracts, fixed test DEX, generated IDL, and deployment. This assignment is **four working days, eight hours per day: 32 hours including integration and contingency**. Use test assets only. This is a plan; implementation files do not exist because of this document.
+Alexis builds everything the audience sees and owns `packages/sdk/`, `apps/web/`, `scripts/agent/`, `scripts/demo/` and `tests/e2e/`. Follow [INTERFACES.md](INTERFACES.md).
 
-Follow [INTERFACES.md](INTERFACES.md) and [AEGIS_PLAN.md](../../AEGIS_PLAN.md). Alexis owns `packages/sdk`, `apps/web`, `scripts/agent`, `scripts/demo`, and `tests/e2e`. Both approve shared `tests/fixtures`; Mariam generates the IDL. Build one thin SDK module, one dashboard, and one local agent script. Do not create a separate types package, general REST service, indexer, or complete chain emulator.
+Alexis never waits for Mariam: until H2 (Day 2 hour 6) everything runs against the mock client. If the IDL is unclear, write the question down and keep going on the mock.
 
-ZK, circuits, provers, Jupiter integration, and Blinks are deferred until after the demo. Do not implement new cryptography. An LLM is optional only after the required flow passes; deterministic actions remain the demo path.
+## Day 1
 
-## Shared baseline
+**Hour 1 — M-1 with Mariam.** Approve the interface.
 
-The immutable public policy belongs to one vault: owner, delegated agent, fixed input/output mints, cap `50000000`, budget `100000000`, one-hour expiry, and `maxSlippageBps=100`. A reset or new authorization creates a new vault. There is no session replacement.
+**Hours 2–3 — SDK and mock.** TypeScript types, the `AegisClient` interface and `MockAegisClient`, which returns the outcomes in INTERFACES §8 (for example, a 60 swap returns `CapExceeded`). Label it as mock everywhere it appears.
 
-Implement the IDL-backed operations `create_vault`, `deposit`, `revoke_agent`, `withdraw`, and `execute_swap(amountInRaw, minOutRaw, expectedNonce, deadlineUnix)`. Resolve fixed accounts using Mariam's documented derivations. No route hash, generic instruction execution, proof envelope, or arbitrary destination belongs in the baseline.
+**Hours 4–8 — Dashboard** (one page, against the mock):
 
-testUSDC has six decimals; testSOL has nine. The test DEX rate is 100:1: input `20000000` yields output `200000000`, with minimum `198000000`. Amounts, nonce, and expiry use decimal strings in JSON. Use `bigint` arithmetic and checked bounds; never convert token amounts through JavaScript `Number`. Chain time determines validity.
+- vault card: owner, agent, cap, budget, expiry, revoked status, balances;
+- **remaining-budget bar** that drops on each trade;
+- buttons: Create vault, Fund, Revoke agent, Withdraw;
+- activity list with success/blocked badges and the program's error name;
+- environment label (`mock` / `localnet`) always visible.
 
-## A01 Freeze fixtures and client boundary
+No browser wallet and no key in the browser: on localnet, owner actions go through a Vite dev-server endpoint that signs with the test owner key in Node (INTERFACES §7). Keep it clean, not fancy.
 
-**Day 1: 2 hours. Dependency:** joint interface review. **Paths:** `packages/sdk`, `tests/fixtures`.
+## Day 2
 
-Agree the account map, wire conversions, errors, local signer boundary, and minimal deployment manifest with Mariam. Add shared fixtures for allowed 20, excessive 60, and cumulative budget exhaustion. Freeze the exact immutable-policy arguments and expiry/deadline semantics.
+**Hours 1–4 — AI agent** (`scripts/agent/`). A Node script that holds only the agent key. It asks an AI model what to trade; the model returns only an amount; the script calls `swap`. The model never sees a key. Modes:
 
-Define a small injectable port for read, build, sign/submit, and receipt lookup. Provide static mock results sufficient to scaffold the dashboard; label them as mocks.
+- **normal:** reasonable market text → the model picks 20 → succeeds;
+- **injected:** the "news" text contains a hidden instruction to swap everything → the model asks for a large amount → program returns `CapExceeded`;
+- **attacker:** uses `swapRaw` to send output to an attacker account, skipping client checks → program returns `AccountMismatch`;
+- **scripted:** the same three without the AI model, for when the AI or internet fails.
 
-**Completion/handoff:** agreed types, numerical fixtures, and a minimal mock. Mariam can confirm the same raw amounts and expected outcomes without reading frontend code.
+Print each step clearly; this output appears in the demo.
 
-## A02 Scaffold dashboard and connect initial lifecycle
+**Hours 5–6 — Real client.** `AnchorAegisClient` built from Mariam's IDL (H1): all methods, `swapRaw`, error mapping by name, `listActivity` via `getSignaturesForAddress`.
 
-**Day 1: 6 hours. Dependencies:** A01; Mariam's initial IDL and running lifecycle by the final Day-1 integration block. **Paths:** `packages/sdk`, `apps/web`.
+**Hour 7 — Switch to the real chain.** Run Mariam's `pnpm localnet` (`scripts/localnet/start.ts`) (H2), point the dashboard and agent at it, and write down anything that does not match.
 
-Create one dashboard with setup, balances/actions, and activity sections. Use mock fixtures briefly, then implement the initial Anchor adapter for vault creation, reading state, and funding. Keep transaction construction separate from signing/submission. Build only the supported instructions and inspect configured program/mint addresses.
+**Hour 8 — M-2 with Mariam.** First real swap through the SDK.
 
-The browser wallet signs owner actions. Secrets never enter DTOs, logs, manifests, or the frontend bundle. Label `mock`, `localnet`, and `devnet` explicitly.
+## Day 3
 
-**Completion/handoff:** by end Day 1, real SDK lifecycle calls use Mariam's IDL; dashboard structure exists. Share a reproducible create/read/fund command and actual configuration.
+**Hours 1–4 — Terminal demo and end-to-end checks.** `scripts/demo/run`: runs the full demo story (create, fund, normal swap, injected attack, redirect attack, revoke, blocked swap, withdraw) on the real chain and prints signatures and balances. This is the backup if the dashboard fails. Then run the cases from INTERFACES §8 through the SDK in `tests/e2e/`.
 
-## A03 Complete owner control and real swap
-
-**Day 2: 8 hours, including one shared deployment hour. Dependencies:** A02; Mariam's revoke/withdraw and fixed-DEX handoffs. **Paths:** `packages/sdk`, `scripts/demo`.
-
-Integrate revoke and owner withdrawal by noon. Both work directly through the SDK and owner wallet with the agent stopped; no application backend is required. Build the exact-input swap and validate current nonce, deadline, fixed accounts, and requested minimum.
-
-By end Day 2, execute the 20-unit swap through the actual program and test DEX. Coordinate one hour with Mariam to attempt devnet deployment/integration. If blocked when that hour ends, continue on the real local chain and prepare a clearly labelled recorded fallback.
-
-**Completion/handoff:** successful swap receipt and before/after balances; owner recovery demonstrated; direct 60-unit cap and substituted-destination smoke rejections with unchanged state; reproducible commands and environment decision. The broader attack suite follows on Day 3.
-
-## A04 Finish dashboard and deterministic agent
-
-**Day 3 morning: 4 hours. Dependencies:** A03. **Paths:** `apps/web`, `scripts/agent`.
-
-Complete balances, remaining budget, nonce, expiry, revoke, withdrawal, and activity. The local Node agent loads only its delegated test key from local secret storage. Provide deterministic valid-20 and malicious-60 modes; never expose the owner key to the agent.
-
-The script emits non-secret receipt JSON. The dashboard may import that receipt and verify its signature/status via RPC, then refresh balances. Importing JSON alone is not chain evidence. This avoids building a service to connect the script and UI.
-
-**Completion/handoff:** dashboard and both agent scenarios work by noon. Share launch commands and supported receipt states.
-
-## A05 Verify attacks and freeze features
-
-**Day 3 afternoon: 4 hours. Dependencies:** A03–A04. **Paths:** `tests/e2e`, `scripts/demo`.
-
-Use fresh vaults to isolate cases: 60 against a fresh 100 budget; five accepted 20-unit swaps and a sixth rejection; replay; revoked agent; changed destination; weak minimum output. Assert balances, nonce, and spent budget. Submit adversarial cases directly to the program rather than counting UI rejection as enforcement.
-
-Distinguish `SimulationRejected`, landed chain failure, signing rejection, and unknown outcome. Preserve signatures and reconcile before retrying. Attribute network fees separately from vault state.
-
-**Completion/handoff:** core tests pass; unresolved defects are recorded with Mariam. Freeze features at end Day 3.
-
-## A06 Rehearse record and absorb integration failures
-
-**Day 4: 8 hours: four planned, four contingency. Dependencies:** A05.
-
-Reproduce setup from clean instructions, create fresh vaults, rerun acceptance tests, and rehearse setup/fund → allowed swap → blocked malicious request → revoke → blocked trade → owner withdrawal. Record the exact environment, program/IDL identity, signatures or labelled test results, balances, and measured timings.
-
-**Completion/handoff:** working launch/reset instructions, acceptance report, and clearly labelled backup recording. Spend contingency on defects, deployment, or recording; add no deferred features. Deliver only claims demonstrated by the real program.
+**Hours 5–8 — M-3 with Mariam.** Freeze at hour 5. Rehearse the three-minute demo, record the backup video, write a short README with start commands.

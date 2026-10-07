@@ -1,73 +1,42 @@
-# Mariam Four Day Contract Track
+# Mariam: Programs (24 hours)
 
-This document describes planned work, not an existing implementation. Mariam owns contracts and deployment; Alexis owns the client, SDK, agent, and UI. Budget: **32 focused hours across four days**, including integration and contingency. Starting from an empty repository is feasible only if Mariam already knows Rust/Anchor and can use a working local Solana toolchain. Use [INTERFACES.md](INTERFACES.md) as the shared contract.
+Mariam builds the two Solana programs, their tests and the local chain script, and owns `programs/`, `tests/program/`, `artifacts/idl/`, `deployments/` and `scripts/localnet/`. Follow [INTERFACES.md](INTERFACES.md).
 
-**Owned paths:** `programs/aegis/`, `programs/demo-dex/`, `tests/program/`, `artifacts/idl/`, `deployments/`, and `scripts/localnet/`. Deliver generated IDL and executable examples; do not change Alexis's client code during integration.
+These two handoffs unblock Alexis, so they have fixed times: **H1 at Day 1 hour 3** and **H2 at Day 2 hour 6**. Ship them on time even if something else is unfinished.
 
-The baseline has one owner, one agent, one vault policy, and one fixed token pair. Policy is immutable at vault creation; only creating a new vault resets its budget. No replacement-session instruction, multiple sessions, generic router, route hashes, or private proofs. Defer fresh ZK and Jupiter work until after the demo. An already-working artifact may be shown separately, with its actual scope explained, without blocking this baseline.
+**Before Day 1:** Rust, Solana CLI and Anchor working in WSL, versions pinned. Confirm with `anchor test` on a sample project.
 
-## M01 Freeze the small contract boundary
+## Day 1
 
-**Day 1, first 3 hours — 3 hours.**
+**Hour 1 — M-1 with Alexis.** Approve the interface.
 
-Create the Anchor workspace and agree the accounts, errors, events, IDL output, and fixture format with Alexis. Use one test runner: Anchor's local-validator integration suite under `tests/program/`; do not introduce a second harness.
+**Hours 2–3 — Skeleton and IDL (H1).** Create the Anchor workspace with `aegis` and `demo_dex`. Write all instructions with final arguments and account structs and empty bodies, plus the error enum. Build and commit the IDL to `artifacts/idl/`.
 
-Vault state includes `owner`, `agent`, `expiryUnix`, `nextNonce`, `spentRaw`, `maxTradeRaw`, `sessionBudgetRaw`, `revoked`, and the public mint/token-account addresses. Fix the demo DEX configuration and public `maxSlippageBps=100`. Freeze the instruction:
+**Hours 4–8 — Vault lifecycle.** Implement `create_vault`, `revoke_agent` and `withdraw` with all account and signer checks. Tests in `tests/program/` using **LiteSVM** (fast, and it can move the clock for expiry tests):
 
-`execute_swap(ctx, amount_in_raw: u64, min_out_raw: u64, expected_nonce: u64, deadline_unix: i64)`
+- create, fund by transfer, read state;
+- owner withdraws; agent cannot withdraw;
+- revoke works and is permanent;
+- owner withdraws after revoke.
 
-Only the authorized agent signs execution. Token amounts and nonces cross JSON as decimal strings; Rust uses checked integers. Chain time governs expiry. Require `chainTime < deadline_unix <= expiryUnix`. Fees are zero in the exchange; a separate fee payer covers network fees and account rent.
+*Plan B check at hour 6: if create or withdraw still fails, ask for help now.*
 
-**Handoff:** approve the shared boundary in the first hour and provide the initial account/instruction scaffold by the end of this task so Alexis can prepare the real adapter. The implemented lifecycle IDL follows in M02 on the same day. No speculative interfaces for deferred features.
+## Day 2
 
-## M02 Implement the lifecycle and owner escape path
+**Hours 1–4 — Test exchange and swap.** `demo_dex::initialize_pool` and `demo_dex::swap` (INTERFACES §4): swap takes input tokens from the caller and sends `amount × 10` output tokens from the pool. `aegis::execute_swap`: all checks from INTERFACES §3, the call into `demo_dex` signed by the vault authority, and the balance check afterwards. Tests: normal 20 swap, 60 rejected, redirect rejected.
 
-**Day 1 remaining 5 hours + Day 2 first 2 hours — 7 hours.**
+*Plan B check at hour 4: if the call into `demo_dex` does not work, replace the swap with a payment to a fixed merchant account (same checks) and tell Alexis in writing.*
 
-Implement vault creation, funding support, irreversible owner revocation, and owner withdrawal. Use deterministic PDA authority and validate account ownership, signer, seeds/bump, fixed mint addresses/decimals, token program, and token-account authority. Creation records the immutable policy; no instruction increases it afterward.
+**Hours 5–6 — Local chain script (H2).** `pnpm localnet` (`scripts/localnet/start.ts`): start a validator, deploy both programs, create the two test mints, create and fund the pool, create and fund test owner and agent keypairs in `.keys/`, write `deployments/localnet.json`. Test it from a clean clone, then hand it off.
 
-Seed testUSDC with 6 decimals and testSOL with 9 decimals. Default cap is `50000000` input raw units; lifetime budget is `100000000`; expiry is one hour after creation. Additional deposits and withdrawals never reset `spentRaw`.
+**Hour 7 — Attack tests.** Start on the remaining cases in INTERFACES §8.
 
-Fix the input and output vault token accounts. Agent privileges exclude withdrawals, policy edits, delegate approvals, authority reassignment, and closing vault accounts. Owner withdrawals work when the agent is revoked or expired and when the app is offline. No backend authorization is needed.
+**Hour 8 — M-2 with Alexis.** First real swap through Alexis's SDK.
 
-**Day 1 evening handoff:** real deployed local program, initial generated lifecycle IDL, fixture addresses, and an SDK-readable vault. Mark incomplete instructions explicitly. **Day 2 noon gate:** create/fund/revoke/withdraw are complete and demonstrated through owner-signed transactions.
+## Day 3
 
-## M03 Implement the real atomic test exchange
+**Hours 1–3 — Finish attack tests.** Every case in INTERFACES §8 passes, including expiry (move the clock) and five-then-sixth budget. Failed swaps leave balances and `spent_raw` unchanged.
 
-**Day 2 remaining 6 hours — 6 hours, including deployment attempt.**
+**Hour 4 — Fixes** from M-2 and Alexis's notes. Commit final IDL.
 
-Build `programs/demo-dex/` as a deterministic reserve exchange using real SPL token transfers. Fund its testSOL reserve. Fix the rate to 100 testUSDC = 1 testSOL: input `20000000` produces output `200000000`; the example minimum is `198000000`.
-
-The Aegis instruction checks signer, revocation, time, nonce, positive amounts, per-trade cap, and remaining lifetime budget. Validate every account and call only the single configured demo DEX with typed arguments. Accept no generic CPI payload or caller-selected output account.
-
-Calculate the quote with checked wide integer arithmetic. Enforce `min_out_raw >= ceil(quote * (10000 - maxSlippageBps) / 10000)`. Snapshot balances, invoke the swap, reload accounts, and require exact input debit plus actual output credit at least `min_out_raw`. Increment spent and nonce only on success; any failed postcondition rolls back transfers and state.
-
-Timebox a devnet deployment attempt to **one hour**. If blocked, keep the actual local chain as the demonstration environment, clearly labeled. This fixed price is a demo reference, not live market or oracle protection.
-
-**End Day 2 gate:** Alexis's SDK executes a real atomic swap using the generated IDL. Also run two direct smoke rejections: 60 units above the cap and a substituted destination. Save the program errors and unchanged state; expand the full attack suite on Day 3.
-
-## M04 Prove the security boundaries
-
-**Day 3 first 4 hours — 4 hours.**
-
-Test valid 20-token trades and the exact cap boundary: 50 succeeds on a fresh vault; 60 fails despite sufficient total budget. Five 20-token trades consume exactly 100; a sixth fails. Confirm spent and nonce from chain state.
-
-Cover replay, concurrent submissions using the same nonce, wrong signer, unauthorized withdrawal, revoked agent, expired vault/deadline, wrong token program or mint, substituted output account, insufficient reserves, a minimum output below the policy floor, and an excessive minimum output. Verify failed swaps leave both token balances, spent, and nonce unchanged. Include a reachable post-CPI failure in the local test harness to establish atomic rollback. Owner withdrawal must still work directly after revocation without the app or agent.
-
-**Day 3 noon gate:** adversarial contract tests pass; Alexis's frontend uses real contract results. UI-only rejections do not count.
-
-## M05 Integrate and freeze
-
-**Day 3 remaining 4 hours — 4 hours.**
-
-Fix integration defects jointly without changing ownership. Publish final IDL plus a manifest containing program IDs, cluster, build revision, mint decimals, fixture addresses, rate, public policy and disclosed program-upgrade/admin roles. Document which owner, agent and fee-payer signatures each terminal command requires. Keep private keys out of the manifest.
-
-Provide repeatable local start/seed commands and valid/rejected transaction examples. Use fresh vaults for independent scenarios. **End Day 3:** freeze features and ABI. If UI work is incomplete, retain the SDK/CLI demonstration; never remove contract checks to meet the deadline.
-
-## M06 Rehearsal evidence and contingency
-
-**Day 4 — 8 hours: 3 rehearsal/evidence, 2 cleanup/regression, 3 contingency.**
-
-Rehearse create/fund → valid trade → cap rejection → budget rejection → revoke → blocked trade → owner withdrawal. Capture actual signatures/logs and before/after state. Distinguish submitted failures from simulations, and label local-chain footage explicitly if used as fallback.
-
-Run one clean setup, the contract suite, and owner recovery without the application. Deliver test assets only, a working demonstration, and accurate deployment instructions. Describe ZK/Jupiter as deferred and the contracts as unaudited demo software; do not claim production protection.
+**Hours 5–8 — M-3 with Alexis.** Freeze at hour 5. Rehearse, record the backup video, final clean-clone run.

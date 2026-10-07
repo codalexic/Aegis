@@ -1,0 +1,19 @@
+{
+  "environment": "localnet",
+  "rpcUrl": "http://127.0.0.1:8899",
+  "wsUrl": "ws://127.0.0.1:8900",
+  "programs": {
+    "aegis": "E6QbymjuPGqyKeQBCo2rfXiRv1Bp55uM7yVYEDnzxDhe",
+    "demoDex": "BWsLwF3o7fzMmtGwp1qA2fC4sSTYt4BjzKQXCXHoEyNz"
+  },
+  "owner": "AC3JV92KRbgwGwo3YQMuCxzkdAfmARXF16ihPuNTNYqs",
+  "agent": "3JvFKSs1GqP8WropydyqgN5kmdoUPBRqLhVnkospHgPW",
+  "inputMint": "2192pHK2fPvGLmwTwFFC6j1J3KWUdoWEskfsGAwMcEub",
+  "outputMint": "CgTn1RLb6S8SuVzSz7Y9d8RqUUgRErwS1Qy4aroe6ohP",
+  "pool": "3eYWrKWgRxUELWrLzie5gkPWzYthNLRFm4AunrPrEG8u",
+  "poolAuthority": "6p6ULckCTSDRYWoyAEakb4WbJb9B1g4psW5c7mgssudJ",
+  "inputReserve": "FzrRRCX6dc9ih1usG2Pe3pRaYUCjgS96eYz8SLYm6sn6",
+  "outputReserve": "28aztY7wrnLLCGjpSK5Ko6tYVqSCbd7N4BxxKmSU6sQQ",
+  "ownerInput": "6ntQom6ucD1jc9ZNntja3SNfiFyY1pL2ygww62BguRvb",
+  "ownerOutput": "2n19RdBcihuEQ7AobWZsuPwpeV94ani3XMi69G4eHxTY"
+}

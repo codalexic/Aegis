@@ -199,8 +199,8 @@ function Dashboard({ connection }: { connection: DashboardConnection }) {
       </div>
       <p className="vault-empty">No vault yet · Click New demo vault</p>
       <div className="balances">
-        <div className="balance"><div className="balance-heading"><span className="field-label">Input balance</span><span className="token-mark"><span className="token-dot" aria-hidden="true" />testUSDC</span></div><strong data-testid="input-balance">{vault ? amount(vault.inputBalanceRaw) : "—"}</strong></div>
-        <div className="balance"><div className="balance-heading"><span className="field-label">Output balance</span><span className="token-mark"><span className="token-dot sol" aria-hidden="true" />testSOL</span></div><strong data-testid="output-balance">{vault ? amount(vault.outputBalanceRaw, 9) : "—"}</strong></div>
+        <div className="balance"><span className="field-label">Input balance</span><div className="balance-value"><strong data-testid="input-balance">{vault ? amount(vault.inputBalanceRaw) : "—"}</strong><span className="token-mark"><span className="token-dot" aria-hidden="true" />testUSDC</span></div></div>
+        <div className="balance"><span className="field-label">Output balance</span><div className="balance-value"><strong data-testid="output-balance">{vault ? amount(vault.outputBalanceRaw, 9) : "—"}</strong><span className="token-mark"><span className="token-dot sol" aria-hidden="true" />testSOL</span></div></div>
       </div>
       <div className="policy-grid">
         <div><span className="field-label">Per-trade cap</span><strong>{vault ? amount(vault.maxTradeRaw) : "50"} <small>testUSDC</small></strong></div>
@@ -239,15 +239,13 @@ function Dashboard({ connection }: { connection: DashboardConnection }) {
     </section> : null}
 
     <section className="activity-card" aria-labelledby="activity-title">
-      <div className="card-heading"><div><h2 id="activity-title">Vault activity</h2>
-        {environment === "localnet" && <p className="muted">Explorer uses your local chain. Allow local network access if prompted.</p>}
-      </div><span className="activity-count">{activity.length} {activity.length === 1 ? "event" : "events"}</span></div>
+      <div className="card-heading"><h2 id="activity-title">Vault activity</h2><span className="activity-count">{activity.length} {activity.length === 1 ? "event" : "events"}</span></div>
       {activity.length === 0 ? <div className="empty-activity"><span aria-hidden="true">↔</span><strong>No activity yet</strong><p>Create your vault to begin. Actions and rejected trades will appear here.</p></div> : <div className="table-scroll"><table>
         <thead><tr><th>Time</th><th>Action</th><th>Amount</th><th>Result</th></tr></thead>
         <tbody>{activity.map((item) => <tr key={item.signature}>
           <td><time>{timeLabel(item.blockTime)}</time></td>
           <td><span className="action-name">{details.current.get(item.signature)?.label ?? "Transaction"}</span>
-            {environment === "localnet" ? <a className="signature" title={item.signature} aria-label={`View transaction ${item.signature} on Solana Explorer`}
+            {environment === "localnet" ? <a className="signature" title={`${item.signature} · Explorer uses your local chain. Allow local network access if prompted.`} aria-label={`View transaction ${item.signature} on Solana Explorer`}
               href={`https://explorer.solana.com/tx/${encodeURIComponent(item.signature)}?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899`} target="_blank" rel="noopener noreferrer"><code>{shorten(item.signature)}</code></a>
               : <code className="signature">{item.signature}</code>}</td>
           <td className="activity-amount">{details.current.get(item.signature)?.amount ?? "—"}</td>

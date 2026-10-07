@@ -16,7 +16,7 @@
     "dev": "pnpm --filter web dev",
     "agent": "tsx scripts/agent/start.ts",
     "test:agent": "vitest run scripts/agent/tests",
-    "demo": "node -e \"console.error('The demo is implemented in C6'); process.exit(1)\""
+    "demo": "tsx scripts/demo/start.ts"
   },
   "devDependencies": {
     "@coral-xyz/anchor": "npm:@anchor-lang/core@1.1.2",

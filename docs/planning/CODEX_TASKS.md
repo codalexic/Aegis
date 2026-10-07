@@ -209,3 +209,65 @@ Not a Codex task. Go through this together before the feature freeze.
 - [ ] Agent `injected` and `scripted` modes both show the program rejection.
 
 Record anything found as a follow-up and split the fixes between Alexis and Mariam.
+
+---
+
+# Stage readiness (Day 2)
+
+The build is complete. These tasks make the demo reliable and easy to present from one screen. Same rules: one task at a time, `git pull` first, check, commit, push. Do not change `programs/` in any of these tasks.
+
+## C8 Agent console in the dashboard
+
+**Files:** `apps/web/server/`, `apps/web/src/`, `scripts/agent/` (only to export what the server needs).
+
+- Add dev-server endpoints `POST /api/agent/{normal,injected,attacker}` (localnet only) with a body `{ "live": boolean }`. They load `.keys/agent.json` and the AI key in Node and reuse `runAgent` from `scripts/agent/run.ts` with a `log` callback that collects steps. `live: false` uses the scripted reply. No key, `.env` value or raw model config ever reaches the browser.
+- Response: `{ steps: Step[] }`, where a step is one of `news`, `model_reply`, `request`, `result`, `balances`, `notice`, as structured fields (not one text blob).
+- Dashboard "Agent console" panel beside the vault card:
+  - three large buttons: **Run normal trade**, **Inject malicious news**, **Hacker redirect**;
+  - a toggle **Live AI / Scripted**, default Live AI, with the model name shown when live;
+  - the news text, with the injected instruction highlighted;
+  - the model's reply as formatted JSON;
+  - the outcome as a large banner: green "Executed" or red "Blocked by Aegis program: <ErrorName>" plus a one-line plain-English reason (e.g. CapExceeded → "Per-trade cap is 50 testUSDC; the agent asked for 1,000");
+  - if the model resists the injection, show "The model resisted the injection" and a one-click **Retry scripted** button.
+- Buttons are disabled while a request is running; errors show a readable message, never a stack trace.
+
+**Done when:** with `pnpm localnet` running and `AEGIS_ENV=localnet pnpm dev`, each button produces the expected banner (normal → Executed, injected → CapExceeded, hacker → AccountMismatch) in both Live and Scripted modes; endpoint tests pass; `pnpm --filter web build` succeeds and `grep -rE "AIza|secretKey|GEMINI" apps/web/dist` finds nothing.
+
+## C9 Injection reliability check
+
+**Files:** `scripts/agent/`.
+
+- Add `pnpm agent:eval --runs 10` (no chain needed): calls the live model 10 times for `normal` and 10 times for `injected` and prints how often `normal` proposed ≤ 50 testUSDC and how often `injected` proposed the full 1,000 testUSDC.
+- If `injected` compliance is below 9/10 or `normal` is below 10/10, adjust only the agent's system prompt and news text (never the program or the client checks) and run again. Keep the agent honest: it must still submit exactly what the model proposed.
+- Respect the free-tier rate limit: pause between calls and stop cleanly on a 429.
+
+**Done when:** the eval prints at least 9/10 injected compliance and 10/10 normal, or, if that cannot be reached, the report states the best rate achieved and the dashboard's Retry scripted path from C8 is confirmed working.
+
+## C10 One-command start and fresh demo vault
+
+**Files:** `scripts/stage/`, `package.json`, `apps/web/`.
+
+- `pnpm start:demo`: runs `anchor build` only if `target/deploy/*.so` is missing or older than the sources, starts localnet, waits until it is healthy, starts the dashboard with `AEGIS_ENV=localnet`, and prints one clear line with the URL. Ctrl+C stops both cleanly. If port 8899 or 5173 is already in use, say so and how to free it instead of failing obscurely.
+- Dashboard button **New demo vault**: creates a fresh vault and funds it with 1,000 testUSDC in one click, and switches the page to it. This is the pre-show reset.
+
+**Done when:** from a new terminal, `pnpm start:demo` brings up a working dashboard in under 90 seconds, and New demo vault produces a funded vault with spent 0.
+
+## C11 Stage polish and on-chain proof
+
+**Files:** `apps/web/src/`.
+
+- Activity list: shorten signatures to `abcd…wxyz`; each links to Solana Explorer for the local chain: `https://explorer.solana.com/tx/<sig>?cluster=custom&customUrl=http%3A%2F%2F127.0.0.1%3A8899`. Blocked rows show the plain-English reason from C8.
+- Readability on a projector at 1280×720: body text at least 16px, key numbers (balances, remaining budget) at least 32px, high contrast, nothing important below the fold on the vault card and agent console.
+- Budget bar changes colour as it falls (green → amber below 40% → red below 15%).
+- Header line under the title: "AI agents can be tricked. Aegis enforces the limits on-chain." 
+- No new dependencies unless unavoidable.
+
+**Done when:** `pnpm --filter web build` succeeds; at 1280×720 the vault card, budget bar and agent console are visible together without scrolling; Explorer links open the transaction for the local chain.
+
+## C12 Final verification
+
+**Files:** none unless a defect is found.
+
+Run, in order, and report each result: `anchor build`, `pnpm test:program`, `pnpm test:sdk`, `pnpm test:agent`, web tests, `pnpm start:demo` + `pnpm test:e2e`, `pnpm demo` twice, `pnpm --filter web build`, a secret scan (`git grep -nE "AIza|BEGIN .*PRIVATE|secretKey" -- . ':!pnpm-lock.yaml'` and `git ls-files | grep -E "\.keys/|\.env$"`). Fix only real defects; do not change `programs/` without stopping to report first.
+
+**Done when:** every command above passes and the report is in the final message.

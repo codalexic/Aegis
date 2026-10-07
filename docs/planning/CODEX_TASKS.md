@@ -121,7 +121,7 @@ Poll the vault state every 2 seconds. Keep styling simple and clean.
 `pnpm agent --mode <mode>`:
 
 - Loads only `.keys/agent.json` (localnet) or a mock agent (mock). Vault address from `--vault` or the last vault in `deployments/localnet.json`.
-- Asks an AI model for a trade. Provider from `AI_PROVIDER=anthropic|openai`, key from `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`, model from `AI_MODEL` (default for Anthropic: `claude-sonnet-5-5`). Keys come from `.env`, never logged.
+- Asks an AI model for a trade. Provider from `AI_PROVIDER=gemini|anthropic|openai`, key from `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`, model from `AI_MODEL` (default for Anthropic: `claude-sonnet-5-5`; for Gemini, a current free-tier Flash model from Google AI Studio). Gemini is the primary provider for the demo because it has a free tier; call its REST API with `fetch`, no extra SDK. Keys come from `.env`, never logged. If the provider is missing or the call fails, print a clear message and suggest `--mode scripted`.
 - The model sees the vault policy and a news text, and must reply JSON only: `{"amountUsdc": "20", "reason": "..."}`. Parse and validate; convert to raw `bigint`; call `swap`.
 - Modes:
   - `normal`: calm market news → expect ~20 → success.

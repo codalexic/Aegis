@@ -106,6 +106,18 @@ export class MockAegisClient implements AegisClient {
     return this.record(vault);
   }
 
+  async rotateAgent(owner: Signer, vault: PublicKey, newAgent: PublicKey): Promise<TxResult> {
+    const state = this.vaults.get(vault.toBase58());
+    if (!state) return this.record(vault, "VaultNotFound");
+    if (!owner.publicKey.equals(state.owner)) return this.record(vault, "Unauthorized");
+    if (newAgent.equals(PublicKey.default) || newAgent.equals(state.owner) || newAgent.equals(state.agent)) {
+      return this.record(vault, "InvalidAmount");
+    }
+    state.agent = newAgent;
+    state.revoked = false;
+    return this.record(vault);
+  }
+
   async withdraw(owner: Signer, vault: PublicKey, mint: PublicKey, amountRaw: bigint): Promise<TxResult> {
     const state = this.vaults.get(vault.toBase58());
     if (!state) return this.record(vault, "VaultNotFound");

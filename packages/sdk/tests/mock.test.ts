@@ -133,6 +133,76 @@ describe("mock shared cases (INTERFACES §8)", () => {
   });
 });
 
+describe("mock agent rotation", () => {
+  it.each([false, true])("rotates with revoked=%s, preserving policy, spending and balances", async (revoked) => {
+    const f = await freshVault();
+    const replacement = identity(6);
+    assertSuccess(await f.client.swap(f.agent, f.vault, 20_000_000n));
+    if (revoked) assertSuccess(await f.client.revoke(f.owner, f.vault));
+    const before = await f.client.getVault(f.vault);
+    const result = await f.client.rotateAgent(f.owner, f.vault, replacement.publicKey);
+    assertSuccess(result);
+    expect(await f.client.getVault(f.vault)).toEqual({ ...before, agent: replacement.publicKey, revoked: false });
+    expect((await f.client.listActivity(f.vault))[0]).toMatchObject({ signature: result.signature, ok: true });
+    await rejectWithoutChanges(f, () => f.client.swap(f.agent, f.vault, 20_000_000n), "Unauthorized");
+    assertSuccess(await f.client.swap(replacement, f.vault, 20_000_000n));
+    expect(await f.client.getVault(f.vault)).toEqual({
+      ...before, agent: replacement.publicKey, revoked: false,
+      inputBalanceRaw: FUNDING - 40_000_000n, outputBalanceRaw: 400_000_000n, spentRaw: 40_000_000n,
+    });
+  });
+
+  it("preserves the cap and cumulative budget across rotation", async () => {
+    const f = await freshVault();
+    const replacement = identity(6);
+    assertSuccess(await f.client.swap(f.agent, f.vault, 40_000_000n));
+    assertSuccess(await f.client.swap(f.agent, f.vault, 40_000_000n));
+    assertSuccess(await f.client.rotateAgent(f.owner, f.vault, replacement.publicKey));
+    await rejectWithoutChanges(f, () => f.client.swap(replacement, f.vault, 60_000_000n), "CapExceeded");
+    await rejectWithoutChanges(f, () => f.client.swap(replacement, f.vault, 40_000_000n), "BudgetExceeded");
+    assertSuccess(await f.client.swap(replacement, f.vault, 20_000_000n));
+    expect((await f.client.getVault(f.vault)).spentRaw).toBe(100_000_000n);
+    await rejectWithoutChanges(f, () => f.client.swap(replacement, f.vault, 20_000_000n), "BudgetExceeded");
+  });
+
+  it.each([false, true])("rejects non-owner rotation with revoked=%s before validating the new agent", async (revoked) => {
+    const f = await freshVault();
+    assertSuccess(await f.client.swap(f.agent, f.vault, 20_000_000n));
+    if (revoked) assertSuccess(await f.client.revoke(f.owner, f.vault));
+    await rejectWithoutChanges(f, () => f.client.rotateAgent(f.agent, f.vault, identity(6).publicKey), "Unauthorized");
+    await rejectWithoutChanges(f, () => f.client.rotateAgent(f.attacker, f.vault, PublicKey.default), "Unauthorized");
+  });
+
+  it.each(["default", "owner", "current agent"])("rejects the %s as replacement without clearing revocation", async (kind) => {
+    const f = await freshVault();
+    assertSuccess(await f.client.swap(f.agent, f.vault, 20_000_000n));
+    assertSuccess(await f.client.revoke(f.owner, f.vault));
+    const replacement = kind === "default" ? PublicKey.default : kind === "owner" ? f.owner.publicKey : f.agent.publicKey;
+    await rejectWithoutChanges(f, () => f.client.rotateAgent(f.owner, f.vault, replacement), "InvalidAmount");
+    await rejectWithoutChanges(f, () => f.client.swap(f.agent, f.vault, 20_000_000n), "Revoked");
+  });
+
+  it("permits rotation after expiry without extending the trading window", async () => {
+    const f = await freshVault();
+    const replacement = identity(6);
+    assertSuccess(await f.client.swap(f.agent, f.vault, 20_000_000n));
+    assertSuccess(await f.client.revoke(f.owner, f.vault));
+    f.setTime(NOW + 3_600n);
+    const before = await f.client.getVault(f.vault);
+    assertSuccess(await f.client.rotateAgent(f.owner, f.vault, replacement.publicKey));
+    expect(await f.client.getVault(f.vault)).toEqual({ ...before, agent: replacement.publicKey, revoked: false });
+    await rejectWithoutChanges(f, () => f.client.swap(replacement, f.vault, 20_000_000n), "Expired");
+  });
+
+  it("reports a missing vault without creating state", async () => {
+    const f = fixture();
+    const [vault] = deriveVaultPda(f.owner.publicKey, 0n);
+    expect(await f.client.rotateAgent(f.owner, vault, identity(6).publicKey))
+      .toMatchObject({ ok: false, error: "VaultNotFound", origin: "client", signature: expect.stringMatching(/^mock-/) });
+    await expect(f.client.getVault(vault)).rejects.toThrow("VaultNotFound");
+  });
+});
+
 describe("mock state and bounds", () => {
   it("creates the specified state and exposes the mock environment through the factory", async () => {
     const f = await freshVault();
@@ -164,7 +234,7 @@ describe("mock state and bounds", () => {
     await expect(client.getVault(deriveVaultPda(f.owner.publicKey, 0n)[0])).rejects.toThrow("VaultNotFound");
   });
 
-  it("keeps revocation permanent and prevents duplicate creation from replacing state", async () => {
+  it("keeps revocation idempotent and prevents duplicate creation from replacing state", async () => {
     const f = await freshVault();
     await rejectWithoutChanges(f, () => f.client.revoke(f.agent, f.vault), "Unauthorized");
     assertSuccess(await f.client.revoke(f.owner, f.vault));

@@ -1,4 +1,5 @@
 import { getOrCreateAssociatedTokenAccount } from "@solana/spl-token";
+import { Keypair, sendAndConfirmTransaction, SystemProgram, Transaction } from "@solana/web3.js";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   assertRejected, assertSuccess, confirmOptions, connectLocalnet, freshVault,
@@ -74,6 +75,31 @@ describe("AnchorAegisClient on localnet", () => {
     assertSuccess(await f.client.revoke(f.owner, f.vault));
     expect((await f.client.getVault(f.vault)).revoked).toBe(true);
     await assertRejected(f, "Revoked", () => f.client.swap(f.agent, f.vault, TRADE));
+  });
+
+  it("rotates a revoked agent, rejects the old signer and lets the new signer trade within the remaining budget", async () => {
+    const replacement = Keypair.generate();
+    await sendAndConfirmTransaction(f.client.connection, new Transaction().add(SystemProgram.transfer({
+      fromPubkey: f.owner.publicKey, toPubkey: replacement.publicKey, lamports: 1_000_000n,
+    })), [f.owner], confirmOptions);
+    const firstSwap = assertSuccess(await f.client.swap(f.agent, f.vault, TRADE));
+    assertSuccess(await f.client.revoke(f.owner, f.vault));
+    const before = await snapshot(f);
+    expect(before.vault.revoked).toBe(true);
+    const rotation = assertSuccess(await f.client.rotateAgent(f.owner, f.vault, replacement.publicKey));
+    expect(await snapshot(f)).toEqual({
+      ...before, vault: { ...before.vault, agent: replacement.publicKey, revoked: false },
+    });
+    await expect.poll(async () => (await f.client.listActivity(f.vault)).find((item) => item.signature === rotation))
+      .toMatchObject({ signature: rotation, ok: true });
+    await nextBlockhash(f, firstSwap);
+    await assertRejected(f, "Unauthorized", () => f.client.swap(f.agent, f.vault, TRADE));
+    assertSuccess(await f.client.swap(replacement, f.vault, TRADE));
+    expect(await snapshot(f)).toEqual({
+      vault: { ...before.vault, agent: replacement.publicKey, revoked: false,
+        inputBalanceRaw: FUNDING - 2n * TRADE, outputBalanceRaw: 400_000_000n, spentRaw: 2n * TRADE },
+      inputReserve: before.inputReserve + TRADE, outputReserve: before.outputReserve - 200_000_000n,
+    });
   });
 
   it("lets the owner withdraw both token balances after revocation", async () => {

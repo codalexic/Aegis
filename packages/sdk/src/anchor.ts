@@ -161,6 +161,11 @@ export class AnchorAegisClient implements AegisClient {
       .accountsStrict({ owner: owner.publicKey, vault }).instruction()]);
   }
 
+  async rotateAgent(owner: Signer, vault: PublicKey, newAgent: PublicKey): Promise<TxResult> {
+    return this.send(owner, async () => [await this.program.methods.rotateAgent(newAgent)
+      .accountsStrict({ owner: owner.publicKey, vault }).instruction()]);
+  }
+
   async withdraw(owner: Signer, vault: PublicKey, mint: PublicKey, amountRaw: bigint): Promise<TxResult> {
     return this.send(owner, async () => {
       const amount = u64(amountRaw);

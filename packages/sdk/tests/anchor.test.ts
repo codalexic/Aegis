@@ -136,6 +136,41 @@ describe("IDL-typed instructions and signing", () => {
     expect(ix.keys.map((item) => item.pubkey)).toEqual([f.owner.publicKey, f.vault]);
   });
 
+  it.each(["new", "default", "owner", "current agent"])("sends the %s replacement to rotate_agent with only the owner signature", async (kind) => {
+    const f = await fixture();
+    const newAgent = kind === "default" ? PublicKey.default : kind === "owner" ? f.owner.publicKey
+      : kind === "current agent" ? f.agent.publicKey : new PublicKey(new Uint8Array(32).fill(11));
+    const result = await f.client.rotateAgent(f.owner, f.vault, newAgent);
+    // Stubbed RPC accepts the transaction; replacement validity is checked on-chain.
+    expect(result).toMatchObject({ ok: true });
+    expect(f.getAccountInfo).not.toHaveBeenCalled();
+    expect(f.getMultipleAccountsInfo).not.toHaveBeenCalled();
+    const tx = f.sent[0];
+    expect(tx.verifySignatures()).toBe(true);
+    expect(tx.feePayer).toEqual(f.owner.publicKey);
+    expect(tx.signatures.map((item) => item.publicKey)).toEqual([f.owner.publicKey]);
+    expect(tx.instructions).toHaveLength(1);
+    const ix = tx.instructions[0];
+    expect(ix.programId).toEqual(AEGIS_PROGRAM_ID);
+    expect(instructionCoder.decode(ix.data)).toEqual({ name: "rotate_agent", data: { new_agent: newAgent } });
+    expect(ix.keys.map((item) => item.pubkey)).toEqual([f.owner.publicKey, f.vault]);
+    expect(ix.keys[0].isSigner).toBe(true);
+    expect(ix.keys[1]).toMatchObject({ isSigner: false, isWritable: true });
+    expect(f.confirmTransaction).toHaveBeenCalledWith({ signature: result.signature, ...f.lifetime }, "confirmed");
+  });
+
+  it("returns controlled signing and RPC errors from rotation", async () => {
+    const f = await fixture();
+    const newAgent = new PublicKey(new Uint8Array(32).fill(11));
+    const signer: Signer = { publicKey: f.owner.publicKey, get secretKey(): Uint8Array { throw new Error("sensitive signing context"); } };
+    expect(await f.client.rotateAgent(signer, f.vault, newAgent))
+      .toEqual({ ok: false, error: "SigningFailed", origin: "client" });
+    expect(f.sendRawTransaction).not.toHaveBeenCalled();
+    f.confirmTransaction.mockRejectedValue(new Error("sensitive RPC context"));
+    expect(await f.client.rotateAgent(f.owner, f.vault, newAgent))
+      .toEqual({ ok: false, error: "RpcError", origin: "rpc", signature: expect.any(String) });
+  });
+
   it.each(["input", "output"])("withdraws %s after revocation/expiry and creates the owner's destination ATA", async (side) => {
     const f = await fixture();
     await f.setVault({ revoked: true, expiry_unix: f.raw.spent_raw });
@@ -168,6 +203,20 @@ describe("IDL-typed instructions and signing", () => {
 });
 
 describe("confirmation and program errors", () => {
+  it.each(["Unauthorized", "InvalidAmount"])("maps a confirmed rotation rejection to %s and preserves its signature", async (name) => {
+    const f = await fixture();
+    const { code } = idl.errors.find((error) => error.name === name)!;
+    const err = { InstructionError: [0, { Custom: code }] };
+    f.confirmTransaction.mockResolvedValue({ context: { slot: 12 }, value: { err } });
+    f.getTransaction.mockImplementation(async () => transactionRecord(f.sent[0], err, errorLogs(AEGIS_PROGRAM_ID, code)));
+    const signer = name === "Unauthorized" ? f.agent : f.owner;
+    const result = await f.client.rotateAgent(signer, f.vault, PublicKey.default);
+    expect(f.sent[0].signatures.map((item) => item.publicKey)).toEqual([signer.publicKey]);
+    expect(result).toEqual({ ok: false, error: name, origin: "program", signature: expect.any(String) });
+    expect(result.signature).not.toMatch(/^mock-/);
+    expect(f.getTransaction).toHaveBeenCalledWith(result.signature, { commitment: "confirmed", maxSupportedTransactionVersion: 1 });
+  });
+
   it.each(idl.errors)("maps confirmed $name from code $code using the IDL", async ({ code, name }) => {
     const f = await fixture();
     const err = { InstructionError: [0, { Custom: code }] };

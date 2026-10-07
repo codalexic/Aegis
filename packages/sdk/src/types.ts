@@ -17,6 +17,7 @@ export interface AegisClient {
   fundVault(owner: Signer, vault: PublicKey, amountRaw: bigint): Promise<TxResult>;
   swap(agent: Signer, vault: PublicKey, amountInRaw: bigint): Promise<TxResult>;
   revoke(owner: Signer, vault: PublicKey): Promise<TxResult>;
+  rotateAgent(owner: Signer, vault: PublicKey, newAgent: PublicKey): Promise<TxResult>;
   withdraw(owner: Signer, vault: PublicKey, mint: PublicKey, amountRaw: bigint): Promise<TxResult>;
   listActivity(vault: PublicKey): Promise<Activity[]>;
 }

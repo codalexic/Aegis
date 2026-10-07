@@ -7,7 +7,7 @@ pnpm test:e2e
 pnpm exec tsc -p tests/e2e/tsconfig.json
 ```
 
-These nine cases cover INTERFACES §8 through the real `AnchorAegisClient`.
+These ten cases cover INTERFACES §8 and agent rotation through the real `AnchorAegisClient`.
 Expiry remains covered by P6's LiteSVM clock tests. Rejections must report the
 exact error with `origin: "program"`, appear in RPC activity, and preserve both
 vault balances, spent, policy and pool reserves. Redirection uses `swapRaw` with
@@ -24,3 +24,8 @@ seeded test keys. No AI provider is called.
 The budget case waits for a fresh blockhash between identical swaps so it sends
 six distinct transactions. It checks every successful balance/spent increment
 and all five success signatures before asserting the sixth rejection.
+
+The rotation case replaces a revoked agent after a trade, verifies that policy,
+spending and balances are preserved, then checks the old agent's `Unauthorized`
+rejection and the new agent's successful trade. The replacement signer is
+generated in memory and receives test SOL from the owner for transaction fees.

@@ -31,6 +31,13 @@ transfer; a readonly vault account reference makes it discoverable in that histo
 Withdrawals create the owner's destination ATA idempotently in the same atomic
 transaction and do not filter revoked or expired vaults.
 
+`rotateAgent(owner, vault, newAgent)` requires only the owner's signature. It
+replaces the agent and clears revocation without resetting spending, cap, budget
+or expiry. The default key, owner and current agent are rejected with
+`InvalidAmount`; a non-owner signer receives `Unauthorized`. The Anchor client
+sends these checks to the program; the mock enforces the same rotation rules.
+Rotation is available through the SDK, not the dashboard.
+
 Error names come from the generated IDLs and the failing program's runtime logs.
 This matters because Aegis and demo_dex reuse numeric error codes. When logs are
 unavailable, unknown custom codes stay `CustomProgramError(n)`; the client never

@@ -4,7 +4,7 @@ import { Connection, Keypair, PublicKey, Transaction, type AccountInfo, type Tra
 import { vi } from "vitest";
 import idl from "../../../artifacts/idl/aegis.json";
 import localnet from "../../../deployments/localnet.json";
-import { AEGIS_PROGRAM_ID, AnchorAegisClient, deriveSwapAccounts, deriveVaultPda } from "../src/index";
+import { AEGIS_PROGRAM_ID, AnchorAegisClient, derivePoolPda, deriveSwapAccounts, deriveVaultPda } from "../src/index";
 
 // JSON imports widen literal strings; these raw coders intentionally keep the generated snake_case IDL.
 export const instructionCoder = new BorshInstructionCoder(idl as Idl);
@@ -51,6 +51,7 @@ export async function fixture() {
     input_mint: inputMint, output_mint: outputMint, input_vault: accounts.inputVault, output_vault: accounts.outputVault,
     max_trade_raw: new BN(policy.maxTradeRaw.toString()), budget_raw: new BN(policy.budgetRaw.toString()),
     expiry_unix: new BN(policy.expiryUnix.toString()), spent_raw: new BN("20000000"), revoked: false, bump, authority_bump: 0,
+    pool_bump: derivePoolPda(inputMint, outputMint)[1],
   };
   const vaultInfo = info(await accountCoder.encode("Vault", raw));
   const connection = new Connection(localnet.rpcUrl, "confirmed");

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { VaultState } from "@aegis/sdk";
 import { rawAmountToUi } from "../../../packages/sdk/src/amounts";
 import type { Step } from "../../../scripts/agent/run";
@@ -21,6 +21,20 @@ export function rejectionReason(error: string, vault: VaultState, requested?: st
     case "SwapResultMismatch": return "The exchange did not deliver the required token balances.";
     default: return "The transaction failed. Check the vault state before retrying.";
   }
+}
+const CHECKS = ["Signer is the agent", "Not revoked, not expired", "Within cap and budget", "Accounts match the vault", "Swap executed", "Balances verified", "Budget updated"];
+const FAILED_AT: Record<string, number> = { Unauthorized: 0, Revoked: 1, Expired: 1, InvalidAmount: 2, CapExceeded: 2, BudgetExceeded: 2, AccountMismatch: 3, SwapResultMismatch: 5 };
+
+function Checks({ ok, error }: { ok: boolean; error?: string }) {
+  const failed = ok ? -1 : FAILED_AT[error ?? ""] ?? 3;
+  return <ol className="checks" aria-label="Aegis checks">
+    {CHECKS.map((label, i) => {
+      const state = failed < 0 || i < failed ? "pass" : i === failed ? "fail" : "skip";
+      return <li key={label} className={`check ${state}`} style={{ "--i": i } as CSSProperties}>
+        <span className="check-mark" aria-hidden="true">{state === "pass" ? "✓" : state === "fail" ? "✗" : "·"}</span>{label}
+      </li>;
+    })}
+  </ol>;
 }
 
 function News({ step }: { step: Extract<Step, { type: "news" }> }) {
@@ -96,6 +110,7 @@ export function AgentConsole({ vault, disabled, onBusy, onComplete, environment 
           <p>{result.ok ? `Swapped ${decimal(request?.amountUsdc ?? "0")} testUSDC; output stayed in the vault.`
             : result.origin === "program" && vault ? rejectionReason(result.error, vault, request?.amountUsdc) : "The request could not be confirmed by the program. Check localnet and retry."}</p>
         </div>}
+        {result && (result.ok || result.origin === "program") && <Checks ok={result.ok} error={result.ok ? undefined : result.error} />}
       </div>
       <div className="agent-steps" role="region" aria-label="Agent details" tabIndex={0}>
         {resisted && <div className="agent-resisted" role="status"><strong>The model resisted the injection</strong>

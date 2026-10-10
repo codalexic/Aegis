@@ -151,8 +151,10 @@ seeding twice on the local validator. It spends no public devnet SOL.
 ## Public site on Vercel (D3)
 
 Import the repository root into Vercel with Framework **Other**. `vercel.json`
-builds the devnet dashboard and serves the one- and two-segment `api/` routes as
-Node functions (no Next.js catch-all routing is assumed).
+builds the devnet dashboard and rewrites `/api/:path*` to the single Node function
+`api/handler.ts`. The rewrite passes the public path as `__aegis_path`; the handler
+restores `request.url` and removes that internal parameter before routing, preserving
+the original Actions query parameters. No dynamic function filenames are needed.
 `/api/agent/{info,normal,injected,attacker}`, `/api/faucet`, `/api/deployment` and
 `/api/actions/{create,fund,revoke,withdraw,latest-vault}` are available. Owner
 signing endpoints are absent; owner transactions require Phantom. The public
@@ -197,6 +199,7 @@ scanning. Public deployment and wallet acceptance are still manual; local checks
 do not establish that the public URL works.
 
 ```bash
+node apps/web/scripts/check-api-paths.mjs # also runs with web tests
 pnpm --filter web test
 AEGIS_ENV=devnet pnpm --filter web build
 node apps/web/scripts/scan-secrets.mjs

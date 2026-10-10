@@ -7,7 +7,7 @@
     "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
-    "test": "vitest run --config tests/vitest.config.ts",
+    "test": "node scripts/check-api-paths.mjs && vitest run --config tests/vitest.config.ts",
     "test:localnet": "vitest run --config tests/localnet.config.ts"
   },
   "dependencies": {

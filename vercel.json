@@ -23,5 +23,8 @@
       ]
     }
   ],
-  "rewrites": [{ "source": "/actions/:path*", "destination": "/index.html" }]
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/handler?__aegis_path=:path*" },
+    { "source": "/actions/:path*", "destination": "/index.html" }
+  ]
 }

@@ -1,0 +1,19 @@
+{
+  "environment": "devnet",
+  "rpcUrl": "https://api.devnet.solana.com",
+  "wsUrl": "wss://api.devnet.solana.com",
+  "programs": {
+    "aegis": "E6QbymjuPGqyKeQBCo2rfXiRv1Bp55uM7yVYEDnzxDhe",
+    "demoDex": "BWsLwF3o7fzMmtGwp1qA2fC4sSTYt4BjzKQXCXHoEyNz"
+  },
+  "owner": "37xyvh5twSnMAtbbnU6x6dUmgWQaVkvGJQGZZAvYVAkH",
+  "agent": "E3bPanjc64oJj4U4GCxhGWzrnHeZeDz1tyuP77cLNj26",
+  "inputMint": "Ai31VEt3ZhMnEuAQL8pYAYLD2FuRXNgRPpgqGM3zpsQV",
+  "outputMint": "5wftRtxa7WrcBxy7Aov2YFYseQt9oj7QNpRyq4wSi2LP",
+  "pool": "DiBaqZZ9CNujfUD3ACPyQPfdCneKwuQ4P284zDno3Cq9",
+  "poolAuthority": "HMbBwGNXDnNKuZwChKhTsgpNHyMCjhGXLdUb7adg33QK",
+  "inputReserve": "82Vg1D5Qmy5A2PUGesTbuUdxxP5joNHYYR1UpWcQp4kr",
+  "outputReserve": "CCvjF2fWKGjbVjZxEzfJhhPbgmvmzR5yHKZgTUVEuS2C",
+  "ownerInput": "HGVtC9vrGex7zf16rRXu6DzVbYrtK32kWa5vfH6A1YfT",
+  "ownerOutput": "H3ThBKZkhg5eSL2NWS4AQ3kPtWgpA6PhKEwdTtv5fCTq"
+}

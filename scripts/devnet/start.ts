@@ -24,7 +24,7 @@ async function deployProgram(name: string, size: number) {
     "--upgrade-authority", resolve(root, ".keys/devnet-deployer.json"),
     "--program-id", resolve(root, `.keys/programs/${name}-keypair.json`),
     "--buffer", resolve(root, `.keys/devnet-${name}-buffer.json`),
-    "--max-len", String(size), "--with-compute-unit-price", "0", "--use-rpc", "--max-sign-attempts", "3",
+    "--max-len", String(size), "--with-compute-unit-price", "0", "--max-sign-attempts", "30",
     "--output", "json"];
   await new Promise<void>((resolveExit, reject) => {
     // Persistent buffer keys allow safe retries and prevent CLI recovery seed phrases.

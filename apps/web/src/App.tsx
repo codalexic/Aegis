@@ -59,6 +59,11 @@ export function App() {
         <div className="environment" title={environment === "devnet" ? "Solana devnet · Test tokens only · Set Phantom to devnet" : environment === "localnet" ? "Real transactions on your local Solana chain. Test tokens only · test key · localnet only" : "Simulated funds and transactions. Refreshing the page starts a new session."}><span className="environment-dot" />{environment}</div>
       </div>
     </header>
+    {environment === "devnet" && <aside className="try-it" aria-labelledby="try-it-title">
+      <h2 id="try-it-title">How to try it</h2>
+      <p><a href="https://phantom.com/download" target="_blank" rel="noreferrer">Install Phantom</a> → Settings → Developer Settings → Testnet Mode → Solana Devnet → Connect wallet → Get 1,000 testUSDC → New demo vault.</p>
+      <p className="muted">Get free devnet SOL for wallet fees at <a href="https://faucet.solana.com" target="_blank" rel="noreferrer">Solana Faucet</a>. Approve vault creation and funding in Phantom, then try the agent buttons. Test tokens have no monetary value.</p>
+    </aside>}
     {connection ? <Dashboard key={`${environment}:${connection.owner.toBase58()}`} connection={connection} /> : <main><p role={error ? "alert" : "status"}>{error ?? (walletMode && !wallet.connected ? `Connect Phantom on ${environment}. Your wallet needs SOL on this cluster for fees.` : "Connecting to the vault…")}</p></main>}
   </>;
 }

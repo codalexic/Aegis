@@ -35,7 +35,9 @@ export async function connectWalletDashboard(environment: "localnet" | "devnet",
     withdraw: (vault, mint, amount) => client.withdraw(wallet, vault, mint, amount),
     faucet: async () => {
       const response = await fetch("/api/faucet", { method: "POST", headers: { "content-type": "application/json", "x-aegis-faucet": environment }, body: JSON.stringify({ wallet: wallet.publicKey.toBase58() }) });
-      const result = await response.json();
+      const result = await response.json().catch(() => ({ error: response.status === 429
+        ? "Faucet request limit reached. Wait before retrying."
+        : "Faucet is temporarily unavailable. Check your token balance before retrying." }));
       if (!response.ok) throw new Error(result.error ?? "Faucet request failed.");
       return "Received 1,000 testUSDC. Your wallet also needs SOL on this cluster for transaction fees.";
     },

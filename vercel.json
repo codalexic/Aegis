@@ -1,0 +1,27 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "corepack pnpm install --frozen-lockfile",
+  "buildCommand": "AEGIS_ENV=devnet corepack pnpm --filter web build",
+  "outputDirectory": "apps/web/dist",
+  "functions": {
+    "api/**/*.ts": {
+      "maxDuration": 180,
+      "excludeFiles": "{.keys/**,.env,.env.*,target/**,test-ledger/**}"
+    }
+  },
+  "headers": [
+    {
+      "source": "/actions.json",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Authorization, Content-Encoding, Accept-Encoding" },
+        { "key": "Access-Control-Expose-Headers", "value": "X-Blockchain-Ids, X-Action-Version" },
+        { "key": "X-Blockchain-Ids", "value": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1" },
+        { "key": "X-Action-Version", "value": "2.4.1" }
+      ]
+    }
+  ],
+  "rewrites": [{ "source": "/actions/:path*", "destination": "/index.html" }]
+}

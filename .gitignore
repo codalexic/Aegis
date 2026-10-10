@@ -7,3 +7,4 @@ test-ledger/
 apps/web/dist/
 *.swp
 .env.*
+.vercel/

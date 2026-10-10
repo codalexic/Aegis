@@ -1,20 +1,14 @@
 import { readFile, rename, writeFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
-import type { IncomingMessage, ServerResponse } from "node:http";
+import type { IncomingMessage } from "node:http";
 import { join } from "node:path";
 // A relative import lets Vite bundle the workspace's TypeScript SDK into its Node config.
 import { AnchorAegisClient, deriveVaultPda, parseRawAmount, type LocalnetDeployment } from "../../../packages/sdk/src/index";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import type { Connect, Plugin } from "vite";
 
-export class ApiError extends Error {
-  constructor(readonly status: number, message: string) { super(message); }
-}
-
-export function json(response: ServerResponse, status: number, value: unknown) {
-  response.writeHead(status, { "content-type": "application/json", "cache-control": "no-store" });
-  response.end(JSON.stringify(value));
-}
+import { ApiError, json, readBody } from "./http";
+export { ApiError, json, readBody } from "./http";
 
 /** Signing is restricted to requests from this loopback dashboard, including before Vite's own middleware. */
 export function requireDashboardRequest(request: IncomingMessage, write: boolean, actor: "owner" | "agent" | "faucet" = "owner", environment = "localnet") {
@@ -25,22 +19,6 @@ export function requireDashboardRequest(request: IncomingMessage, write: boolean
       new URL(`http://${host}`).port !== String(request.socket.localPort)) throw new ApiError(403, "Loopback dashboard requests only.");
   if (write && (request.headers.origin !== `http://${host}` || request.headers[`x-aegis-${actor}`] !== environment ||
       request.headers["content-type"]?.split(";")[0] !== "application/json")) throw new ApiError(403, "Same-origin dashboard JSON requests only.");
-}
-
-export async function readBody(request: IncomingMessage): Promise<Record<string, unknown>> {
-  let size = 0;
-  const chunks: Buffer[] = [];
-  for await (const chunk of request) {
-    const bytes = Buffer.from(chunk);
-    size += bytes.length;
-    if (size > 4096) throw new ApiError(413, "Request too large.");
-    chunks.push(bytes);
-  }
-  try {
-    const body: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-    if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error();
-    return body as Record<string, unknown>;
-  } catch { throw new ApiError(400, "Expected a JSON object."); }
 }
 
 async function loadOwner(root: string, expected: string) {

@@ -99,8 +99,8 @@ Details: [agent providers and modes](scripts/agent/README.md),
 
 ## Devnet
 
-D1 tooling is ready; public deployment and the devnet 8/8 demo still require
-funding. Wallet signing is implemented; see the [dashboard instructions](apps/web/README.md).
+Both programs are deployed; public addresses are committed in
+`deployments/devnet.json`. Wallet signing is implemented; see the [dashboard instructions](apps/web/README.md).
 
 Keep the original program keypairs backed up in `.keys/programs/`; the deploy
 command verifies their public keys against the committed IDs. A fresh clone
@@ -143,6 +143,57 @@ Localnet defaults and loopback restrictions are preserved.
 
 With localnet running, `pnpm test:devnet` checks the funding gate, key reuse and
 seeding twice on the local validator. It spends no public devnet SOL.
+
+## Public site on Vercel (D3)
+
+Import the repository root into Vercel with Framework **Other**. `vercel.json`
+builds the devnet dashboard and serves the one- and two-segment `api/` routes as
+Node functions (no Next.js catch-all routing is assumed).
+`/api/agent/{info,normal,injected,attacker}`, `/api/faucet`, `/api/deployment` and
+`/api/actions/{create,fund,revoke,withdraw,latest-vault}` are available. Owner
+signing endpoints are absent; owner transactions require Phantom. The public
+site always uses `deployments/devnet.json`, regardless of localnet settings.
+
+Set these exact variables in **Project → Settings → Environment Variables**:
+
+| Variable | Required/value |
+| --- | --- |
+| `GEMINI_API_KEY` | Secret: existing Google AI Studio Gemini key; needed for Live AI. Scripted works without it. |
+| `AEGIS_AGENT_SECRET` | Secret: JSON array of 64 bytes from `.keys/devnet-agent.json`. Must match the manifest's agent. |
+| `AEGIS_FAUCET_SECRET` | Secret: JSON array of 64 bytes from `.keys/devnet-deployer.json`, the existing mint authority. |
+| `ENABLE_EXPERIMENTAL_COREPACK` | `1`, so Vercel uses pinned pnpm `12.9.1`. |
+| `AI_MODEL` | Optional Gemini model ID; defaults to `gemini-3.1-flash-lite`. |
+| `AEGIS_PUBLIC_ORIGIN` | Optional canonical HTTPS site origin; set for a custom domain. Otherwise uses Vercel's `VERCEL_PROJECT_PRODUCTION_URL` in Production and `VERCEL_URL` in Preview. |
+
+Vercel supplies `VERCEL`, `VERCEL_ENV`, `VERCEL_PROJECT_PRODUCTION_URL` and
+`VERCEL_URL`; do not copy them from local files. No `VITE_` secret variables.
+Server secrets come only from Vercel environment variables; the deployed code
+never reads `.keys/` or `.env`. Do not set localnet signing/deployment overrides.
+After changing settings, redeploy to apply them.
+
+Agent requests require that the vault authorizes the configured agent. Gemini
+quota/HTTP failures produce a clear error and the console offers **Retry scripted**.
+Request bodies are limited to 4 KiB. Warm instances enforce six agent calls/IP/
+minute, one faucet call/IP/10 minutes, one claim/wallet/10 minutes, and ten faucet
+claims/hour. Confirmed chain history also restricts the faucet after cold starts;
+recent token-account activity counts toward the wallet cooldown. Concurrent
+instances can race on pending claims, so these are demo controls, not atomic global
+quotas. Enable the documented Vercel Firewall rule (six API POSTs/IP/minute across
+endpoints) before sharing; its counters are per region. No database is required.
+
+Follow [D3 manual steps](docs/planning/D3_MANUAL_STEPS.md) for account/login,
+GitHub import, exact private key-copy commands, environment settings, Firewall,
+funding, Phantom/private-window testing, curl checks, dial.to and deployed-asset
+scanning. Public deployment and wallet acceptance are still manual; local checks
+do not establish that the public URL works.
+
+```bash
+pnpm --filter web test
+AEGIS_ENV=devnet pnpm --filter web build
+node apps/web/scripts/scan-secrets.mjs
+pnpm test:sdk
+pnpm test:agent
+```
 
 ## Solana Actions (D4)
 
@@ -199,8 +250,8 @@ sign each returned transaction with an ephemeral test keypair, and confirm it on
 the validator. They also check CORS, input validation, latest-vault selection,
 dashboard discovery, and withdrawal of both token balances after revocation.
 
-**Pending:** deploy to devnet and host the routes, then test all four actions with
-Phantom on dial.to using
+**Pending manual acceptance:** host the implemented Vercel routes and test all four
+actions with Phantom on dial.to using
 `https://dial.to/?action=solana-action:<encoded HTTPS action URL>&cluster=devnet`.
-The dial.to walkthrough and optional registry submission are deferred; no public
-devnet transactions or deployment are needed for the automated localnet checks.
+The [D3 manual guide](docs/planning/D3_MANUAL_STEPS.md) covers dial.to and optional
+registry submission; no public transactions are needed for automated local checks.

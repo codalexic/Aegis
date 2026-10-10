@@ -36,6 +36,7 @@ export function AgentConsole({ vault, disabled, onBusy, onComplete, environment 
   const [model, setModel] = useState<string | null>(null);
   const [steps, setSteps] = useState<Step[]>([]);
   const [busy, setBusy] = useState(false);
+  const [lastScenario, setLastScenario] = useState<Scenario>("normal");
   const running = useRef(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -51,20 +52,22 @@ export function AgentConsole({ vault, disabled, onBusy, onComplete, environment 
   async function run(scenario: Scenario, useLive = live) {
     if (running.current || disabled || !vault) return;
     running.current = true;
-    setBusy(true); onBusy(true); setError(null); setSteps([]);
+    setLastScenario(scenario); setBusy(true); onBusy(true); setError(null); setSteps([]);
     try {
       const response = await fetch(`/api/agent/${scenario}`, {
         method: "POST", headers: { "content-type": "application/json", "x-aegis-agent": environment },
         body: JSON.stringify({ live: useLive, ...(walletMode && { vault: vault.address.toBase58() }) }),
       });
-      const value = await response.json();
+      const value = await response.json().catch(() => ({ error: response.status === 429
+        ? "Demo request limit reached. Wait a minute before retrying."
+        : "The server is temporarily unavailable. Try again later." }));
       if (!response.ok) {
         setError(typeof value.error === "string" ? value.error : "Agent request failed. Try again.");
       } else if (Array.isArray(value.steps)) setSteps(value.steps);
-      else setError("The server returned an unreadable result. Check localnet and try again.");
+      else setError("The server returned an unreadable result. Check the cluster and try again.");
     } catch { setError("Could not reach the agent. Check the dashboard server and try again."); }
     finally {
-      try { await onComplete(); } catch { setError("Could not refresh the vault. Check localnet before retrying."); }
+      try { await onComplete(); } catch { setError("Could not refresh the vault. Check the cluster before retrying."); }
       running.current = false; setBusy(false); onBusy(false);
     }
   }
@@ -90,11 +93,13 @@ export function AgentConsole({ vault, disabled, onBusy, onComplete, environment 
         {!busy && !error && steps.length === 0 && <p className="agent-placeholder">Choose a scenario. The result appears here.</p>}
         {!vault && <p className="muted">Create and fund a vault to run the agent.</p>}
         {busy && <p role="status">Agent running… Waiting for the reply and chain confirmation.</p>}
-        {error && <p className="notice error" role="alert">{error}</p>}
+        {error && <div><p className="notice error" role="alert">{error}</p>
+          {live && <button disabled={locked} onClick={() => { setLive(false); void run(lastScenario, false); }}>Retry scripted</button>}
+        </div>}
         {result && <div role="status" data-testid="agent-outcome" className={`agent-outcome ${result.ok ? "executed" : "blocked"}`}>
           <strong>{result.ok ? "Executed" : result.origin === "program" ? `Blocked by Aegis program: ${result.error}` : `Request failed: ${result.error}`}</strong>
           <p>{result.ok ? `Swapped ${decimal(request?.amountUsdc ?? "0")} testUSDC; output stayed in the vault.`
-            : result.origin === "program" && vault ? rejectionReason(result.error, vault, request?.amountUsdc) : "The request could not be confirmed by the program. Check localnet and retry."}</p>
+            : result.origin === "program" && vault ? rejectionReason(result.error, vault, request?.amountUsdc) : "The request could not be confirmed by the program. Check the cluster and retry."}</p>
         </div>}
       </div>
       <div className="agent-steps" role="region" aria-label="Agent details" tabIndex={0}>

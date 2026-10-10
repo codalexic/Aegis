@@ -8,7 +8,7 @@ import { actionsPlugin } from "./api/actions/plugin";
 const workspaceRoot = fileURLToPath(new URL("../../", import.meta.url));
 
 export default defineConfig(({ mode }) => {
-  const environment = process.env.AEGIS_ENV ?? loadEnv(mode, workspaceRoot, "AEGIS_").AEGIS_ENV ?? "mock";
+  const environment = process.env.VERCEL === "1" ? "devnet" : process.env.AEGIS_ENV ?? loadEnv(mode, workspaceRoot, "AEGIS_").AEGIS_ENV ?? "mock";
   if (environment !== "mock" && environment !== "localnet" && environment !== "devnet") {
     throw new Error("AEGIS_ENV must be mock, localnet or devnet.");
   }

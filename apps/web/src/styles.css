@@ -155,3 +155,8 @@ footer { display: flex; justify-content: space-between; gap: 16px; padding-top: 
   progress::-moz-progress-bar { transition: none; }
   button:active:not(:disabled) { transform: none; }
 }
+
+.try-it { max-width: 1200px; margin: 24px auto 0; padding: 18px 24px; border: 1px solid var(--border, #d9ded8); border-radius: 12px; }
+.try-it h2 { font-size: 1rem; margin: 0 0 8px; }
+.try-it p { margin: 6px 0; line-height: 1.6; }
+@media (max-width: 1248px) { .try-it { margin-left: 24px; margin-right: 24px; } }

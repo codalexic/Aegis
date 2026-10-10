@@ -1,7 +1,7 @@
 import { createActionHeaders, type ActionGetResponse } from "@solana/actions";
 import type { Connect } from "vite";
 import rules from "../../public/actions.json";
-import { ApiError, json, readBody } from "../../server/owner-api";
+import { ApiError, json, readBody } from "../../server/http";
 import { ActionError, ActionsService, walletAddress, type ActionName } from "./service";
 
 export interface ActionsConfig {
@@ -33,11 +33,11 @@ function metadata(action: ActionName, config: ActionsConfig): ActionGetResponse 
 }
 
 /** Actions are cross-origin unsigned builders; existing key-backed APIs keep their own stricter boundary. */
-export function actionsMiddleware(loadConfig: () => Promise<ActionsConfig>): Connect.NextHandleFunction {
+export function actionsMiddleware(loadConfig: () => Promise<ActionsConfig>, initialChainId?: string): Connect.NextHandleFunction {
   return (request, response, next) => {
     const path = request.url?.split("?")[0];
     if (path !== "/actions.json" && !path?.startsWith("/api/actions/")) return next();
-    for (const [key, value] of Object.entries(createActionHeaders({ actionVersion: "2.4.1" }))) response.setHeader(key, value);
+    for (const [key, value] of Object.entries(createActionHeaders({ chainId: initialChainId, actionVersion: "2.4.1" }))) response.setHeader(key, value);
     void (async () => {
       const config = await loadConfig();
       for (const [key, value] of Object.entries(createActionHeaders({ chainId: config.chainId, actionVersion: "2.4.1" }))) response.setHeader(key, value);

@@ -6,7 +6,7 @@ import {
   FUNDING, nextBlockhash, snapshot, tokenBalance, TRADE, type Fixture, type LocalnetContext,
 } from "./helpers";
 
-// INTERFACES §8, except expiry: the real clock is left alone (P6 tests expiry in LiteSVM).
+// Vault policy and lifecycle; expiry uses the controllable clock in the LiteSVM program tests.
 describe("AnchorAegisClient on localnet", () => {
   let context: LocalnetContext;
   let f: Fixture;

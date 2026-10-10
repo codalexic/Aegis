@@ -1,4 +1,4 @@
-# Localnet SDK checks (C5)
+# Localnet SDK checks
 
 Keep `pnpm localnet` running in another terminal, then run from the repository root:
 
@@ -7,8 +7,9 @@ pnpm test:e2e
 pnpm exec tsc -p tests/e2e/tsconfig.json
 ```
 
-These ten cases cover INTERFACES §8 and agent rotation through the real `AnchorAegisClient`.
-Expiry remains covered by P6's LiteSVM clock tests. Rejections must report the
+These cases cover swaps, cap and budget enforcement, account and signer validation,
+revocation, withdrawals and agent rotation through the real `AnchorAegisClient`.
+Expiry is covered by the LiteSVM clock tests in `tests/program`. Rejections must report the
 exact error with `origin: "program"`, appear in RPC activity, and preserve both
 vault balances, spent, policy and pool reserves. Redirection uses `swapRaw` with
 an initialized attacker token account for the correct mint.

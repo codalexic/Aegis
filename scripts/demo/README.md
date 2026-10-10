@@ -1,4 +1,4 @@
-# Terminal demo (C6)
+# Terminal demo
 
 From the repository root, keep `pnpm localnet` running and run:
 
@@ -34,8 +34,8 @@ eight steps against devnet. It reads `deployments/devnet.json`, uses
 requires real program-origin rejections, and prints devnet Explorer links for
 every signature. RPC transport retries never rebuild a signed transaction.
 
-Completion check: start a fresh `pnpm localnet` in another terminal, then run both
-demos consecutively against that same chain:
+To verify repeatability, start a fresh `pnpm localnet` in another terminal, then
+run the demo twice consecutively against that same chain:
 
 ```bash
 pnpm exec tsc -p scripts/demo/tsconfig.json

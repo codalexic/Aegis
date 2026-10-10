@@ -95,7 +95,7 @@ For an offline simulation, use `AEGIS_ENV=mock pnpm dev` or
 `AEGIS_ENV=mock pnpm demo`. Simulated results are labelled `mock`.
 
 Details: [agent providers and modes](scripts/agent/README.md),
-[terminal demo](scripts/demo/README.md), [interface specification](docs/planning/INTERFACES.md).
+[terminal demo](scripts/demo/README.md), [SDK](packages/sdk/README.md).
 
 ## Devnet
 
@@ -148,7 +148,7 @@ Localnet defaults and loopback restrictions are preserved.
 With localnet running, `pnpm test:devnet` checks the funding gate, key reuse and
 seeding twice on the local validator. It spends no public devnet SOL.
 
-## Public site on Vercel (D3)
+## Public site on Vercel
 
 Import the repository root into Vercel with Framework **Other**. `vercel.json`
 uses `pnpm build:vercel` to write the [Vercel Build Output API](https://vercel.com/docs/build-output-api)
@@ -200,11 +200,29 @@ instances can race on pending claims, so these are demo controls, not atomic glo
 quotas. Enable the documented Vercel Firewall rule (six API POSTs/IP/minute across
 endpoints) before sharing; its counters are per region. No database is required.
 
-Follow [D3 manual steps](docs/planning/D3_MANUAL_STEPS.md) for account/login,
-GitHub import, exact private key-copy commands, environment settings, Firewall,
-funding, Phantom/private-window testing, curl checks, dial.to and deployed-asset
-scanning. Public deployment and wallet acceptance are still manual; local checks
-do not establish that the public URL works.
+### Deployment
+
+1. Sign in to Vercel and import this GitHub repository. Use the repository root,
+   Framework **Other**, Node **24.x**, and enable Fluid Compute. Keep the build
+   settings from `vercel.json` and the pinned pnpm version.
+2. Set the environment variables listed above for the target environment. Supply
+   `AEGIS_AGENT_SECRET` and `AEGIS_FAUCET_SECRET` privately from their dedicated
+   key files; `GEMINI_API_KEY` enables Live AI. Set `ENABLE_EXPERIMENTAL_COREPACK=1`.
+3. Deploy. For a custom domain, set `AEGIS_PUBLIC_ORIGIN` to its exact HTTPS origin.
+   Redeploy after changing environment variables. Allow public access to the
+   Production URL so the dashboard and Actions work without a Vercel login.
+4. In Vercel Firewall, add a rate-limit rule matching both paths starting with
+   `/api/` and method `POST`: a fixed 60-second window, six requests, counted by
+   IP, with a 429 response. Publish the rule before sharing the site.
+5. Fund the agent, faucet and Phantom wallet public addresses with devnet SOL for
+   fees and account rent. Connect Phantom on devnet, get testUSDC, create and fund
+   a vault, exercise the trading scenarios, then revoke and withdraw.
+6. Verify `/api/agent/info`, `/api/deployment` and `/api/actions/create` return JSON,
+   and `/api/owner/create` returns 404. Test the Actions through dial.to as described
+   below. Run the checks below and scan the deployed JavaScript assets with
+   `node apps/web/scripts/scan-secrets.mjs <downloaded-assets-directory>`.
+
+Local checks do not establish that the public URL or Phantom signing works.
 
 ```bash
 node apps/web/scripts/check-api-paths.mjs # also runs with web tests
@@ -223,7 +241,7 @@ checks all four Action GETs, agent info, CORS/devnet Action headers, preflight,
 query validation, and emitted routing/static files. `--server` permits signer API
 and environment variable names in server code; it still scans actual credentials.
 
-## Solana Actions (D4)
+## Solana Actions
 
 With localnet already running, start `AEGIS_ENV=localnet pnpm dev`. The dev server
 provides these unsigned [Solana Actions](https://solana.com/docs/tools/actions):
@@ -278,8 +296,10 @@ sign each returned transaction with an ephemeral test keypair, and confirm it on
 the validator. They also check CORS, input validation, latest-vault selection,
 dashboard discovery, and withdrawal of both token balances after revocation.
 
-**Pending manual acceptance:** host the implemented Vercel routes and test all four
-actions with Phantom on dial.to using
+To try the deployed Actions, open each action URL with Phantom on devnet using
 `https://dial.to/?action=solana-action:<encoded HTTPS action URL>&cluster=devnet`.
-The [D3 manual guide](docs/planning/D3_MANUAL_STEPS.md) covers dial.to and optional
-registry submission; no public transactions are needed for automated local checks.
+Create a vault, fund it, revoke the agent, then withdraw. Reload the dashboard
+with the same wallet to see the latest confirmed vault. For optional link
+unfurling, submit the public Actions URL through the
+[Dialect registry](https://docs.dialect.to/docs/actions-and-blinks).
+Automated local checks require no public transactions.

@@ -13,13 +13,14 @@ endpoint. The default connection retries HTTP 429/5xx, transient RPC errors and
 network failures up to three times with exponential backoff. A retry resends the
 same signed bytes; program rejections are never retried as new transactions.
 `explorerTransactionUrl(signature, environment)` selects the correct cluster and
-returns no link for mock signatures. No dashboard devnet signing is added here.
+returns no link for mock signatures. For browser wallet signing, see the
+[dashboard documentation](../../apps/web/README.md#wallet-owner-signing).
 
 The client holds no wallet and reads no key files. Reads work without a signer;
 each write receives its owner or agent `Signer`, which is also the fee payer.
 Amounts stay `bigint`; conversion to/from Anchor `BN` uses decimal strings.
 Instructions and decoded vault fields are checked against the generated `Aegis`
-TypeScript type. Neither IDLs nor program checks are modified by this client.
+TypeScript type.
 
 `swapRaw` sends caller-selected accounts with `accountsStrict`, without account
 resolution or policy checks. Its only amount validation is the u64 serialization
@@ -57,6 +58,7 @@ pnpm test:sdk
 pnpm --filter @aegis/sdk typecheck
 ```
 
-C3 tests use real IDL encoding, decoding and transaction signing against stubbed
-RPC methods. They require no keys on disk, validator or generated build output.
-Dashboard/agent localnet wiring is C4; the localnet end-to-end suite is C5.
+SDK unit tests use real IDL encoding, decoding and transaction signing against
+stubbed RPC methods. They require no keys on disk, validator or generated build
+output. The [localnet end-to-end suite](../../tests/e2e/README.md) exercises the
+client against deployed programs.

@@ -92,8 +92,8 @@ again. Record the best observed rates if reliability cannot be reached, and
 confirm the dashboard's **Retry scripted** fallback. Never change program or
 client checks, clamp a proposal, or present the scripted fallback as live AI.
 
-The C2 completion check also requires running all four modes against the mock,
-with a real API key for normal and injected. Provider API references:
+To exercise all four modes in mock mode, configure a provider API key for normal
+and injected; attacker and scripted need no provider. Provider API references:
 [Gemini](https://ai.google.dev/gemini-api/docs/generate-content/latest-model),
 [Anthropic Messages](https://platform.claude.com/docs/en/api/messages/create),
 [OpenAI Responses](https://developers.openai.com/api/docs/guides/structured-outputs).

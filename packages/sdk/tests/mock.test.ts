@@ -51,7 +51,7 @@ async function rejectWithoutChanges(f: Awaited<ReturnType<typeof freshVault>>, r
   expect((await f.client.listActivity(f.vault))[0]).toMatchObject({ ok: false, error, signature: result.signature });
 }
 
-describe("mock shared cases (INTERFACES §8)", () => {
+describe("mock vault policy and lifecycle", () => {
   it("swaps 20 and credits 200000000 raw output with spent 20000000", async () => {
     const f = await freshVault();
     const before = await f.client.getVault(f.vault);

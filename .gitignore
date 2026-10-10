@@ -8,3 +8,5 @@ apps/web/dist/
 *.swp
 .env.*
 .vercel/
+.private/
+AGENTS.md

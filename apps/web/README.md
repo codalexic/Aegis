@@ -22,7 +22,7 @@ Restarting `pnpm localnet` resets the chain and allows a fresh demo.
 Localnet retains up to 1,000,000 ledger shreds so activity survives a full demo
 and slow provider calls; the validator's default limit prunes it within minutes.
 
-With an AI provider configured in the ignored root `.env`, run the C4 check:
+With an AI provider configured in the ignored root `.env`, try the trading scenarios:
 
 ```bash
 AEGIS_ENV=localnet pnpm agent --mode normal
@@ -65,7 +65,7 @@ pnpm --filter web build
 grep -rE "AIza|secretKey|GEMINI" apps/web/dist
 ```
 
-## Wallet owner signing (D2)
+## Wallet owner signing
 
 The usual `pnpm start:demo` / `AEGIS_ENV=localnet pnpm dev` flow still uses the
 local owner API. To exercise browser wallet signing against the same local chain:
@@ -75,8 +75,8 @@ pnpm localnet # if it is not already running
 AEGIS_ENV=localnet AEGIS_SIGNING=wallet pnpm dev
 ```
 
-Once D1 is deployed, `AEGIS_ENV=devnet pnpm dev` selects wallet signing automatically
-and reads `deployments/devnet.json`. No devnet manifest is fabricated before deployment.
+After deploying the programs to devnet, `AEGIS_ENV=devnet pnpm dev` selects wallet
+signing automatically and reads `deployments/devnet.json`.
 Connect Phantom on the selected cluster; the connected wallet needs SOL there for
 fees and account rent. Get 1,000 testUSDC, then New demo vault requests two wallet
 approvals (create and fund). Revoke and each nonempty withdrawal request another
@@ -96,8 +96,9 @@ one server-signed transaction. In devnet, the local server loads only
 testUSDC mint authority, and never uses the deployer for claims. Limits are one
 claim per wallet per ten minutes and ten claims total per rolling hour. Allowances are reserved before RPC awaits and
 retained on uncertain failures. Limits live in the server process and reset when it
-restarts. All endpoints remain restricted to this loopback dashboard; public hosting
-and distributed abuse controls belong to D3. Agent requests in wallet mode identify
+restarts. These development endpoints are restricted to the loopback dashboard.
+For public hosting and distributed abuse controls, see
+[Deployment](../../README.md#deployment). Agent requests in wallet mode identify
 the selected vault, and the server verifies that it authorizes the server's agent.
 
 Checks:
@@ -114,5 +115,6 @@ all three agent endpoints with Scripted replies. It asserts successful normal tr
 on-chain `CapExceeded` and `AccountMismatch` rejections with unchanged vault balances,
 revocation and both withdrawals. Private test signing material stays in Node.
 
-Pending: the manual Phantom-on-devnet walkthrough after D1 has sufficient SOL and
-the programs are deployed. Automated localnet signing does not replace that extension check.
+To verify Phantom signing on devnet, deploy the programs and fund the wallet with
+devnet SOL, then try the same trading scenarios in the extension. Automated
+localnet signing does not verify the Phantom extension integration.

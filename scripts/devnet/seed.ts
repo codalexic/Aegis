@@ -14,14 +14,15 @@ const options = { commitment: "confirmed", preflightCommitment: "confirmed" } as
 export const POOL_LIQUIDITY = 100_000_000_000_000n;
 export const OWNER_TOKENS = 10_000_000_000n;
 
-export async function seedDevnet(connection: Connection, owner: Keypair, agent: Keypair,
+export async function seedDevnet(connection: Connection, owner: Keypair, faucet: Keypair, agent: Keypair,
   input: Keypair, output: Keypair, agentFunding: bigint) {
-  for (const [key, decimals] of [[input, 6], [output, 9]] as const) {
+  if (faucet.publicKey.equals(owner.publicKey)) throw new DevnetError("A dedicated faucet authority is required.");
+  for (const [key, decimals, authority] of [[input, 6, faucet], [output, 9, owner]] as const) {
     if (!await connection.getAccountInfo(key.publicKey, "confirmed")) {
-      await createMint(connection, owner, owner.publicKey, null, decimals, key, options);
+      await createMint(connection, owner, authority.publicKey, null, decimals, key, options);
     }
     const mint = await getMint(connection, key.publicKey, "confirmed");
-    if (mint.decimals !== decimals || !mint.mintAuthority?.equals(owner.publicKey) || mint.freezeAuthority !== null) {
+    if (mint.decimals !== decimals || !mint.mintAuthority?.equals(authority.publicKey) || mint.freezeAuthority !== null) {
       throw new DevnetError("Existing devnet mint has unexpected decimals or authority; left unchanged.");
     }
   }
@@ -45,7 +46,7 @@ export async function seedDevnet(connection: Connection, owner: Keypair, agent: 
   const ownerInput = await getOrCreateAssociatedTokenAccount(connection, owner, input.publicKey, owner.publicKey, false, "confirmed", options);
   await getOrCreateAssociatedTokenAccount(connection, owner, output.publicKey, owner.publicKey, false, "confirmed", options);
   if (ownerInput.amount < OWNER_TOKENS) {
-    await mintTo(connection, owner, input.publicKey, ownerInput.address, owner, OWNER_TOKENS - ownerInput.amount, [], options);
+    await mintTo(connection, owner, input.publicKey, ownerInput.address, faucet, OWNER_TOKENS - ownerInput.amount, [], options);
   }
   const reserve = await getAccount(connection, accounts.outputReserve, "confirmed");
   if (!reserve.owner.equals(accounts.poolAuthority) || !reserve.mint.equals(output.publicKey)) throw new DevnetError("Unexpected pool reserve.");

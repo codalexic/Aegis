@@ -1,10 +1,15 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
+import { Keypair, sendAndConfirmTransaction } from "@solana/web3.js";
+import { getMint } from "@solana/spl-token";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FaucetLimiter, faucetApiMiddleware } from "../server/faucet-api";
 import deployment from "../../../deployments/localnet.json";
+import devnet from "../../../deployments/devnet.json";
 
 vi.mock("node:fs/promises", () => ({ readFile: vi.fn(), writeFile: vi.fn(), rename: vi.fn() }));
+vi.mock("@solana/web3.js", async (original) => ({ ...await original<object>(), sendAndConfirmTransaction: vi.fn() }));
+vi.mock("@solana/spl-token", async (original) => ({ ...await original<object>(), getMint: vi.fn() }));
 afterEach(() => vi.clearAllMocks());
 
 async function serverTest(run: (url: string) => Promise<void>, environment: "localnet" | "devnet" = "localnet") {
@@ -43,6 +48,29 @@ describe("test-token faucet allowance", () => {
 });
 
 describe("faucet HTTP boundary", () => {
+  it.each(["valid", "wrong-key", "wrong-authority", "missing-faucet", "deployer-faucet"])("uses the dedicated local devnet key: %s", async (kind) => serverTest(async (url) => {
+    const faucet = Keypair.generate();
+    const owner = Keypair.generate();
+    const manifest = { ...devnet, owner: owner.publicKey.toBase58(), faucet: kind === "missing-faucet" ? undefined :
+      kind === "deployer-faucet" ? owner.publicKey.toBase58() : faucet.publicKey.toBase58() };
+    vi.mocked(readFile).mockImplementation(async (path) => {
+      if (String(path).endsWith("deployments/devnet.json")) return JSON.stringify(manifest);
+      if (String(path).endsWith(".keys/devnet-faucet.json")) return JSON.stringify(Array.from((kind === "wrong-key" ? owner : faucet).secretKey));
+      throw new Error("Unexpected file read");
+    });
+    vi.mocked(getMint).mockResolvedValue({ decimals: 6, mintAuthority: kind === "wrong-authority" ? owner.publicKey : faucet.publicKey } as Awaited<ReturnType<typeof getMint>>);
+    vi.mocked(sendAndConfirmTransaction).mockResolvedValue("test-only-signature");
+    const response = await fetch(`${url}/api/faucet`, { method: "POST", headers: { origin: url, "content-type": "application/json", "x-aegis-faucet": "devnet" }, body: JSON.stringify({ wallet: owner.publicKey.toBase58() }) });
+    expect(readFile).not.toHaveBeenCalledWith("/unused/.keys/devnet-deployer.json", "utf8");
+    expect(response.status).toBe(kind === "valid" ? 200 : 503);
+    if (kind === "valid") {
+      expect(vi.mocked(sendAndConfirmTransaction).mock.calls[0][2].map(key => key.publicKey.toBase58())).toEqual([faucet.publicKey.toBase58()]);
+    } else {
+      expect(sendAndConfirmTransaction).not.toHaveBeenCalled();
+      if (kind !== "wrong-authority") expect(getMint).not.toHaveBeenCalled();
+    }
+  }, "devnet"));
+
   it("rejects cross-origin claims before reading any files", async () => serverTest(async (url) => {
     const response = await fetch(`${url}/api/faucet`, { method: "POST", headers: { origin: "https://attacker.invalid", "content-type": "application/json", "x-aegis-faucet": "localnet" }, body: "{}" });
     expect(response.status).toBe(403);

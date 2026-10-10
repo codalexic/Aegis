@@ -91,8 +91,10 @@ serialization shape; it cannot sign with local keys. The React integration uses 
 pinned wallet-adapter-react base provider and hooks without mobile auto-discovery.
 
 The faucet creates the wallet's input-token ATA and mints exactly 1,000 testUSDC in
-one server-signed transaction. Limits are one claim per wallet per ten minutes and
-ten claims total per rolling hour. Allowances are reserved before RPC awaits and
+one server-signed transaction. In devnet, the local server loads only
+`.keys/devnet-faucet.json`, verifies the manifest’s `faucet` address and current
+testUSDC mint authority, and never uses the deployer for claims. Limits are one
+claim per wallet per ten minutes and ten claims total per rolling hour. Allowances are reserved before RPC awaits and
 retained on uncertain failures. Limits live in the server process and reset when it
 restarts. All endpoints remain restricted to this loopback dashboard; public hosting
 and distributed abuse controls belong to D3. Agent requests in wallet mode identify

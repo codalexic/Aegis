@@ -45,7 +45,7 @@ chat. Do not run the commands below in a recorded/shared terminal.
 | --- | --- |
 | `GEMINI_API_KEY` | Your existing Google AI Studio Gemini API key. See below. |
 | `AEGIS_AGENT_SECRET` | Entire JSON array printed by the devnet-agent command below. |
-| `AEGIS_FAUCET_SECRET` | Entire JSON array printed by the devnet-deployer command below. |
+| `AEGIS_FAUCET_SECRET` | Entire JSON array printed by the devnet-faucet command below. |
 | `ENABLE_EXPERIMENTAL_COREPACK` | `1` (not a secret; enables the pinned pnpm version). |
 
 **Print the existing agent value yourself**, then copy the complete line, including
@@ -55,16 +55,21 @@ chat. Do not run the commands below in a recorded/shared terminal.
 node -e 'const fs = require("node:fs"); process.stdout.write(JSON.stringify(JSON.parse(fs.readFileSync(".keys/devnet-agent.json", "utf8"))) + "\n")'
 ```
 
-**Print the existing mint-authority value yourself**, then copy the complete line
+**Print the dedicated faucet value yourself**, then copy the complete line
 into `AEGIS_FAUCET_SECRET`:
 
 ```bash
-node -e 'const fs = require("node:fs"); process.stdout.write(JSON.stringify(JSON.parse(fs.readFileSync(".keys/devnet-deployer.json", "utf8"))) + "\n")'
+node -e 'const fs = require("node:fs"); process.stdout.write(JSON.stringify(JSON.parse(fs.readFileSync(".keys/devnet-faucet.json", "utf8"))) + "\n")'
 ```
 
-These are the exact existing D1 files; do not generate replacement keys. The
-server checks their public keys against `deployments/devnet.json`. This faucet
-key is also the existing devnet deployer/upgrade authority; keep it private.
+Use the existing agent and dedicated faucet files; do not generate replacement
+keys. The server checks their public keys against `deployments/devnet.json` and
+checks that the faucet is the current testUSDC mint authority before every claim.
+The faucet holds only testUSDC mint authority and SOL for ATA rent and fees.
+
+**Never paste `.keys/devnet-deployer.json` anywhere, including Vercel, chat or
+shared terminals. It is the programs’ upgrade authority and must never leave
+this machine. `AEGIS_FAUCET_SECRET` must come only from `.keys/devnet-faucet.json`.**
 
 Gemini is **not** in `.keys/`. Open https://aistudio.google.com/apikey, sign in,
 and copy your existing key (or create a free-tier key yourself if needed). If
@@ -136,7 +141,7 @@ access. Vercel Hobby supports one rate-limit rule. Use it for all API POSTs:
 The app additionally allows six agent requests/IP/minute, one faucet request/IP/
 10 minutes, one claim/wallet/10 minutes and ten faucet claims/hour **per warm
 instance**, reserving before RPC. Confirmed authority/account history also applies
-faucet limits after restarts; other successful deployer transactions also count
+faucet limits after restarts; other successful faucet transactions also count
 toward the hourly cap, and recent recipient-account activity conservatively
 starts the wallet cooldown. Pending claims on separate instances can race, and
 Vercel WAF counters are per region. These are demo abuse controls, not a globally
@@ -155,8 +160,8 @@ These commands print only public addresses/balances:
 ```bash
 solana address --keypair .keys/devnet-agent.json
 solana balance --url devnet --keypair .keys/devnet-agent.json
-solana address --keypair .keys/devnet-deployer.json
-solana balance --url devnet --keypair .keys/devnet-deployer.json
+solana address --keypair .keys/devnet-faucet.json
+solana balance --url devnet --keypair .keys/devnet-faucet.json
 ```
 
 If either balance is low, open https://faucet.solana.com, sign in yourself if

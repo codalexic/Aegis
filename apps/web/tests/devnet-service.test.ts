@@ -30,7 +30,7 @@ describe("environment-only signing configuration", () => {
 
 describe("faucet transaction", () => {
   it("mints exactly 1,000 testUSDC to the requested wallet ATA using only the configured authority", async () => {
-    const authority = { publicKey: new PublicKey(deployment.owner) } as Keypair;
+    const authority = { publicKey: new PublicKey(deployment.faucet) } as Keypair;
     vi.spyOn(Keypair, "fromSecretKey").mockReturnValue(authority);
     vi.mocked(getMint).mockResolvedValue({ decimals: 6, mintAuthority: authority.publicKey } as Awaited<ReturnType<typeof getMint>>);
     const client = devnetClient();
@@ -41,7 +41,9 @@ describe("faucet transaction", () => {
     expect(result).toEqual({ signature: "test-only-signature", amountRaw: "1000000000" });
     const [, transaction, signers] = vi.mocked(sendAndConfirmTransaction).mock.calls[0];
     expect(signers).toEqual([authority]);
+    expect(authority.publicKey.toBase58()).not.toBe(deployment.owner);
     expect(transaction.instructions).toHaveLength(2);
+    expect(transaction.instructions[0].keys[0].pubkey.equals(authority.publicKey)).toBe(true);
     expect(transaction.instructions[0].keys[2].pubkey.equals(recipient)).toBe(true);
     const mint = transaction.instructions[1];
     expect(mint.data[0]).toBe(14); // SPL MintToChecked
@@ -50,10 +52,30 @@ describe("faucet transaction", () => {
     expect(mint.keys[0].pubkey.toBase58()).toBe(deployment.inputMint);
     expect(mint.keys[2].pubkey.equals(authority.publicKey)).toBe(true);
   });
-  it("does not send when the mint authority/decimals differ", async () => {
-    vi.spyOn(Keypair, "fromSecretKey").mockReturnValue({ publicKey: new PublicKey(deployment.owner) } as Keypair);
-    vi.mocked(getMint).mockResolvedValue({ decimals: 9, mintAuthority: new PublicKey(deployment.owner) } as Awaited<ReturnType<typeof getMint>>);
+  it.each([
+    { decimals: 9, mintAuthority: new PublicKey(deployment.faucet) },
+    { decimals: 6, mintAuthority: new PublicKey(deployment.owner) },
+    { decimals: 6, mintAuthority: Keypair.generate().publicKey },
+    { decimals: 6, mintAuthority: null },
+  ])("does not send when mint configuration differs: %j", async (state) => {
+    vi.spyOn(Keypair, "fromSecretKey").mockReturnValue({ publicKey: new PublicKey(deployment.faucet) } as Keypair);
+    vi.mocked(getMint).mockResolvedValue(state as Awaited<ReturnType<typeof getMint>>);
     await expect(mintTestUsdc({ AEGIS_FAUCET_SECRET: JSON.stringify(Array(64).fill(1)) }, Keypair.generate().publicKey)).rejects.toThrow("mint configuration mismatch");
+    expect(sendAndConfirmTransaction).not.toHaveBeenCalled();
+  });
+  it.each([deployment.owner, Keypair.generate().publicKey.toBase58()])("rejects a secret for %s before RPC or sending", async (publicKey) => {
+    vi.spyOn(Keypair, "fromSecretKey").mockReturnValue({ publicKey: new PublicKey(publicKey) } as Keypair);
+    await expect(mintTestUsdc({ AEGIS_FAUCET_SECRET: JSON.stringify(Array(64).fill(1)) }, Keypair.generate().publicKey)).rejects.toThrow("AEGIS_FAUCET_SECRET is missing or does not match");
+    expect(getMint).not.toHaveBeenCalled();
+    expect(sendAndConfirmTransaction).not.toHaveBeenCalled();
+  });
+  it.each([undefined, deployment.owner])("rejects a missing or deployer faucet in the manifest", async (faucet) => {
+    const original = deployment.faucet;
+    try {
+      deployment.faucet = faucet as string;
+      await expect(mintTestUsdc({}, Keypair.generate().publicKey)).rejects.toThrow("dedicated faucet");
+    } finally { deployment.faucet = original; }
+    expect(getMint).not.toHaveBeenCalled();
     expect(sendAndConfirmTransaction).not.toHaveBeenCalled();
   });
 });

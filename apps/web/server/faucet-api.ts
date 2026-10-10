@@ -43,11 +43,13 @@ export function faucetApiMiddleware(root: string, environment: "localnet" | "dev
       limiter.take(recipient.toBase58());
       let authority: Keypair;
       try {
-        const name = environment === "devnet" ? "devnet-deployer" : "owner";
+        const name = environment === "devnet" ? "devnet-faucet" : "owner";
+        const expected = environment === "devnet" ? deployment.faucet : deployment.owner;
+        if (!expected || (environment === "devnet" && expected === deployment.owner)) throw new Error();
         const bytes: unknown = JSON.parse(await readFile(join(root, `.keys/${name}.json`), "utf8"));
         if (!Array.isArray(bytes) || bytes.length !== 64 || !bytes.every((byte) => Number.isInteger(byte) && byte >= 0 && byte <= 255)) throw new Error();
         authority = Keypair.fromSecretKey(Uint8Array.from(bytes));
-        if (authority.publicKey.toBase58() !== deployment.owner) throw new Error();
+        if (authority.publicKey.toBase58() !== expected) throw new Error();
       } catch { throw new ApiError(503, "Faucet authority is unavailable. Check the server configuration."); }
       const mint = new PublicKey(deployment.inputMint);
       const state = await getMint(client.connection, mint, "confirmed");

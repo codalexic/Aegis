@@ -18,7 +18,7 @@ import { createDevnetConnection, DEVNET_RPC_URL, DEVNET_WS_URL } from "./devnet"
 import type { Activity, AegisClient, CreateVaultParams, SwapAccounts, TxResult, VaultState } from "./types";
 
 // Dashboard creation adds lastVault; a freshly seeded deployment has no vault yet.
-export type ChainDeployment = Omit<typeof localnet, "lastVault"> & { lastVault?: string };
+export type ChainDeployment = Omit<typeof localnet, "lastVault"> & { lastVault?: string; faucet?: string };
 export type LocalnetDeployment = ChainDeployment;
 export interface AnchorClientOptions {
   /** Public addresses only. Pass freshly read JSON after reseeding localnet if needed. */

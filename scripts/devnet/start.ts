@@ -56,6 +56,8 @@ async function main() {
     throw new DevnetError("Existing devnet manifest has unexpected environment or program IDs.");
   }
   const owner = await loadOrCreateKey(root, "devnet-deployer", existing?.owner);
+  const faucet = await loadOrCreateKey(root, "devnet-faucet", existing?.faucet);
+  if (faucet.publicKey.equals(owner.publicKey)) throw new DevnetError("A dedicated faucet authority is required.");
   console.log(`Devnet deployer: ${owner.publicKey.toBase58()}`);
   const connection = createDevnetConnection();
   const rpc = createSolanaRpc(DEVNET_RPC_URL);
@@ -125,11 +127,12 @@ async function main() {
         throw new DevnetError(`${program.name} did not match the built binary after deployment.`);
       }
     }
-    await seedDevnet(connection, owner, agent, input, output, budget.agentFunding);
+    await seedDevnet(connection, owner, faucet, agent, input, output, budget.agentFunding);
     const deployment: ChainDeployment = {
       environment: "devnet", rpcUrl: DEVNET_RPC_URL, wsUrl: DEVNET_WS_URL,
       programs: { aegis: AEGIS_PROGRAM_ID.toBase58(), demoDex: DEMO_DEX_PROGRAM_ID.toBase58() },
       owner: owner.publicKey.toBase58(), agent: agent.publicKey.toBase58(),
+      faucet: faucet.publicKey.toBase58(),
       inputMint: input.publicKey.toBase58(), outputMint: output.publicKey.toBase58(),
       pool: accounts.pool.toBase58(), poolAuthority: accounts.poolAuthority.toBase58(),
       inputReserve: accounts.inputReserve.toBase58(), outputReserve: accounts.outputReserve.toBase58(),

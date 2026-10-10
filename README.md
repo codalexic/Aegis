@@ -129,11 +129,15 @@ AEGIS_ENV=devnet pnpm agent --mode scripted --vault <VAULT_ADDRESS>
 ```
 
 Deployment checks funding before any transaction, uses the existing program IDs
-and `.keys/devnet-deployer.json` as upgrade/mint authority, creates testUSDC (6
-decimals) and testSOL (9), seeds 100,000 testSOL in the pool and 10,000 testUSDC
-for the owner, and funds `.keys/devnet-agent.json`. Reruns reuse mints/pool,
+and `.keys/devnet-deployer.json` as program upgrade and testSOL mint authority.
+It creates testUSDC (6 decimals) with `.keys/devnet-faucet.json` as its dedicated
+mint authority and testSOL (9 decimals), seeds 100,000 testSOL in the pool and
+10,000 testUSDC for the owner, and funds `.keys/devnet-agent.json`. Reruns reuse mints/pool,
 skip identical binaries and top up only missing balances. Upload buffer keys
-are preserved for resuming failures. Run one deployment process at a time.
+are preserved for resuming failures. Reruns keep the faucet as testUSDC mint
+authority, use it to sign owner testUSDC top-ups, and reject unexpected authorities
+without reassigning them. Back up the faucet key locally; a missing key for a
+recorded faucet address stops deployment. Run one deployment process at a time.
 
 Successful setup writes public addresses to `deployments/devnet.json`. Pass it
 to the SDK with `createClient("devnet", { deployment })`. The agent uses only the
@@ -160,10 +164,15 @@ Set these exact variables in **Project → Settings → Environment Variables**:
 | --- | --- |
 | `GEMINI_API_KEY` | Secret: existing Google AI Studio Gemini key; needed for Live AI. Scripted works without it. |
 | `AEGIS_AGENT_SECRET` | Secret: JSON array of 64 bytes from `.keys/devnet-agent.json`. Must match the manifest's agent. |
-| `AEGIS_FAUCET_SECRET` | Secret: JSON array of 64 bytes from `.keys/devnet-deployer.json`, the existing mint authority. |
+| `AEGIS_FAUCET_SECRET` | Secret: JSON array of 64 bytes from `.keys/devnet-faucet.json`. Must match the manifest's `faucet` and current testUSDC mint authority. |
 | `ENABLE_EXPERIMENTAL_COREPACK` | `1`, so Vercel uses pinned pnpm `12.9.1`. |
 | `AI_MODEL` | Optional Gemini model ID; defaults to `gemini-3.1-flash-lite`. |
 | `AEGIS_PUBLIC_ORIGIN` | Optional canonical HTTPS site origin; set for a custom domain. Otherwise uses Vercel's `VERCEL_PROJECT_PRODUCTION_URL` in Production and `VERCEL_URL` in Preview. |
+
+**Never paste `.keys/devnet-deployer.json` anywhere, including Vercel or chat.
+It controls program upgrades and must never leave this machine.** The faucet
+uses only `.keys/devnet-faucet.json`; fund its public address with devnet SOL for
+ATA rent and fees (initial funding: 0.15 SOL).
 
 Vercel supplies `VERCEL`, `VERCEL_ENV`, `VERCEL_PROJECT_PRODUCTION_URL` and
 `VERCEL_URL`; do not copy them from local files. No `VITE_` secret variables.

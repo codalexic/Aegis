@@ -38,7 +38,8 @@ export async function checkFaucetHistory(client: AnchorAegisClient, authority: P
 }
 
 export async function mintTestUsdc(env: NodeJS.ProcessEnv, recipient: PublicKey) {
-  const authority = environmentSigner(env, "AEGIS_FAUCET_SECRET", deployment.owner);
+  if (!deployment.faucet || deployment.faucet === deployment.owner) throw new ApiError(503, "A dedicated faucet authority is required.");
+  const authority = environmentSigner(env, "AEGIS_FAUCET_SECRET", deployment.faucet);
   const client = devnetClient();
   const mint = new PublicKey(deployment.inputMint);
   const state = await getMint(client.connection, mint, "confirmed");

@@ -39,6 +39,7 @@ for (const key of ["GEMINI_API_KEY", "AEGIS_AGENT_SECRET", "AEGIS_FAUCET_SECRET"
 }
 const tracked = execFileSync("git", ["ls-files", "-z"], { cwd: root }).toString().split("\0").filter(Boolean);
 const dist = resolve(root, process.argv[2] ?? "apps/web/dist");
+const serverBundle = process.argv.includes("--server");
 if (!existsSync(dist)) throw new Error("Build output is missing; build the web app first.");
 const targets = [...new Set([...tracked.map((path) => join(root, path)), ...files(dist)])];
 let failures = 0;
@@ -51,8 +52,10 @@ for (const path of targets) {
   if ([...secrets].some((secret) => text.includes(secret) || compact.includes(secret.replace(/\s/g, "")))) categories.push("local credential match");
   if (/AIza[\w-]{35}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/.test(text)) categories.push("credential pattern");
   if (/\[\s*\d{1,3}(?:\s*,\s*\d{1,3}){63}\s*\]/.test(text)) categories.push("literal 64-byte key array");
-  if (path.startsWith(`${dist}/`) && /secretKey|AEGIS_AGENT_SECRET|AEGIS_FAUCET_SECRET/.test(text)) categories.push("server signing material in browser bundle");
+  // Server code needs signer APIs and runtime environment names; credential values
+  // are still forbidden by every check above. Browser output forbids both.
+  if (!serverBundle && path.startsWith(`${dist}/`) && /secretKey|AEGIS_AGENT_SECRET|AEGIS_FAUCET_SECRET/.test(text)) categories.push("server signing material in browser bundle");
   if (categories.length) { failures++; console.error(`${name}: ${categories.join(", ")}`); }
 }
 if (failures) { console.error(`FAIL: ${failures} files require review.`); process.exitCode = 1; }
-else console.log(`PASS: ${tracked.length} git-tracked files and ${files(dist).length} bundle files; no credentials or browser signing material found.`);
+else console.log(`PASS: ${tracked.length} git-tracked files and ${files(dist).length} ${serverBundle ? "server" : "browser"} bundle files; no credentials${serverBundle ? "" : " or browser signing material"} found.`);

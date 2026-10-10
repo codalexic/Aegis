@@ -1,4 +1,4 @@
-import { readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -19,8 +19,9 @@ function check(directory) {
 }
 
 try {
-  check(directory);
-  console.log(`PASS: ${files} API files; no conflicting path segments or filenames.`);
+  if (process.argv[2] || existsSync(directory)) check(directory);
+  if (!process.argv[2] && files) throw new Error("Root api/ must stay empty: Vercel auto-detection would overwrite the bundled function. Use scripts/vercel/handler.ts.");
+  console.log(`PASS: ${files} API files; no conflicting path segments or filenames${process.argv[2] ? "" : " or auto-detected functions"}.`);
 } catch (error) {
   console.error(error.message);
   process.exitCode = 1;

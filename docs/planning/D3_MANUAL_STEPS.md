@@ -15,9 +15,9 @@ redeploy them for this task.
    allow this repository, return, and select **Import**.
 3. Set **Project Name** to an available name (for example `aegis-demo`). Select
    **Framework Preset → Other**. Set **Root Directory** to the repository root
-   (`./`), **not** `apps/web`. Both the root `api/` folder and `vercel.json` must
+   (`./`), **not** `apps/web`. Both `scripts/vercel/` and `vercel.json` must
    be included. Leave the build/output overrides off: the committed configuration
-   supplies the install/build commands and `apps/web/dist` output directory.
+   supplies the install/build commands and `.vercel/output` Build Output API directory.
 4. Expand **Environment Variables** and enter the values in step 2 below before
    clicking **Deploy**. The initial deploy only hosts the website/functions; it
    does not deploy Solana programs or send transactions.

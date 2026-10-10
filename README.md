@@ -151,8 +151,16 @@ seeding twice on the local validator. It spends no public devnet SOL.
 ## Public site on Vercel (D3)
 
 Import the repository root into Vercel with Framework **Other**. `vercel.json`
-builds the devnet dashboard and rewrites `/api/:path*` to the single Node function
-`api/handler.ts`. The rewrite passes the public path as `__aegis_path`; the handler
+uses `pnpm build:vercel` to write the [Vercel Build Output API](https://vercel.com/docs/build-output-api)
+directory `.vercel/output`: the devnet dashboard in `static/`, routing and discovery
+headers from `scripts/vercel/config.json`, and one Node 24 function in
+`functions/api/handler.func/`. esbuild bundles `scripts/vercel/handler.ts`, its dependencies,
+the public devnet manifest and the generated IDL into `handler.mjs`; no repository
+files or installed packages are needed at runtime. Secrets are read only from
+runtime environment variables, never substituted into the bundle.
+Keep the handler source outside root `api/`: Vercel auto-detects that directory
+and would overwrite the bundled function with its unbundled TypeScript output.
+The API rewrite passes the public path as `__aegis_path`; the handler
 restores `request.url` and removes that internal parameter before routing, preserving
 the original Actions query parameters. No dynamic function filenames are needed.
 `/api/agent/{info,normal,injected,attacker}`, `/api/faucet`, `/api/deployment` and
@@ -203,9 +211,17 @@ node apps/web/scripts/check-api-paths.mjs # also runs with web tests
 pnpm --filter web test
 AEGIS_ENV=devnet pnpm --filter web build
 node apps/web/scripts/scan-secrets.mjs
+pnpm test:vercel # builds output, copies it outside the repo, invokes it in fresh Node 24
+node apps/web/scripts/scan-secrets.mjs .vercel/output/static
+node apps/web/scripts/scan-secrets.mjs .vercel/output/functions --server
 pnpm test:sdk
 pnpm test:agent
 ```
+
+The Vercel smoke test needs no login, signing keys, model key, or RPC access. It
+checks all four Action GETs, agent info, CORS/devnet Action headers, preflight,
+query validation, and emitted routing/static files. `--server` permits signer API
+and environment variable names in server code; it still scans actual credentials.
 
 ## Solana Actions (D4)
 

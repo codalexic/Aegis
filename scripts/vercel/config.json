@@ -1,0 +1,20 @@
+{
+  "version": 3,
+  "routes": [
+    {
+      "src": "^/actions\\.json$",
+      "headers": {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, Content-Encoding, Accept-Encoding",
+        "Access-Control-Expose-Headers": "X-Blockchain-Ids, X-Action-Version",
+        "X-Blockchain-Ids": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+        "X-Action-Version": "2.4.1"
+      },
+      "continue": true
+    },
+    { "src": "^/api(?:/(.*))?$", "dest": "/api/handler?__aegis_path=$1" },
+    { "handle": "filesystem" },
+    { "src": "^/actions(?:/.*)?$", "dest": "/index.html" }
+  ]
+}

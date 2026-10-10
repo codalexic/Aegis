@@ -2,8 +2,8 @@ import { createServer, type Server } from "node:http";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BLOCKCHAIN_IDS } from "@solana/actions";
 import { Connection, Keypair, type PublicKey } from "@solana/web3.js";
-import handler from "../../../api/handler";
-import vercel from "../../../vercel.json";
+import handler from "../../../scripts/vercel/handler";
+import output from "../../../scripts/vercel/config.json";
 import rules from "../public/actions.json";
 import { ActionsService } from "../api/actions/service";
 import { deployment, devnetClient, environmentSigner, mintTestUsdc } from "../server/devnet-service";
@@ -14,7 +14,7 @@ vi.mock("../server/devnet-service", async (original) => ({ ...await original<obj
 }));
 
 const origin = "https://aegis.example";
-const rewrite = vercel.rewrites.find(({ source }) => source === "/api/:path*")!;
+const rewrite = output.routes.find(({ dest }) => dest?.startsWith("/api/handler?"))!;
 const actions = ["create", "fund", "revoke", "withdraw"] as const;
 let requestNumber = 0;
 
@@ -39,7 +39,7 @@ describe.each(["rewritten URL", "request.query", "original URL"] as const)("Verc
     vi.spyOn(ActionsService.prototype, "latestVault").mockResolvedValue(vault);
     server = createServer(async (request, response) => {
       const incoming = new URL(request.url!, origin);
-      const destination = new URL(rewrite.destination.replace(":path*", incoming.pathname.slice("/api/".length)), origin);
+      const destination = new URL(incoming.pathname.replace(new RegExp(rewrite.src!), rewrite.dest!), origin);
       for (const [key, value] of incoming.searchParams) destination.searchParams.append(key, value);
       const query = Object.fromEntries([...new Set(destination.searchParams.keys())].map((key) => {
         const values = destination.searchParams.getAll(key);
@@ -163,8 +163,9 @@ describe.each(["rewritten URL", "request.query", "original URL"] as const)("Verc
 });
 
 it("keeps the Actions page rewrite and static discovery headers", () => {
-  expect(vercel.rewrites).toContainEqual({ source: "/actions/:path*", destination: "/index.html" });
-  expect(vercel.headers.find(({ source }) => source === "/actions.json")?.headers).toEqual([
+  expect(output.routes).toContainEqual({ src: "^/actions(?:/.*)?$", dest: "/index.html" });
+  const headers = output.routes.find(({ src }) => src === "^/actions\\.json$")!.headers!;
+  expect(Object.entries(headers).map(([key, value]) => ({ key, value }))).toEqual([
     { key: "Access-Control-Allow-Origin", value: "*" },
     { key: "Access-Control-Allow-Methods", value: "GET, OPTIONS" },
     { key: "Access-Control-Allow-Headers", value: "Content-Type, Authorization, Content-Encoding, Accept-Encoding" },

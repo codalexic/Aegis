@@ -480,6 +480,7 @@ function Dashboard({ connection, toolbar }: { connection: DashboardConnection; t
   </>;
 
   return <Shell active={active} cta={cta} rail={narrow ? undefined : rail}>
+    {narrow && <div className="rail-top">{toolbar}</div>}
     <div className="content-top">
       <div><p className="eyebrow">{environmentName(environment)} · Test money, no real value</p>
         <h1>AI agents can be tricked. Aegis still enforces the limits.</h1></div>

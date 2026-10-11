@@ -73,3 +73,16 @@ it("continues polling after failures", async () => {
   expect(f.state).toHaveBeenCalledTimes(2);
   f.poller.stop();
 });
+
+it("drops a late failure after the owner's poller stops", async () => {
+  const f = fixture(true);
+  let reject!: (error: unknown) => void;
+  f.state.mockImplementationOnce(() => new Promise<void>((_, no) => { reject = no; }));
+  f.show(false);
+  f.poller.stop();
+  reject(new Error("Wallet disconnected"));
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(f.onError).not.toHaveBeenCalled();
+  expect(f.activity).not.toHaveBeenCalled();
+  expect(f.state).toHaveBeenCalledTimes(1);
+});

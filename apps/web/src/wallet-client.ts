@@ -7,14 +7,16 @@ import type { DashboardConnection } from "./client";
 import { getAssociatedTokenAddressSync } from "./browser-token";
 import { readWalletBalance } from "./funding";
 
-export async function connectWalletDashboard(environment: "localnet" | "devnet", wallet: WalletSigner): Promise<DashboardConnection> {
-  const response = await fetch("/api/deployment", { cache: "no-store" });
+export async function connectWalletDashboard(environment: "localnet" | "devnet", wallet: WalletSigner, signal?: AbortSignal): Promise<DashboardConnection> {
+  const response = await fetch("/api/deployment", { cache: "no-store", signal });
   const deployment: ChainDeployment & { error?: string } = await response.json();
+  signal?.throwIfAborted();
   if (!response.ok) throw new Error(deployment.error ?? "Cannot load this cluster's deployment.");
   if (deployment.environment !== environment) throw new Error("Deployment environment mismatch.");
   const client = new WalletAegisClient(deployment, { devnetRpcUrl: import.meta.env.VITE_DEVNET_RPC_URL }), agent = new PublicKey(deployment.agent);
-  const latestResponse = await fetch(`/api/actions/latest-vault?account=${wallet.publicKey.toBase58()}`, { cache: "no-store" });
+  const latestResponse = await fetch(`/api/actions/latest-vault?account=${wallet.publicKey.toBase58()}`, { cache: "no-store", signal });
   const latest: { vault?: string | null; message?: string } = await latestResponse.json();
+  signal?.throwIfAborted();
   if (!latestResponse.ok) throw new Error(latest.message ?? "Cannot find the wallet's latest vault.");
   const getWalletSolBalance = async (): Promise<bigint | null> => {
     try {
@@ -24,7 +26,9 @@ export async function connectWalletDashboard(environment: "localnet" | "devnet",
     } catch { return null; }
   };
   const withSol = async <T extends TxResult>(need: bigint, action: () => Promise<T>): Promise<T | Extract<TxResult, { ok: false }>> => {
+    signal?.throwIfAborted();
     const balance = environment === "devnet" ? await getWalletSolBalance() : null;
+    signal?.throwIfAborted();
     if (balance !== null && balance < need) return { ok: false, error: NO_DEVNET_SOL, origin: "client" };
     return action();
   };
@@ -32,6 +36,7 @@ export async function connectWalletDashboard(environment: "localnet" | "devnet",
   const create = () => withSol(10_000_000n, async () => {
     const slot = await client.rpc<number>("getSlot", [{ commitment: "confirmed" }]);
     const time = await client.rpc<number | null>("getBlockTime", [slot]);
+    signal?.throwIfAborted();
     if (time === null) throw new Error("Chain clock is unavailable.");
     const [vaultId] = crypto.getRandomValues(new BigUint64Array(1));
     return client.createVault(wallet, { vaultId, agent, maxTradeRaw: 50_000_000n, budgetRaw: 100_000_000n, expiryUnix: BigInt(time) + 3600n });
@@ -55,7 +60,8 @@ export async function connectWalletDashboard(environment: "localnet" | "devnet",
     revoke: (vault) => withSol(100_000n, () => client.revoke(wallet, vault)),
     withdraw: (vault, mint, amount) => withSol(100_000n, () => client.withdraw(wallet, vault, mint, amount)),
     faucet: async () => {
-      const response = await fetch("/api/faucet", { method: "POST", headers: { "content-type": "application/json", "x-aegis-faucet": environment }, body: JSON.stringify({ wallet: wallet.publicKey.toBase58() }) });
+      signal?.throwIfAborted();
+      const response = await fetch("/api/faucet", { method: "POST", headers: { "content-type": "application/json", "x-aegis-faucet": environment }, body: JSON.stringify({ wallet: wallet.publicKey.toBase58() }), signal });
       const result = await response.json().catch(() => ({ error: response.status === 429
         ? "Faucet request limit reached. Wait before retrying."
         : "Faucet is temporarily unavailable. Check your token balance before retrying." }));

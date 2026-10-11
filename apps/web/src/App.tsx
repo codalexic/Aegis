@@ -18,6 +18,7 @@ import { Notice } from "./Notice";
 import { DevnetSolHint } from "./DevnetSolHint";
 import { needsFaucet, newFundedDemo, withWalletBalanceRefresh } from "./funding";
 import { trackActiveSection } from "./active-section";
+import { isWalletDisconnected, WALLET_CHANGED, WALLET_REQUEST_FAILED } from "./wallet-lifecycle";
 
 const nowUnix = () => BigInt(Math.floor(Date.now() / 1000));
 const shorten = (value: string) => `${value.slice(0, 4)}…${value.slice(-4)}`;
@@ -112,33 +113,85 @@ function useMediaQuery(query: string): boolean {
   return matches;
 }
 
-export function App() {
-  const environment = import.meta.env.AEGIS_ENV as AegisEnvironment;
+export function App({
+  environment = import.meta.env.AEGIS_ENV as AegisEnvironment,
+  walletMode = import.meta.env.AEGIS_WALLET === true,
+}: { environment?: AegisEnvironment; walletMode?: boolean } = {}) {
   const wallet = useWallet();
-  const walletMode = import.meta.env.AEGIS_WALLET === true;
   const walletAddress = wallet.publicKey?.toBase58();
-  const activeWallet = useRef(walletAddress);
-  activeWallet.current = walletAddress;
+  const adapter = wallet.wallet?.adapter;
+  const generation = useRef(0);
+  const [revision, setRevision] = useState(0);
+  const [changed, setChanged] = useState(false);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!adapter) return;
+    setRevision(generation.current);
+    const reset = (disconnected: boolean) => {
+      // Invalidate work synchronously with the event, before React renders.
+      setRevision(++generation.current);
+      setChanged(disconnected);
+      setRequestError(null);
+    };
+    const onConnect = () => reset(false);
+    const onDisconnect = () => reset(true);
+    adapter.on("connect", onConnect);
+    adapter.on("disconnect", onDisconnect);
+    return () => {
+      ++generation.current;
+      adapter.off("connect", onConnect);
+      adapter.off("disconnect", onDisconnect);
+    };
+  }, [adapter]);
+
+  const isCurrent = useCallback(() => !walletMode || (generation.current === revision
+    && adapter?.publicKey?.toBase58() === walletAddress), [walletMode, revision, adapter, walletAddress]);
+  const requestWallet = useCallback(async <T,>(action: () => Promise<T>): Promise<T> => {
+    const started = generation.current;
+    setRequestError(null);
+    try { return await action(); }
+    catch (error) {
+      if (generation.current === started && !isWalletDisconnected(error)) setRequestError(WALLET_REQUEST_FAILED);
+      throw error;
+    }
+  }, []);
+  return <>
+    <OwnerApp key={`${environment}:${walletMode ? `${walletAddress}:${revision}` : "server"}`}
+      environment={environment} walletMode={walletMode} wallet={wallet} changed={changed}
+      isCurrent={isCurrent} requestWallet={requestWallet} />
+    {requestError && <Notice tone="error" message={requestError} className="wallet-error" onDismiss={() => setRequestError(null)} />}
+  </>;
+}
+
+function OwnerApp({ environment, walletMode, wallet, changed, isCurrent, requestWallet }: {
+  environment: AegisEnvironment; walletMode: boolean; wallet: ReturnType<typeof useWallet>; changed: boolean;
+  isCurrent(): boolean; requestWallet<T>(action: () => Promise<T>): Promise<T>;
+}) {
   const [connection, setConnection] = useState<DashboardConnection | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    let active = true;
+    const controller = new AbortController();
+    const current = () => !controller.signal.aborted && isCurrent();
     setConnection(null); setError(null);
     if (walletMode && (!wallet.publicKey || !wallet.signTransaction)) return;
     const pending = walletMode ? connectWalletDashboard(environment as "localnet" | "devnet", {
       publicKey: wallet.publicKey!, signTransaction: async (transaction) => {
-        if (activeWallet.current !== walletAddress) throw new Error("Wallet changed.");
-        const signed = await wallet.signTransaction!(transaction);
-        if (activeWallet.current !== walletAddress) throw new Error("Wallet changed.");
+        if (!current()) throw new DOMException("Wallet changed.", "AbortError");
+        const signed = await requestWallet(() => wallet.signTransaction!(transaction));
+        if (!current()) throw new DOMException("Wallet changed.", "AbortError");
         return signed;
       },
-    }) : connectDashboard(environment);
-    void pending.then((value) => { if (active) setConnection(value); })
-      .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : "Connection failed."); });
-    return () => { active = false; };
-  }, [environment, walletMode, walletAddress, wallet.signTransaction]);
+    }, controller.signal) : connectDashboard(environment);
+    void pending.then((value) => { if (current()) setConnection(value); })
+      .catch((reason: unknown) => {
+        if (current() && !isWalletDisconnected(reason)) setError(reason instanceof Error ? reason.message : "Connection failed.");
+      });
+    return () => controller.abort();
+  }, [environment, walletMode, wallet.publicKey, wallet.signTransaction, isCurrent, requestWallet]);
 
-  const walletControl = (className: string) => walletMode && <button type="button" className={className} disabled={wallet.connecting || wallet.disconnecting} onClick={() => void (wallet.connected ? wallet.disconnect() : wallet.connect()).catch(() => {})}>
+  const walletControl = (className: string) => walletMode && <button type="button" className={className} disabled={wallet.connecting || wallet.disconnecting} onClick={() => {
+    void (wallet.connected ? wallet.disconnect() : requestWallet(() => wallet.connect())).catch(() => {});
+  }}>
     <Icon name="wallet" size={16} />{wallet.connected ? "Disconnect" : "Connect wallet"}
   </button>;
   const environmentPill = <div className="environment" title={environmentTitle(environment)}><span className="environment-dot" />{environmentShort(environment)}</div>;
@@ -157,7 +210,7 @@ export function App() {
             <h1>AI agents can be tricked. Aegis still enforces the limits.</h1>
             {error
               ? <Notice tone="error" message={error} />
-              : <p className="connecting-hint" role="status">Devnet SOL covers transaction fees.</p>}
+              : <p className="connecting-hint" role="status">{changed ? WALLET_CHANGED : "Devnet SOL covers transaction fees."}</p>}
           </div>
           {environment === "devnet" && <TryIt />}
         </> : error
@@ -169,7 +222,7 @@ export function App() {
       </div>
     </Shell>;
   }
-  return <Dashboard key={`${environment}:${connection.owner.toBase58()}`} connection={connection} toolbar={<>{environmentPill}{walletControl("small rail-action")}</>} />;
+  return <Dashboard key={`${environment}:${connection.owner.toBase58()}`} connection={connection} isCurrent={isCurrent} toolbar={<>{environmentPill}{walletControl("small rail-action")}</>} />;
 }
 
 const TRY_STEPS: { title: string; body: ReactNode }[] = [
@@ -269,7 +322,16 @@ function KeyRow({ label, value, note }: { label: string; value: string; note?: s
 /* --------------------------------------------------------------------------
    Dashboard
    -------------------------------------------------------------------------- */
-export function Dashboard({ connection, toolbar }: { connection: DashboardConnection; toolbar: ReactNode }) {
+const alwaysCurrent = () => true;
+export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent }: {
+  connection: DashboardConnection; toolbar: ReactNode; isCurrent?(): boolean;
+}) {
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+  const current = useCallback(() => mounted.current && isCurrent(), [isCurrent]);
   const { client, owner, agent, environment } = connection;
   const address = useRef<PublicKey | null>(connection.initialVault);
   const details = useRef(new Map<string, ActionDetail>());
@@ -291,40 +353,44 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
   const narrow = useMediaQuery("(max-width: 1240px)");
 
   const refreshWalletBalance = useCallback(async () => {
+    if (!current()) return;
     const request = ++balanceRequest.current;
     const balance = await connection.getWalletBalance?.().catch(() => null) ?? null;
     // A slow poll started before confirmation must not overwrite the fresh balance.
-    if (request === balanceRequest.current) setWalletBalance(balance);
-  }, [connection]);
+    if (current() && request === balanceRequest.current) setWalletBalance(balance);
+  }, [connection, current]);
 
   const refreshState = useCallback(async () => {
+    if (!current()) return;
     setNow(nowUnix());
     await refreshWalletBalance();
-    if (!address.current) return;
+    if (!current() || !address.current) return;
     const selected = address.current;
     try {
       const state = await client.getVault(selected);
-      if (address.current !== selected) return;
+      if (!current() || address.current !== selected) return;
       currentState.current = state;
       setVault(state);
       setReady(true);
     } catch (error) {
-      if (address.current !== selected) return;
+      if (!current() || address.current !== selected) return;
       if (error instanceof Error && error.message === "VaultNotFound") {
         currentState.current = null;
         setVault(null); setActivity([]); setReady(true); return;
       }
       throw error;
     }
-  }, [client, refreshWalletBalance]);
+  }, [client, refreshWalletBalance, current]);
 
   const refreshActivity = useCallback(async () => {
     const selected = address.current, state = currentState.current;
-    if (!selected || !state || !state.address.equals(selected)) return;
+    if (!current() || !selected || !state || !state.address.equals(selected)) return;
     const history = await client.listActivity(selected);
+    if (!current() || address.current !== selected) return;
     const read = async (item: Activity) => {
+      if (!current() || address.current !== selected) return;
       const detail = await connection.readDetail!(item.signature, state);
-      if (detail && address.current === selected) details.current.set(item.signature, detail);
+      if (current() && detail && address.current === selected) details.current.set(item.signature, detail);
     };
     if (connection.readDetail) {
       const missing = history.filter((item) => !details.current.has(item.signature));
@@ -332,23 +398,27 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
         for (const item of missing) await read(item);
       } else await Promise.all(missing.map(read));
     }
-    if (address.current === selected) setActivity(history);
-  }, [client, connection, environment]);
+    if (current() && address.current === selected) setActivity(history);
+  }, [client, connection, environment, current]);
 
   const refresh = useCallback(async () => {
+    if (!current()) return;
     if (environment === "devnet") { await polling.current?.refresh(); return; }
     if (refreshing.current) return;
     refreshing.current = true;
     try { await refreshState(); await refreshActivity(); }
     finally { refreshing.current = false; }
-  }, [environment, refreshState, refreshActivity]);
+  }, [environment, refreshState, refreshActivity, current]);
 
   useEffect(() => {
-    const onError = (error: unknown) => setNotice((current) => current?.ok === false ? current : {
-      ok: false, text: isRateLimited(error) ? RPC_RATE_LIMITED : environment === "localnet"
-        ? "Lost contact with the test chain. Is the local validator still running?"
-        : "Could not refresh the vault. Retrying…",
-    });
+    const onError = (error: unknown) => {
+      if (!current() || isWalletDisconnected(error)) return;
+      setNotice((current) => current?.ok === false ? current : {
+        ok: false, text: isRateLimited(error) ? RPC_RATE_LIMITED : environment === "localnet"
+          ? "Lost contact with the test chain. Is the local validator still running?"
+          : "Could not refresh the vault. Retrying…",
+      });
+    };
     if (environment === "devnet") {
       const scheduler = startDashboardPolling({ state: refreshState, activity: refreshActivity, onError });
       polling.current = scheduler;
@@ -359,7 +429,7 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
     void refresh().catch(onError);
     const timer = window.setInterval(() => { void refresh().catch(onError); }, 2_000);
     return () => window.clearInterval(timer);
-  }, [refresh, refreshState, refreshActivity, environment]);
+  }, [refresh, refreshState, refreshActivity, environment, current]);
 
   useEffect(() => {
     if (!notice?.ok) return;
@@ -368,26 +438,28 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
   }, [notice]);
 
   function track<T extends TxResult>(result: T, detail: ActionDetail): T {
+    if (!current()) throw new DOMException("Wallet changed.", "AbortError");
     if (result.signature) details.current.set(result.signature, detail);
     if (!result.ok) throw Object.assign(new Error(result.error), { detail: result.detail });
     return result;
   }
 
   async function run(label: string, action: () => Promise<string>) {
-    if (running.current || agentBusy) return;
+    if (!current() || running.current || agentBusy) return;
     running.current = true;
     setBusy(label);
     setNotice(null);
     try {
       // Keep actions locked through a fresh read, even if polling is hidden or
       // waiting for activity history. Also reconcile partial successes/failures.
-      setNotice({ ok: true, text: await withWalletBalanceRefresh(action, refreshWalletBalance) });
+      const text = await withWalletBalanceRefresh(action, refreshWalletBalance);
+      if (current()) setNotice({ ok: true, text });
     } catch (error) {
-      setNotice({ ok: false, text: error });
+      if (current() && !isWalletDisconnected(error)) setNotice({ ok: false, text: error });
     } finally {
-      try { await refresh(); } catch { setNotice((current) => current?.ok === false ? current : { ok: false, text: "Could not refresh the vault. Retrying…" }); }
+      try { await refresh(); } catch { if (current()) setNotice((notice) => notice?.ok === false ? notice : { ok: false, text: "Could not refresh the vault. Retrying…" }); }
       running.current = false;
-      setBusy(null);
+      if (current()) setBusy(null);
     }
   }
 
@@ -405,6 +477,7 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
 
   const newDemo = () => run("New demo vault", async () => {
     const result = await newFundedDemo(connection, walletBalance, refreshWalletBalance);
+    if (!current()) return "";
     if (result.vault) {
       address.current = result.vault;
       details.current.clear();

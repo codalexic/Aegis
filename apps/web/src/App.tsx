@@ -15,6 +15,7 @@ import { Logo } from "./Logo";
 import { SidebarIllustration } from "./Illustration";
 import { TradeBars, type TradeBar } from "./TradeBars";
 import { Notice } from "./Notice";
+import { needsFaucet, newFundedDemo } from "./funding";
 
 const nowUnix = () => BigInt(Math.floor(Date.now() / 1000));
 const shorten = (value: string) => `${value.slice(0, 4)}…${value.slice(-4)}`;
@@ -219,12 +220,27 @@ function Tile({ tone, icon, label, value, unit, sub, subTone, testId, children }
   </div>;
 }
 
-function Step({ number, state, title, text, children }: { number: number; state: "done" | "next" | "todo"; title: string; text: string; children: ReactNode }) {
+function Step({ number, state, title, text, children }: { number: number; state: "done" | "next" | "todo"; title: string; text: ReactNode; children: ReactNode }) {
   return <div className={`step ${state}`}>
     <span className="step-num" aria-hidden="true">{state === "done" ? <Icon name="check" size={18} /> : number}</span>
     <div><strong>{state === "done" && <span className="sr-only">Done: </span>}{title}</strong><p>{text}</p></div>
     {children}
   </div>;
+}
+
+export function FundingStep({ state, text, balance, hasFaucet, hasVault, locked, busy, onFaucet, onFund }: {
+  state: "done" | "next" | "todo"; text: string; balance: bigint | null; hasFaucet: boolean;
+  hasVault: boolean; locked: boolean; busy: string | null; onFaucet(): void; onFund(): void;
+}) {
+  const getTokens = needsFaucet(balance, hasFaucet);
+  const isBusy = busy === (getTokens ? "Get testUSDC" : "Fund vault");
+  return <Step number={2} state={state} title="Add 1,000 testUSDC" text={<>
+    {text}<br />Wallet: {balance === null ? "—" : amount(balance)} testUSDC
+  </>}>
+    <button className={state === "next" ? "primary" : ""} disabled={!hasVault || locked}
+      data-busy={isBusy ? "true" : undefined} aria-busy={isBusy || undefined}
+      onClick={getTokens ? onFaucet : onFund}>{getTokens ? "Get 1,000 testUSDC" : "Fund 1,000"}</button>
+  </Step>;
 }
 
 function KeyRow({ label, value, note }: { label: string; value: string; note?: string }) {
@@ -241,12 +257,13 @@ function KeyRow({ label, value, note }: { label: string; value: string; note?: s
 /* --------------------------------------------------------------------------
    Dashboard
    -------------------------------------------------------------------------- */
-function Dashboard({ connection, toolbar }: { connection: DashboardConnection; toolbar: ReactNode }) {
+export function Dashboard({ connection, toolbar }: { connection: DashboardConnection; toolbar: ReactNode }) {
   const { client, owner, agent, environment } = connection;
   const address = useRef<PublicKey | null>(connection.initialVault);
   const details = useRef(new Map<string, ActionDetail>());
   const running = useRef(false);
   const [vault, setVault] = useState<VaultState | null>(null);
+  const [walletBalance, setWalletBalance] = useState<bigint | null>(null);
   const [activity, setActivity] = useState<Activity[]>([]);
   const [now, setNow] = useState(nowUnix);
   const [busy, setBusy] = useState<string | null>(null);
@@ -260,8 +277,14 @@ function Dashboard({ connection, toolbar }: { connection: DashboardConnection; t
   const active = useActiveSection(ready);
   const narrow = useMediaQuery("(max-width: 1240px)");
 
+  const refreshWalletBalance = useCallback(async () => {
+    const balance = await connection.getWalletBalance?.().catch(() => null) ?? null;
+    setWalletBalance(balance);
+  }, [connection]);
+
   const refreshState = useCallback(async () => {
     setNow(nowUnix());
+    await refreshWalletBalance();
     if (!address.current) return;
     const selected = address.current;
     try {
@@ -278,7 +301,7 @@ function Dashboard({ connection, toolbar }: { connection: DashboardConnection; t
       }
       throw error;
     }
-  }, [client]);
+  }, [client, refreshWalletBalance]);
 
   const refreshActivity = useCallback(async () => {
     const selected = address.current, state = currentState.current;
@@ -364,7 +387,7 @@ function Dashboard({ connection, toolbar }: { connection: DashboardConnection; t
   });
 
   const newDemo = () => run("New demo vault", async () => {
-    const result = await connection.newDemo();
+    const result = await newFundedDemo(connection, walletBalance, refreshWalletBalance);
     if (result.vault) {
       address.current = result.vault;
       details.current.clear();
@@ -442,7 +465,6 @@ function Dashboard({ connection, toolbar }: { connection: DashboardConnection; t
   /* ---- sidebar CTA + rail ---- */
   const busyProps = (label: string) => busy === label ? { "data-busy": "true" as const, "aria-busy": true as const } : {};
   const cta = <>
-    {connection.faucet && <button disabled={locked} {...busyProps("Get testUSDC")} onClick={() => void run("Get testUSDC", connection.faucet!)}><Icon name="coins" size={16} />Get 1,000 testUSDC</button>}
     <button className="primary" disabled={!ready || locked} {...busyProps("New demo vault")} onClick={() => void newDemo()}><Icon name="sparkle" size={16} />New demo vault</button>
     <span className="sidebar-hint">One click: creates a fresh vault and adds 1,000 testUSDC.</span>
   </>;
@@ -514,9 +536,12 @@ function Dashboard({ connection, toolbar }: { connection: DashboardConnection; t
         <Step number={1} state={step1} title="Create a vault" text={vault ? "Your vault is open with a 50 testUSDC per-trade cap and a 100 testUSDC total budget." : "Opens a vault with a 50 testUSDC per-trade cap and a 100 testUSDC total budget. Or use New demo vault for both steps at once."}>
           <button className={step1 === "next" ? "primary" : ""} disabled={!ready || !!vault || locked} {...busyProps("Create vault")} onClick={() => void create()}>Create vault</button>
         </Step>
-        <Step number={2} state={step2} title="Add 1,000 testUSDC" text={finished ? `This vault is ${vault!.revoked ? "revoked" : "expired"}, so new money would just sit there. Withdraw what is left, then start a New demo vault from the sidebar.` : "Test money only. The agent can trade with it, but never beyond the guardrails."}>
-          <button className={step2 === "next" ? "primary" : ""} disabled={!vault || locked} {...busyProps("Fund vault")} onClick={() => void fund()}>Fund 1,000</button>
-        </Step>
+        <FundingStep state={step2} balance={walletBalance} hasFaucet={!!connection.faucet} hasVault={!!vault} locked={locked} busy={busy}
+          text={finished ? `This vault is ${vault!.revoked ? "revoked" : "expired"}, so new money would just sit there. Withdraw what is left, then start a New demo vault from the sidebar.`
+            : needsFaucet(walletBalance, !!connection.faucet) ? (vault ? "Get test money in your wallet, then fund the vault."
+              : "Create a vault first; it needs no testUSDC. Then get test money in your wallet and fund the vault.")
+            : "Move test money from your wallet into the vault. The agent can trade with it, but never beyond the guardrails."}
+          onFaucet={() => void run("Get testUSDC", connection.faucet!)} onFund={() => void fund()} />
         <Step number={3} state={step3} title="Try the agent" text="Run a normal trade, then try to trick it. Anything outside the rules is blocked on-chain.">
           <a className="step-ok" href="#agent">Go to agent <Icon name="arrow" size={14} /></a>
         </Step>

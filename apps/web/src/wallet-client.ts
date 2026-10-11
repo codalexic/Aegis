@@ -3,6 +3,8 @@ import { WalletAegisClient, type WalletSigner } from "../../../packages/sdk/src/
 import type { ChainDeployment } from "@aegis/sdk";
 import { actionDetail } from "./activity";
 import type { DashboardConnection } from "./client";
+import { getAssociatedTokenAddressSync } from "./browser-token";
+import { readWalletBalance } from "./funding";
 
 export async function connectWalletDashboard(environment: "localnet" | "devnet", wallet: WalletSigner): Promise<DashboardConnection> {
   const response = await fetch("/api/deployment", { cache: "no-store" });
@@ -22,6 +24,9 @@ export async function connectWalletDashboard(environment: "localnet" | "devnet",
   };
   return {
     environment, walletMode: true, client, owner: wallet.publicKey, agent, initialVault: latest.vault ? new PublicKey(latest.vault) : null,
+    getWalletBalance: () => readWalletBalance(environment === "devnet"
+      ? import.meta.env.VITE_DEVNET_RPC_URL || deployment.rpcUrl : deployment.rpcUrl,
+    getAssociatedTokenAddressSync(new PublicKey(deployment.inputMint), wallet.publicKey)),
     create,
     newDemo: async () => {
       const created = await create();

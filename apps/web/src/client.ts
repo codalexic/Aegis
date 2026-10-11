@@ -3,10 +3,12 @@ import type { AegisClient, AegisEnvironment, LocalnetDeployment, TxResult, Vault
 import { MockAegisClient } from "../../../packages/sdk/src/mock";
 import { LocalnetReader } from "./localnet-reader";
 import { actionDetail, type ActionDetail } from "./activity";
+import { readWalletBalance } from "./funding";
 
 export interface DashboardConnection {
   walletMode?: boolean;
   faucet?(): Promise<string>;
+  getWalletBalance?(): Promise<bigint | null>;
   environment: AegisEnvironment;
   client: Pick<AegisClient, "getVault" | "listActivity">;
   owner: PublicKey;
@@ -66,6 +68,7 @@ export async function connectDashboard(environment: AegisEnvironment): Promise<D
   const client = new LocalnetReader(deployment);
   return {
     environment, client, owner: new PublicKey(deployment.owner), agent: new PublicKey(deployment.agent), initialVault: new PublicKey(deployment.lastVault),
+    getWalletBalance: () => readWalletBalance(deployment.rpcUrl, new PublicKey(deployment.ownerInput)),
     create: async () => {
       const result = await ownerAction("create");
       return { ...result, ...(result.vault ? { vault: new PublicKey(result.vault) } : { vault: undefined }) };

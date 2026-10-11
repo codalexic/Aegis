@@ -9,6 +9,7 @@ export interface DashboardConnection {
   walletMode?: boolean;
   faucet?(): Promise<string>;
   getWalletBalance?(): Promise<bigint | null>;
+  getWalletSolBalance?(): Promise<bigint | null>;
   environment: AegisEnvironment;
   client: Pick<AegisClient, "getVault" | "listActivity">;
   owner: PublicKey;

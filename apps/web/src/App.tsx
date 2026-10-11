@@ -15,6 +15,7 @@ import { Logo } from "./Logo";
 import { SidebarIllustration } from "./Illustration";
 import { TradeBars, type TradeBar } from "./TradeBars";
 import { Notice } from "./Notice";
+import { DevnetSolHint } from "./DevnetSolHint";
 import { needsFaucet, newFundedDemo, withWalletBalanceRefresh } from "./funding";
 import { trackActiveSection } from "./active-section";
 
@@ -549,6 +550,7 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
 
     <section id="vault" className="card vault-card" aria-labelledby="vault-title">
       <div className="card-heading"><h2 id="vault-title">Trading vault</h2><span className={`status ${status.toLowerCase().replace(" ", "-")}`} data-testid="vault-status"><span className="small-dot" aria-hidden="true" />{status}</span></div>
+      {connection.getWalletSolBalance && <DevnetSolHint readBalance={connection.getWalletSolBalance} />}
       <div className="steps">
         <Step number={1} state={step1} title="Vault setup" text="">
           <button className={step1 === "next" ? "primary" : ""} disabled={!ready || !!vault || locked} {...busyProps("Create vault")} onClick={() => void create()}>Create vault</button>

@@ -68,10 +68,8 @@ export class ChainReader {
       if (isRateLimited(body.error)) throw new RpcError(RPC_RATE_LIMITED);
       // State can change between simulation and sendTransaction's preflight.
       // Preserve only the parsed program code, never arbitrary RPC error text.
-      if (body.error?.data?.err && Array.isArray(body.error.data.logs) && body.error.data.logs.every((log: unknown) => typeof log === "string")) {
-        const code = programErrorName(body.error.data.logs);
-        if (code) throw new ProgramError(code);
-      }
+      const code = this.rpcErrorName(body.error);
+      if (code) throw new ProgramError(code);
       if (!response.ok || body.error || !("result" in body)) throw new Error();
       return body.result;
     } catch (error) {
@@ -79,6 +77,14 @@ export class ChainReader {
       if (this.deployment.environment === "localnet") throw new ClientError("RpcError");
       throw new RpcError(isRateLimited(error) ? RPC_RATE_LIMITED : "RpcError");
     }
+  }
+
+  protected rpcErrorName(error: unknown): string | undefined {
+    const data = (error as { data?: { err?: unknown; logs?: unknown } } | undefined)?.data;
+    if (data?.err && Array.isArray(data.logs) && data.logs.every((log: unknown) => typeof log === "string")) {
+      return programErrorName(data.logs);
+    }
+    return undefined;
   }
 
   async getVault(vault: PublicKey): Promise<VaultState> {

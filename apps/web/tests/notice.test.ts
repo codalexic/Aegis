@@ -9,7 +9,7 @@ import { describeError, PROGRAM_ERROR_MESSAGES } from "../src/errors";
 import { Notice } from "../src/Notice";
 
 const clientCodes = [
-  "RpcError", "RpcRateLimited", "RateLimited", "WalletRejected", "UserRejected", "SigningFailed",
+  "NoDevnetSol", "AccountNotFound", "RpcError", "RpcRateLimited", "RateLimited", "WalletRejected", "UserRejected", "SigningFailed",
   "WalletModifiedTransaction", "InvalidWalletSignature", "WalletSigningError",
   "InsufficientFunds", "InsufficientFundsForFee", "InsufficientFundsForRent",
   "NotRentExempt", "ResultWithNegativeLamports", "AccountAlreadyInUse", "MintMismatch", "OwnerMismatch", "InvalidOwner", "AccountFrozen",
@@ -115,4 +115,10 @@ describe("shared notice layout", () => {
     expect(rule(".notice-code")).toContain("font-size: 11px;");
     expect(rule(".notice-code")).toContain("color: var(--ink-2);");
   });
+});
+
+it.each(["NoDevnetSol", "AccountNotFound", "InsufficientFundsForFee", "insufficient lamports for rent"])("links %s to the devnet faucet in a new tab", (code) => {
+  const markup = renderError(code);
+  expect(markup).toContain("Your wallet has no devnet SOL for fees. Get free devnet SOL, then try again.");
+  expect(markup).toContain('<a href="https://faucet.solana.com" target="_blank" rel="noreferrer">Get free devnet SOL</a>');
 });

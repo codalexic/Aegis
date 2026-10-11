@@ -16,6 +16,7 @@ import type { CreateVaultParams, TxResult } from "./types";
 import { WalletTransaction, type WalletSigner } from "./wallet-transaction";
 import { validateWalletMessage } from "./wallet-validation";
 import { debugWalletFailure, walletErrorDetail } from "./wallet-diagnostics";
+import { isNoDevnetSol, NO_DEVNET_SOL, walletTransactionErrorName } from "./wallet-errors";
 export type { WalletSigner } from "./wallet-transaction";
 
 const associatedTokenProgram = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
@@ -29,6 +30,15 @@ function u64(value: bigint) {
 
 /** Owner operations, with instructions built locally and signing delegated to a wallet. */
 export class WalletAegisClient extends ChainReader {
+  protected override rpcErrorName(error: unknown): string | undefined {
+    const name = super.rpcErrorName(error);
+    return this.deployment.environment === "devnet" && (isNoDevnetSol(error) || isNoDevnetSol(name)) ? NO_DEVNET_SOL : name;
+  }
+
+  private transactionErrorName(error: unknown, logs?: readonly string[] | null): string {
+    return this.deployment.environment === "devnet" ? walletTransactionErrorName(error, logs) : transactionErrorName(error, logs);
+  }
+
   private instruction(name: string, args: object, accounts: Record<string, PublicKey>): TransactionInstruction {
     const definition = schema.instructions.find((instruction) => instruction.name === name)!;
     return { programId: AEGIS_PROGRAM_ID, data: coder.encode(name, args), keys: definition.accounts.map((account) => {
@@ -117,7 +127,7 @@ export class WalletAegisClient extends ChainReader {
       step = "simulateTransaction";
       const { value: simulation } = await this.rpc<{ value: { err: unknown; logs?: string[] } }>("simulateTransaction", [Buffer.from(transaction.serialize()).toString("base64"), { encoding: "base64", commitment: "confirmed", sigVerify: false }]);
       if (simulation.err) {
-        const error = transactionErrorName(simulation.err, simulation.logs);
+        const error = this.transactionErrorName(simulation.err, simulation.logs);
         debugWalletFailure(step, "SimulationFailed", error);
         return { ok: false, origin: "program", error };
       }
@@ -128,6 +138,7 @@ export class WalletAegisClient extends ChainReader {
       } catch (error) {
         if (isRateLimited(error)) throw new RpcError(RPC_RATE_LIMITED);
         if (isWalletRejected(error)) throw new ClientError(WALLET_REJECTED);
+        if (this.deployment.environment === "devnet" && isNoDevnetSol(error)) throw new ClientError(NO_DEVNET_SOL);
         throw new ClientError("WalletSigningError", walletErrorDetail(error));
       }
       step = "validateWalletMessage";
@@ -172,7 +183,7 @@ export class WalletAegisClient extends ChainReader {
         if (status && ["confirmed", "finalized"].includes(status.confirmationStatus)) {
           if (status.err) {
             const landed = await this.getTransaction(signature).catch(() => null);
-            const error = transactionErrorName(status.err, landed?.meta?.logMessages);
+            const error = this.transactionErrorName(status.err, landed?.meta?.logMessages);
             debugWalletFailure(step, "TransactionFailed", error);
             return { ok: false, signature, origin: "program", error };
           }
@@ -184,7 +195,8 @@ export class WalletAegisClient extends ChainReader {
       }
       throw new ClientError("ConfirmationTimedOut");
     } catch (error) {
-      const result = failure(error, signature);
+      const result = failure(this.deployment.environment === "devnet" && isNoDevnetSol(error)
+        ? new ClientError(NO_DEVNET_SOL) : error, signature);
       debugWalletFailure(step, result.error, result.detail);
       return result;
     }

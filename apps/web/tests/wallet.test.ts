@@ -225,11 +225,11 @@ describe("wallet-adapter owner signing", () => {
     expect(rpc).not.toHaveBeenCalled(); expect(sign).not.toHaveBeenCalled();
   });
 
-  it("does not request a wallet signature when simulation fails", async () => {
+  it.each(["AccountNotFound", "InsufficientFundsForFee", "InsufficientFundsForRent", { InsufficientFundsForRent: { account_index: 0 } }])("does not request a wallet signature when fee/rent simulation fails: %j", async (err) => {
     const { client, rpc, wallet, sign } = fixture();
     rpc.mockResolvedValueOnce({ value: { blockhash: PublicKey.default.toBase58(), lastValidBlockHeight: 100 } })
-      .mockResolvedValueOnce({ value: { err: "InsufficientFundsForRent" } });
-    expect(await client.createVault(wallet, params)).toEqual({ ok: false, origin: "program", error: "InsufficientFundsForRent" });
+      .mockResolvedValueOnce({ value: { err } });
+    expect(await client.createVault(wallet, params)).toEqual({ ok: false, origin: "program", error: "NoDevnetSol" });
     expect(sign).not.toHaveBeenCalled();
   });
 });
@@ -262,4 +262,20 @@ it("preserves the locally computed signature when submission is uncertain", asyn
     return original(method, params);
   });
   expect(await client.createVault(wallet, params)).toMatchObject({ ok: false, origin: "rpc", error: "RpcError", signature: expect.any(String) });
+});
+
+it.each([
+  { data: { err: "AccountNotFound" } },
+  { data: { err: "InsufficientFundsForFee" } },
+  { data: { err: { InsufficientFundsForRent: { account_index: 0 } } } },
+  new Error("Transaction simulation failed: insufficient lamports for rent"),
+])("returns NoDevnetSol if funds run out between simulation and send: %j", async (error) => {
+  const { client, rpc, wallet, sign } = fixture();
+  const original = rpc.getMockImplementation()!;
+  rpc.mockImplementation(async (method, params) => {
+    if (method === "sendTransaction") throw error;
+    return original(method, params);
+  });
+  expect(await client.createVault(wallet, params)).toMatchObject({ ok: false, error: "NoDevnetSol", signature: expect.any(String) });
+  expect(sign).toHaveBeenCalledTimes(1);
 });

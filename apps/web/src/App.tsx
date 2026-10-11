@@ -560,9 +560,13 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
   const capUi = vault ? Number(rawAmountToUi(vault.maxTradeRaw, 6)) : 50;
   // A revoked or expired vault is finished: nothing is "next" except starting over.
   const finished = !!vault && (vault.revoked || status === "Expired");
+  // Completion records what happened, even after trades or withdrawals empty the vault.
+  const hasFunded = !!vault && (hasInput || vault.spentRaw > 0n || vault.outputBalanceRaw > 0n ||
+    activity.some((item) => item.ok && details.current.get(item.signature)?.label === "Fund vault"));
+  const hasAgentRequest = !!vault && (vault.spentRaw > 0n || swaps.length > 0);
   const step1 = vault ? "done" : "next";
-  const step2 = hasInput ? "done" : vault && !finished ? "next" : "todo";
-  const step3 = swaps.length > 0 ? "done" : hasInput && !finished ? "next" : "todo";
+  const step2 = hasFunded ? "done" : vault && !finished ? "next" : "todo";
+  const step3 = hasAgentRequest ? "done" : hasInput && !finished ? "next" : "todo";
   const guardLead = !vault ? <>Applies once the vault is created.</>
     : vault.revoked ? <>Agent is <strong>revoked</strong>.</>
     : status === "Expired" ? <>Trading permission has <strong>expired</strong>.</>

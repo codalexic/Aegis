@@ -5,6 +5,7 @@ import type { Step } from "../../../scripts/agent/run";
 import { Icon, type IconName } from "./icons";
 import { PROGRAM_ERROR_MESSAGES } from "./errors";
 import { Notice } from "./Notice";
+import { ProgressButton } from "./Progress";
 
 type Scenario = "normal" | "injected" | "attacker";
 const decimal = (value: string) => {
@@ -59,6 +60,7 @@ export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, en
   const [lastScenario, setLastScenario] = useState<Scenario>("normal");
   const running = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState("");
   useEffect(() => {
     let active = true;
     void fetch("/api/agent/info", { cache: "no-store" }).then(async (response) => {
@@ -75,6 +77,9 @@ export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, en
     if (running.current || disabled || !vault || finished) return;
     running.current = true;
     setLastScenario(scenario); setBusy(true); onBusy(true); setError(null); setSteps([]);
+    // This endpoint returns a complete run, not a stream. Do not invent a
+    // timed transition from model inference to transaction confirmation.
+    setProgress(useLive && scenario !== "attacker" ? "Asking the AI and checking the trade…" : "Sending to Solana…");
     try {
       const response = await fetch(`/api/agent/${scenario}`, {
         method: "POST", headers: { "content-type": "application/json", "x-aegis-agent": environment },
@@ -89,6 +94,7 @@ export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, en
       else setError("The server returned an unreadable result. Try again.");
     } catch { setError("Could not reach the agent. Is the dashboard server running?"); }
     finally {
+      setProgress("Refreshing vault…");
       try { await onComplete(); } catch { setError("Could not refresh the vault. Try again in a moment."); }
       running.current = false; setBusy(false); onBusy(false);
     }
@@ -101,7 +107,9 @@ export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, en
   const usable = !!vault && !finished;
   const locked = disabled || busy || !usable;
   const detailSteps = steps.filter((step) => step.type !== "result");
-  return <section id="agent" className="card agent-console" aria-labelledby="agent-title" aria-busy={busy}>
+  return <>
+    <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">{busy ? progress : ""}</span>
+    <section id="agent" className="card agent-console" aria-labelledby="agent-title" aria-busy={busy}>
     <div className="card-heading">
       <h2 id="agent-title">Agent console</h2>
       <div className="segmented" role="group" aria-label="Agent mode">
@@ -121,13 +129,17 @@ export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, en
       {SCENARIOS.map((scenario) => <li key={scenario.id} className="scenario">
         <span className={`scenario-icon ${scenario.tone}`} aria-hidden="true"><Icon name={scenario.icon} size={20} /></span>
         <div><strong>{scenario.title}</strong><p>{scenario.text}</p></div>
-        <button className={scenario.id === "normal" && usable ? "primary" : undefined} disabled={locked} onClick={() => void run(scenario.id)}>{scenario.button}</button>
+        <ProgressButton className={scenario.id === "normal" && usable ? "primary" : undefined} disabled={locked}
+          busy={busy && lastScenario === scenario.id} progress="Running…" onClick={() => void run(scenario.id)}>{scenario.button}</ProgressButton>
       </li>)}
     </ul>
-    <div className="agent-result-area">
+    <div className="agent-result-area" aria-busy={busy}>
       {reply && <p><span className="status">{reply.source === "live" ? "AI decided" : reply.source === "scripted" ? "Recorded reply" : "Fixed hacker request · No AI"}</span>{reply.source === "live" && model && <> {model}</>}</p>}
       {!busy && !error && steps.length === 0 && usable && <p className="agent-placeholder">Pick a scenario above.</p>}
-      {busy && <p className="agent-running" role="status">Running… the agent decides, then the vault checks the trade against the rules. This can take a moment.</p>}
+      {busy && <div className="agent-running">
+        <div><strong>{progress}</strong><p>{progress === "Refreshing vault…" ? "Updating balances and activity."
+          : "Waiting for the agent’s result. Solana transactions can take 5–15 seconds; live AI adds a few more seconds."}</p></div>
+      </div>}
       {error && <div className="agent-outcome blocked" role="alert">
         <span className="outcome-icon" aria-hidden="true"><Icon name="alert" /></span>
         <div><strong>The agent could not run</strong><p>{error}</p></div>
@@ -161,5 +173,5 @@ export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, en
         })}
       </div>
     </details>}
-  </section>;
+  </section></>;
 }

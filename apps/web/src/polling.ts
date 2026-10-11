@@ -25,11 +25,11 @@ export function startDashboardPolling(options: {
     pending = (async () => {
       if (Date.now() >= stateDue) {
         stateDue = Date.now() + 10_000;
-        try { await options.state(); } catch (error) { options.onError(error); }
+        try { await options.state(); } catch (error) { if (!stopped) options.onError(error); }
       }
       if (!stopped && !visibility.hidden && Date.now() >= activityDue) {
         activityDue = Date.now() + 20_000;
-        try { await options.activity(); } catch (error) { options.onError(error); }
+        try { await options.activity(); } catch (error) { if (!stopped) options.onError(error); }
       }
     })().finally(() => { pending = undefined; schedule(); });
     return pending;

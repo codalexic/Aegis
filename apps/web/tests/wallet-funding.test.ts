@@ -20,13 +20,18 @@ async function fixture(balance = 1_000_000_000n) {
 
 it("creates twice through the wallet dashboard with distinct random vault IDs", async () => {
   const f = await fixture();
-  const first = await f.dashboard.create(), second = await f.dashboard.create();
+  const progress = vi.fn();
+  const first = await f.dashboard.create(progress), second = await f.dashboard.create();
   expect(first.ok).toBe(true);
   expect(second.ok).toBe(true);
   expect(first.vault!.equals(second.vault!)).toBe(false);
   expect((await f.dashboard.client.getVault(first.vault!)).owner).toEqual(f.owner.publicKey);
   expect((await f.dashboard.client.getVault(second.vault!)).owner).toEqual(f.owner.publicKey);
   expect(f.sign).toHaveBeenCalledTimes(2);
+  // The second action has no listener: callbacks must not leak between actions.
+  expect(progress.mock.calls.map(([stage]) => stage)).toEqual([
+    "Preparing…", "Approve in Phantom…", "Confirming on Solana…", "Done",
+  ]);
 });
 
 it("creates, funds, and explains a second fund without another wallet request", async () => {

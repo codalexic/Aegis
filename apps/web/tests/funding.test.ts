@@ -167,9 +167,14 @@ describe("New demo vault funding order", () => {
 
   it("confirms faucet, refreshes balance, then creates and funds when low", async () => {
     const f = await fixture();
-    expect(await newFundedDemo(f.connection, 0n, f.refresh)).toMatchObject({ ok: true });
+    const progress = vi.fn();
+    expect(await newFundedDemo(f.connection, 0n, f.refresh, progress)).toMatchObject({ ok: true });
     expect(f.calls).toEqual(["faucet", "balance", "create", "fund"]);
     expect(f.fund.mock.calls[0][2]).toBe(DEMO_FUND_RAW);
+    expect(progress.mock.calls.map(([stage]) => stage)).toEqual([
+      "Getting testUSDC…", "Creating and funding vault…", "Creating vault · Preparing…",
+      "Creating vault · Done", "Funding vault · Preparing…", "Funding vault · Done",
+    ]);
   });
 
   it("preserves the friendly faucet limit and never creates or funds a vault", async () => {

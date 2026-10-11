@@ -32,7 +32,8 @@ export function TradeBars({ trades, cap, unit, className }: {
 
   const label = shown.length === 0
     ? "No trade requests yet"
-    : `${shown.length.toLocaleString()} trade requests; ${blocked.toLocaleString()} blocked above the ${cap.toLocaleString()} ${unit} per-trade cap`;
+    : `${shown.length.toLocaleString()} trade requests; ${blocked.toLocaleString()} blocked above the ${cap.toLocaleString()} ${unit} per-trade cap`
+      + (shown.some((t) => t.amount > domain) ? `; scale capped at ${domain.toLocaleString()} ${unit}; taller requests are marked` : "");
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={label} className={`trade-bars${className ? ` ${className}` : ""}`}>
@@ -49,12 +50,12 @@ export function TradeBars({ trades, cap, unit, className }: {
       <rect x={0} y={capY} width={W} height={BASE - capY} fill="var(--chart-band, var(--chart-ink))" />
       <line x1={16} x2={W - 16} y1={BASE} y2={BASE} stroke="var(--chart-line)" strokeWidth={1} />
       <line x1={16} x2={W - 16} y1={capY} y2={capY} stroke="var(--chart-muted)" strokeWidth={1} strokeDasharray="3 5" opacity={0.9} />
-      <text x={20} y={capY - 6} fontSize={10} fontWeight={650} fill="var(--chart-muted)">cap {cap.toLocaleString()}</text>
+      <text x={20} y={capY - 6} fontSize={10} fontWeight={650} fill="var(--chart-muted)">per-trade cap {cap.toLocaleString()}</text>
 
       {shown.map((t, i) => {
         const x = startX + i * (COL + GAP);
         const h = heightFor(t.amount);
-        const tip = `${t.amount.toLocaleString()} ${unit} · ${t.ok ? "allowed" : `blocked${t.error ? ` (${t.error})` : ""}`}${t.time ? ` · ${t.time}` : ""}`;
+        const tip = `${t.amount.toLocaleString()} ${unit} · ${t.ok ? "allowed" : `blocked (${t.error ?? "rejected"})`}${t.time ? ` · ${t.time}` : ""}`;
         return (
           <g key={`b${i}`} className={`trade-bar trade-bar--${t.ok ? "ok" : "blocked"}`} style={{ ["--bar-delay" as string]: `${i * 50}ms` }}>
             <title>{tip}</title>

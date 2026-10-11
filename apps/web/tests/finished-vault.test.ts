@@ -99,8 +99,8 @@ it.each([0n, 1_000_000_000n])("preserves active-vault actions at wallet balance 
 });
 
 it.each([
-  ["mock", "Practice mode"], ["localnet", "Private test chain"], ["devnet", "Solana devnet"],
+  ["mock", "Practice"], ["localnet", "Localnet"], ["devnet", "Devnet"],
 ] as const)("restores the footer disclaimer with the %s environment", async (environment, label) => {
   const markup = await render("active", 0n, "input", environment);
-  expect(markup).toContain(`<footer><span>Aegis · Bounded autonomy</span><span>${label} · Test money, no real value</span></footer>`);
+  expect(markup).toContain(`<footer><span>Aegis</span><span>${label} · Test money, no real value</span></footer>`);
 });

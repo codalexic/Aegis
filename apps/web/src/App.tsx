@@ -61,7 +61,7 @@ type PageId = (typeof NAV)[number]["id"];
 
 const PAGE_TITLE: Record<PageId, { eyebrow?: string; title: string }> = {
   vault: { eyebrow: "Your vault", title: "AI agents can be tricked. Aegis still enforces the limits." },
-  agent: { eyebrow: "Agent", title: "Push the limits. Aegis blocks what you forbid." },
+  agent: { eyebrow: "Agent", title: "Test the agent’s limits." },
   stats: { eyebrow: "Stats", title: "Requests against the per-trade cap." },
   activity: { eyebrow: "Activity", title: "Every trade and every blocked attempt." },
 };
@@ -125,7 +125,7 @@ function Nav({ active }: { active: string }) {
     height: pill.h,
   } satisfies CSSProperties;
 
-  return <nav className="nav" aria-label="Pages" ref={navRef}>
+  return <nav className="nav" aria-label="Sections" ref={navRef}>
     <span className={`nav-pill${pill.ready ? " is-ready" : ""}`} style={pillStyle} aria-hidden="true" />
     {NAV.map((item) => (
       <a key={item.id} href={`#/${item.id}`} aria-current={active === item.id ? "true" : undefined}>
@@ -272,24 +272,24 @@ const TRY_STEPS: { title: string; body: ReactNode }[] = [
     body: <>Download from <a href="https://phantom.com/download" target="_blank" rel="noreferrer">phantom.com</a></>,
   },
   {
-    title: "Point Phantom at Devnet",
-    body: "In Phantom: Settings → Developer Settings → turn on Testnet Mode → choose Solana Devnet. Your mainnet funds stay untouched.",
+    title: "Switch to devnet",
+    body: "In Phantom: Settings → Developer Settings → Testnet Mode → Solana Devnet.",
   },
   {
     title: "Connect here",
-    body: "Hit Connect wallet in the top right, then approve the request in Phantom. That wallet is your identity for this demo.",
+    body: "Use the top-right button; approve in Phantom.",
   },
   {
-    title: "Fund a vault and try to break it",
-    body: "Open a New demo vault to get 1,000 testUSDC under the agent's limits - then run the attack scenarios and see what Aegis blocks.",
+    title: "Try the demo",
+    body: "Create and fund a vault, then test the agent.",
   },
 ];
 
 function TryIt() {
   return <aside className="try-it" aria-labelledby="try-it-title">
     <header className="try-it-head">
-      <h2 id="try-it-title">How to try it?</h2>
-      <p className="try-it-lead">A quick walkthrough on Solana Devnet for you to get started.</p>
+      <h2 id="try-it-title">Get started</h2>
+      <p className="try-it-lead">You’ll approve transactions in Phantom.</p>
     </header>
     <ol className="try-it-steps">
       {TRY_STEPS.map((step, index) => <li key={step.title} data-step={index + 1}>
@@ -300,7 +300,7 @@ function TryIt() {
         </div>
       </li>)}
     </ol>
-    <p className="try-it-foot">Out of fee SOL? Use the <a href="https://faucet.solana.com" target="_blank" rel="noreferrer">Solana Faucet</a>.</p>
+    <p className="try-it-foot">Need devnet SOL? Use the <a href="https://faucet.solana.com" target="_blank" rel="noreferrer">Solana Faucet</a>.</p>
   </aside>;
 }
 
@@ -611,10 +611,10 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
   const step3 = !ready ? "todo" : hasAgentRequest ? "done" : hasInput && !finished ? "next" : "todo";
   const stepsDone = (step1 === "done" ? 1 : 0) + (step2 === "done" ? 1 : 0) + (step3 === "done" ? 1 : 0);
   const guardLead = !ready ? <>Loading vault state…</>
-    : !vault ? <>No vault yet. Create one and the guardrails switch on.</>
-    : vault.revoked ? <>Agent is <strong>revoked</strong>. It can no longer trade; your funds stay withdrawable.</>
-    : status === "Expired" ? <>Trading permission has <strong>expired</strong>. Withdraw any time.</>
-    : <>Agent may spend up to <strong>{amount(vault.maxTradeRaw)} testUSDC</strong> per trade.</>;
+    : !vault ? <>Applies once the vault is created.</>
+    : vault.revoked ? <>Agent is <strong>revoked</strong>.</>
+    : status === "Expired" ? <>Trading permission has <strong>expired</strong>.</>
+    : <>Fixed at vault creation.</>;
 
   const cta = <>
     <ProgressButton className="primary" disabled={!ready || locked} busy={busy === "New demo vault"} progress="Setting up…" onClick={() => void newDemo()}><Icon name="sparkle" size={16} />New demo vault</ProgressButton>
@@ -654,7 +654,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
         <Tile loading={loading} tone="cream" icon="chart" label="Budget left" value={vault ? amount(remaining) : "0"} unit="testUSDC" testId="remaining-budget">
           <div className={`budget-section ${budgetLevel}`}>
             <progress aria-label="Remaining budget" aria-valuetext={vault ? `${amount(remaining)} of ${amount(vault.budgetRaw)} testUSDC remaining` : "No vault"} value={remainingBasisPoints.toString()} max="10000" />
-            <span className="budget-number">{vault ? <><strong>{amount(vault.spentRaw)}</strong> spent of {amount(vault.budgetRaw)} total</> : "Create a vault to activate"}</span>
+            <span className="budget-number"></span>
           </div>
         </Tile>
         <Tile loading={loading} tone="cream" icon="shield" label="Attacks blocked" value={activityReady ? String(blocked) : "—"} subTone={blocked > 0 ? "good" : undefined}
@@ -665,10 +665,10 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       <section className="go-live" aria-labelledby="vault-setup-title">
         <div className="go-live-head">
           <div>
-            <h2 id="vault-setup-title">{stepsDone === 3 ? "Vault ready" : "Set up your vault"}</h2>
+            <h2 id="vault-setup-title">{stepsDone === 3 ? "Vault ready" : "Trading vault"}</h2>
             <p className="go-live-lead">{stepsDone === 3
-              ? "Limits are live. Try the agent, or revoke and withdraw whenever you want."
-              : "Create, fund, then stress-test the agent. Everything below stays under your control."}</p>
+              ? "Try the agent, or revoke and withdraw."
+              : "Create and fund a vault, then test the agent."}</p>
           </div>
           <div className="go-live-progress" aria-label={`${stepsDone} of 3 steps done`}>
             <span>{stepsDone} of 3 done</span>
@@ -679,18 +679,18 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
           <span className={`status ${status.toLowerCase().replace(" ", "-")}`} data-testid="vault-status"><span className="small-dot" aria-hidden="true" />{status}</span>
         </div>
         <div className="steps">
-          <Step number={1} state={step1} title={vault ? "Vault created" : "Create a vault"} text={vault ? "" : "Opens a vault with a 50 testUSDC per-trade cap and a 100 testUSDC total budget. Or use New demo vault for both steps at once."}>
+          <Step number={1} state={step1} title={vault ? "Vault created" : "Vault setup"} text="">
             <div className="step-action">
               {!vault && <ProgressButton className={step1 === "next" ? "primary" : ""} disabled={!ready || locked} busy={busy === "Create vault"} progress="Creating…" onClick={() => void create()}>Create vault</ProgressButton>}
             </div>
           </Step>
           <FundingStep state={step2} balance={walletBalance} hasFaucet={!!connection.faucet} hasVault={!!vault} finished={finished} locked={locked} busy={busy}
-            text={needsFaucet(walletBalance, !!connection.faucet) ? (vault ? "Get test money in your wallet, then fund the vault."
-                : "Create a vault first; it needs no testUSDC. Then get test money in your wallet and fund the vault.")
-              : "Move test money from your wallet into the vault. The agent can trade with it, but never beyond the guardrails."}
+            text={needsFaucet(walletBalance, !!connection.faucet) ? (vault ? "Get testUSDC before funding."
+                : "Set up your vault first.")
+              : "Transfer from your wallet."}
             onFaucet={() => void run("Get testUSDC", connection.faucet!)} onFund={() => void fund()} onNewDemo={() => void newDemo()} />
-          <Step number={3} state={step3} title="Try the agent" text="Run a normal trade, then try to trick it. Anything outside the rules is blocked on-chain.">
-            <button type="button" className="step-ok" onClick={() => go("agent")}>Open agent <Icon name="arrow" size={14} /></button>
+          <Step number={3} state={step3} title="Try the agent" text="Trade normally, then test an attack.">
+            <button type="button" className="step-ok" onClick={() => go("agent")}>Go to agent <Icon name="arrow" size={14} /></button>
           </Step>
         </div>
       </section>
@@ -699,15 +699,15 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
         <section className="rail-card" aria-labelledby="guard-title">
           <div className="rail-heading"><h2 id="guard-title">Guardrails</h2><span className="rail-badge"><Icon name="shield" size={16} /></span></div>
           <p className="rail-lead">{guardLead}</p>
-          <p className="rail-sub">Enforced by the blockchain itself. The agent cannot change or get around them.</p>
+          <p className="rail-sub">Enforced on-chain. The agent cannot change them.</p>
           <div className="guard-rows">
             <div className="guard-row"><span className="label">Per-trade cap</span><span className="value">{vault ? amount(vault.maxTradeRaw) : "50"}<small>testUSDC</small></span></div>
             <div className="guard-row"><span className="label">Total budget</span><span className="value">{vault ? amount(vault.budgetRaw) : "100"}<small>testUSDC</small></span></div>
-            <div className="guard-row"><span className="label">Spent so far</span><span className="value" data-testid="spent">{vault ? amount(vault.spentRaw) : "0"}<small>testUSDC</small></span>
+            <div className="guard-row"><span className="label">Spent so far</span><span className="value" data-testid="spent">{vault ? amount(vault.spentRaw) : "—"}<small>testUSDC</small></span>
               <div className={`meter ${budgetLevel}`} role="img" aria-label={vault ? `${spentPercent}% of the budget spent` : "No vault"}><span style={{ width: `${spentPercent}%` }} /></div></div>
             <div className="guard-row"><span className="label">Time left</span><span className="value" data-testid="expiry">{vault ? countdown(vault.expiryUnix, now) : "1 hour, from creation"}</span>
               <div className="meter neutral" role="img" aria-label={vault ? `${lifePercent}% of the hour remaining` : "No vault"}><span style={{ width: `${lifePercent}%` }} /></div></div>
-            <div className="guard-row"><span className="label">Funds go to</span><span className="value"><Icon name="lock" size={14} /> This vault only</span></div>
+            <div className="guard-row"><span className="label">Output goes to</span><span className="value"><Icon name="lock" size={14} /> This vault only</span></div>
           </div>
         </section>
         <section className="rail-card addresses-card" aria-labelledby="keys-title">
@@ -719,8 +719,8 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
           </div>
           {vault && <div className="owner-panel">
             <div className="owner-panel-copy">
-              <strong>You stay in control</strong>
-              <p>Stop the agent or take everything out any time.</p>
+              <strong>Owner controls.</strong>
+              <p>Funds stay withdrawable after revocation or expiry.</p>
             </div>
             <div className="owner-panel-actions">
               <ProgressButton className="danger" disabled={vault.revoked || locked} busy={busy === "Revoke agent"} progress="Revoking…" onClick={() => void revoke()}>Revoke agent</ProgressButton>
@@ -734,8 +734,8 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
 
     {page === "stats" && <section className="rail-card chart-card" aria-labelledby="chart-title">
       <div className="rail-heading">
-        <h2 id="chart-title">Agent requests vs cap</h2>
-        <span className="chart-cap-pill">cap {capUi} testUSDC</span>
+        <h2 id="chart-title">Agent requests</h2>
+        <span className="chart-cap-pill">Per-trade cap</span>
       </div>
       {!ready || !activityReady ? pageLoading : <>
         <div className="chart-stats">
@@ -749,13 +749,13 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
           </div>
           <div className="chart-legend" aria-hidden="true">
             <span><i />Allowed</span>
-            <span><i className="bad" />Blocked</span>
+            <span><i className="bad" />Blocked by Aegis</span>
           </div>
         </> : <div className="empty-activity">
           <span aria-hidden="true"><Icon name="chart" /></span>
           <strong>No agent requests yet</strong>
-          <p>Run a trade from Agent. Allowed and blocked amounts will show up here against the per-trade cap.</p>
-          <button type="button" className="primary" onClick={() => go("agent")}>Open agent <Icon name="arrow" size={14} /></button>
+          <p>Run an agent trade to compare requests with the per-trade cap.</p>
+          <button type="button" className="primary" onClick={() => go("agent")}>Go to agent <Icon name="arrow" size={14} /></button>
         </div>}
       </>}
     </section>}
@@ -763,7 +763,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
     {page === "agent" && (!ready ? pageLoading : environment !== "mock"
       ? <AgentConsole environment={environment} walletMode={connection.walletMode} key={address.current?.toBase58()} vault={vault} finished={finished} disabled={!!busy || loading} onBusy={setAgentBusy} onComplete={refreshAfterAgent} />
       : <section id="agent" className="card trade-card" aria-labelledby="trade-title">
-        <div><h2 id="trade-title">Try an agent trade</h2><p className="muted">20 testUSDC is within the 50 cap and goes through. Try 60 to watch the cap block it.</p></div>
+        <div><h2 id="trade-title">Try an agent trade</h2><p className="muted">Try an amount above the per-trade cap.</p></div>
         <form onSubmit={trade}>
           <label htmlFor="trade-amount">Amount <span>testUSDC</span></label>
           <div className="trade-controls"><input id="trade-amount" inputMode="decimal" value={tradeAmount} onChange={(event) => setTradeAmount(event.target.value)} disabled={!vault || finished || !!busy} autoComplete="off" /><ProgressButton className="primary" disabled={!vault || finished || !!busy} busy={busy === "Agent trade"} progress="Swapping…" type="submit">Swap</ProgressButton></div>
@@ -772,7 +772,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
 
     {page === "activity" && <section className="card activity-card" aria-labelledby="activity-title">
       <div className="card-heading"><h2 id="activity-title">Vault activity</h2><span className="muted">{!activityReady || activity.length === 0 ? "" : `${activity.length} ${activity.length === 1 ? "event" : "events"}`}</span></div>
-      {!ready || !activityReady ? pageLoading : activity.length === 0 ? <div className="empty-activity activity-in"><span aria-hidden="true"><Icon name="activity" /></span><strong>No activity yet</strong><p>Create your vault to begin. Every trade and every blocked attempt will show up here, newest first.</p></div> : <div className="table-scroll activity-in">
+      {!ready || !activityReady ? pageLoading : activity.length === 0 ? <div className="empty-activity activity-in"><span aria-hidden="true"><Icon name="activity" /></span><strong>No activity yet</strong><p>Transactions appear here, newest first.</p></div> : <div className="table-scroll activity-in">
         <table>
           <thead><tr><th>Time</th><th>Action</th><th>Amount</th><th>Result</th></tr></thead>
           <tbody>{activity.map((item, index) => <tr key={item.signature} style={{ ["--i" as string]: index }}>
@@ -790,8 +790,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       </div>}
     </section>}
 
-    <footer><span>Aegis · Bounded autonomy</span><span>{environmentName(environment)} · Test money, no real value</span></footer>
+    <footer><span>Aegis</span><span>{environmentShort(environment)} · Test money, no real value</span></footer>
     </div>
   </Shell>;
 }
-

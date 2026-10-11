@@ -32,6 +32,7 @@ beforeEach(() => {
   vi.setSystemTime(1_900_000_000_000);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   Object.defineProperty(document, "hidden", { configurable: true, value: false });
+  window.location.hash = "#/vault";
   vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(160);
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
@@ -79,9 +80,14 @@ it("keeps a wallet action busy through real prepare, approve, confirm and refres
   expect(container.textContent).toContain("Preparing…");
   expect(f.sign).not.toHaveBeenCalled();
   expect(container.querySelector(".steps .step")!.querySelector("button")).toBeNull();
-  for (const label of ["Fund 1,000", "New demo vault", "Withdraw all", "Run normal trade", "Inject malicious news", "Hacker redirect"]) {
+  for (const label of ["Fund 1,000", "New demo vault", "Withdraw all"]) {
     expect(button(label).disabled, label).toBe(true);
   }
+  await flush(() => { window.location.hash = "#/agent"; window.dispatchEvent(new HashChangeEvent("hashchange")); });
+  for (const label of ["Run normal trade", "Inject malicious news", "Hacker redirect"]) {
+    expect(button(label).disabled, label).toBe(true);
+  }
+  await flush(() => { window.location.hash = "#/vault"; window.dispatchEvent(new HashChangeEvent("hashchange")); });
   expect(lock).toHaveBeenLastCalledWith(true);
   await flush(() => f.simulation.resolve({ value: { err: null } }));
   expect(container.querySelector('.dashboard-notice [role="status"]')?.textContent).toContain("Approve in Phantom…");

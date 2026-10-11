@@ -68,7 +68,14 @@ describe("Step 2 funding action", () => {
   });
 
   it("removes the faucet from the sidebar and lets an empty wallet create a vault", async () => {
-    vi.stubGlobal("window", { matchMedia: () => ({ matches: false }) });
+    const location = { hash: "#/vault", replace(next: string) { location.hash = next; } };
+    vi.stubGlobal("window", {
+      matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
+      location,
+      addEventListener() {},
+      removeEventListener() {},
+      history: { pushState() {} },
+    });
     const connection = await connectDashboard("mock");
     connection.faucet = vi.fn();
     const markup = renderToStaticMarkup(createElement(Dashboard, { connection, toolbar: null }));
@@ -76,7 +83,7 @@ describe("Step 2 funding action", () => {
     expect(sidebar).toContain("New demo vault");
     expect(sidebar).not.toContain("Get 1,000 testUSDC");
     expect(sidebar.match(/<button[^>]*>.*?New demo vault<\/button>/)?.[0]).not.toContain("disabled");
-    expect(markup).toMatch(/<button class="primary">Create vault<\/button>/);
+    expect(markup).toMatch(/<button class="primary"[^>]*>Create vault<\/button>/);
   });
 });
 

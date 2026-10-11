@@ -12,15 +12,31 @@ vi.mock("react", async (importOriginal) => {
 const now = 1_800_000_000n;
 const finishedMessage = "Start again with a funded vault.";
 
+function stubWindow(hash = "#/vault") {
+  const location = {
+    hash,
+    replace(next: string) { location.hash = next; },
+  };
+  vi.stubGlobal("window", {
+    matchMedia: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
+    location,
+    addEventListener() {},
+    removeEventListener() {},
+    history: { pushState() {} },
+  });
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(Number(now) * 1000);
-  vi.stubGlobal("window", { matchMedia: () => ({ matches: false }) });
+  stubWindow("#/vault");
 });
 afterEach(() => { vi.clearAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 async function render(status: "revoked" | "expired" | "active", walletBalance: bigint,
-  funds: "input" | "output" | "empty" = "input", environment: "localnet" | "mock" | "devnet" = "localnet") {
+  funds: "input" | "output" | "empty" = "input", environment: "localnet" | "mock" | "devnet" = "localnet",
+  hash = "#/vault") {
+  stubWindow(hash);
   const connection = await connectDashboard("mock");
   const created = await connection.create();
   const vault = await connection.client.getVault(created.vault!);
@@ -51,10 +67,12 @@ describe.each(["revoked", "expired"] as const)("%s vault", (status) => {
     expect(markup).not.toContain(">Get 1,000 testUSDC</button>");
     expect(button(markup, "New demo vault")).toContain('class="primary"');
     expect(button(markup, "New demo vault")).not.toContain("disabled");
+
+    const agent = await render(status, balance, "input", "localnet", "#/agent");
     for (const label of ["Run normal trade", "Inject malicious news", "Hacker redirect", "Live AI", "Scripted"]) {
-      expect(button(markup, label)).toContain('disabled=""');
+      expect(button(agent, label)).toContain('disabled=""');
     }
-    expect(markup).not.toContain("Pick a scenario above.");
+    expect(agent).not.toContain("Pick a scenario above.");
   });
 
   it.each(["input", "output", "empty"] as const)("allows withdrawal only with funds: %s", async (funds) => {
@@ -63,7 +81,7 @@ describe.each(["revoked", "expired"] as const)("%s vault", (status) => {
   });
 
   it("also disables practice trades", async () => {
-    expect(button(await render(status, 0n, "input", "mock"), "Swap")).toContain('disabled=""');
+    expect(button(await render(status, 0n, "input", "mock", "#/agent"), "Swap")).toContain('disabled=""');
   });
 });
 
@@ -71,10 +89,13 @@ it.each([0n, 1_000_000_000n])("preserves active-vault actions at wallet balance 
   const markup = await render("active", balance);
   expect(markup).not.toContain(finishedMessage);
   expect(button(markup, balance === 0n ? "Get 1,000 testUSDC" : "Fund 1,000")).not.toContain("disabled");
-  for (const label of ["Withdraw all", "Run normal trade", "Inject malicious news", "Hacker redirect"]) {
-    expect(button(markup, label)).not.toContain("disabled");
+  expect(button(markup, "Withdraw all")).not.toContain("disabled");
+
+  const agent = await render("active", balance, "input", "localnet", "#/agent");
+  for (const label of ["Run normal trade", "Inject malicious news", "Hacker redirect"]) {
+    expect(button(agent, label)).not.toContain("disabled");
   }
-  expect(markup).toContain("Pick a scenario above.");
+  expect(agent).toContain("Pick a scenario above.");
 });
 
 it.each([

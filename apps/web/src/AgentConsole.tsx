@@ -38,9 +38,9 @@ export function blockedTitle(error: string): string {
 // Plain-language framing for each scenario. Button labels stay as they were
 // because server copy refers to them (e.g. "Use Scripted to retry without AI.").
 const SCENARIOS: { id: Scenario; icon: IconName; tone: string; title: string; text: string; button: string }[] = [
-  { id: "normal", icon: "bolt", tone: "", title: "Within the rules", text: "Swaps 20 testUSDC. Within the rules, so it goes through.", button: "Run normal trade" },
-  { id: "injected", icon: "alert", tone: "attack", title: "Fake news attack", text: "Hidden news tells the agent to spend 1,000. Blocked: over the per-trade cap.", button: "Inject malicious news" },
-  { id: "attacker", icon: "lock", tone: "hack", title: "Hacker redirect", text: "Tries to send the output to an attacker. Blocked: output must stay in the vault.", button: "Hacker redirect" },
+  { id: "normal", icon: "swap", tone: "", title: "Within the rules", text: "Swaps 20 testUSDC. Within the rules, so it goes through.", button: "Run normal trade" },
+  { id: "injected", icon: "news", tone: "attack", title: "Fake news attack", text: "Hidden news tells the agent to spend 1,000. Blocked: over the per-trade cap.", button: "Inject malicious news" },
+  { id: "attacker", icon: "redirect", tone: "hack", title: "Hacker redirect", text: "Tries to send the output to an attacker. Blocked: output must stay in the vault.", button: "Hacker redirect" },
 ];
 
 function News({ step }: { step: Extract<Step, { type: "news" }> }) {
@@ -120,7 +120,11 @@ export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, en
     <p className="muted agent-model">{live
       ? (model ? `Live AI: ${model} reads the news and decides the amount itself.` : "No AI key is set up on this server. Switch back to Scripted to run the scenarios.")
       : "Scripted: a recorded reply, no AI call. The on-chain checks are identical."}</p>
-    {!usable && <p className="muted agent-model">{!vault ? "Set up and fund your vault first." : "Trading stopped. Start again from the sidebar."}</p>}
+    {!usable && (
+      !vault
+        ? <Notice tone="error" className="agent-model" message="Set up and fund your vault first." />
+        : <Notice tone="error" className="agent-model" message="Trading stopped. Start again from the sidebar." />
+    )}
     <ul className="scenario-list">
       {SCENARIOS.map((scenario) => <li key={scenario.id} className="scenario">
         <span className={`scenario-icon ${scenario.tone}`} aria-hidden="true"><Icon name={scenario.icon} size={20} /></span>

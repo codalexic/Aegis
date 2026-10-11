@@ -11,11 +11,19 @@ let root: Root, container: HTMLDivElement, connection: DashboardConnection;
 beforeEach(async () => {
   vi.useFakeTimers();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  window.location.hash = "#/vault";
   connection = await connectDashboard("mock");
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
 });
+
+async function goPage(id: "vault" | "agent") {
+  await act(async () => {
+    window.location.hash = `#/${id}`;
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  });
+}
 
 afterEach(async () => {
   await act(async () => root.unmount());
@@ -126,8 +134,11 @@ it.each(["revoked", "expired"] as const)("preserves completed steps after trades
   await mount();
   await click("Create vault");
   await click("Fund 1,000");
+  await goPage("agent");
   const form = container.querySelector("form")!;
+  expect(form).toBeTruthy();
   await act(async () => { form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+  await goPage("vault");
   expectSteps("done", "done", "done");
   if (status === "revoked") await click("Revoke agent");
   else await act(async () => { await vi.advanceTimersByTimeAsync(3_600_000); });

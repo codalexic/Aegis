@@ -51,6 +51,42 @@ async function loadedVault(overrides: Partial<VaultState> = {}, activity: Activi
   return vault;
 }
 
+it("offers Create vault without a vault and replaces it with a checked status after creation", async () => {
+  await mount();
+  let setup = container.querySelector(".steps .step")!;
+  expect(setup.querySelector("button")?.textContent).toBe("Create vault");
+  expect(setup.querySelector("button")?.disabled).toBe(false);
+  await click("Create vault");
+  expectSteps("done", "next", "todo");
+  setup = container.querySelector(".steps .step")!;
+  expect(setup.querySelector("button")).toBeNull();
+  expect(setup.querySelector(".step-num svg")).not.toBeNull();
+  expect(setup.textContent).toBe("Done: Vault created");
+});
+
+it("shows a checked status without Create vault for a returning wallet", async () => {
+  await loadedVault();
+  await mount();
+  expectSteps("done", "next", "todo");
+  const setup = container.querySelector(".steps .step")!;
+  expect(setup.querySelector("button")).toBeNull();
+  expect(setup.querySelector(".step-num svg")).not.toBeNull();
+  expect(setup.textContent).toBe("Done: Vault created");
+});
+
+it.each([0n, 1_000_000_000n])("keeps completed funding actionable with wallet balance %s", async (balance) => {
+  await loadedVault({ inputBalanceRaw: 1_000_000_000n });
+  connection.getWalletBalance = vi.fn(async () => balance);
+  connection.faucet = vi.fn(async () => "TestUSDC received.");
+  const fund = vi.spyOn(connection, "fund");
+  await mount();
+  expectSteps("done", "done", "next");
+  const label = balance === 0n ? "Get 1,000 testUSDC" : "Fund 1,000";
+  expect(container.querySelectorAll(".steps .step")[1].querySelector("button")?.textContent).toBe(label);
+  await click(label);
+  expect(balance === 0n ? connection.faucet : fund).toHaveBeenCalledTimes(1);
+});
+
 it("keeps funding complete after fund → withdraw without any trades", async () => {
   await mount();
   await click("Create vault");

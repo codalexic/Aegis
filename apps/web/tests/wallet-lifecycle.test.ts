@@ -244,6 +244,25 @@ it("drops a connect failure after the adapter has disconnected", async () => {
   expect(alerts()).toHaveLength(0);
 });
 
+it("shows connection progress, then skeletons while discovering the wallet's vault", async () => {
+  const connecting = deferred<void>();
+  const discovery = deferred<Response>();
+  phantom.connect.mockReturnValueOnce(connecting.promise);
+  latest = () => discovery.promise;
+  await mount();
+  await click("Connect wallet");
+  const button = container.querySelector('button[aria-label="Connecting…"]');
+  expect(button?.getAttribute("aria-busy")).toBe("true");
+  expect(button?.querySelector(".progress-spinner")).not.toBeNull();
+  expect(container.textContent).toContain("Approve connection in Phantom…");
+  await flush(() => connecting.resolve());
+  expect(container.querySelector('[data-testid="vault-skeleton"]')).not.toBeNull();
+  expect(container.querySelectorAll(".tile .skeleton-value")).toHaveLength(4);
+  await flush(() => discovery.resolve(Response.json({ vault: vaultA.toBase58() })));
+  expect(container.querySelectorAll(".skeleton")).toHaveLength(0);
+  expect(ownerVisible(A)).not.toBeNull();
+});
+
 it("recognizes wrapped disconnects without swallowing a real user cancellation", () => {
   expect(isWalletDisconnected({ error: disconnected("WalletNotConnectedError") })).toBe(true);
   expect(isWalletDisconnected({ cause: disconnected() })).toBe(true);

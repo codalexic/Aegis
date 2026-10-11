@@ -1,5 +1,5 @@
 import type { PublicKey } from "@solana/web3.js";
-import type { DashboardConnection } from "./client";
+import type { DashboardConnection, ProgressCallback } from "./client";
 
 export const DEMO_FUND_RAW = 1_000_000_000n;
 
@@ -33,10 +33,13 @@ export async function readWalletBalance(rpcUrl: string, tokenAccount: PublicKey)
 
 export async function newFundedDemo(
   connection: DashboardConnection, balance: bigint | null, refreshWalletBalance: () => Promise<void>,
+  onProgress?: ProgressCallback,
 ) {
   if (needsFaucet(balance, !!connection.faucet)) {
+    onProgress?.("Getting testUSDC…");
     await connection.faucet!();
     await refreshWalletBalance();
   }
-  return connection.newDemo();
+  onProgress?.("Creating and funding vault…");
+  return connection.newDemo(onProgress);
 }

@@ -5,6 +5,8 @@ import { LocalnetReader } from "./localnet-reader";
 import { actionDetail, type ActionDetail } from "./activity";
 import { readWalletBalance } from "./funding";
 
+export type ProgressCallback = (stage: string) => void;
+
 export interface DashboardConnection {
   walletMode?: boolean;
   faucet?(): Promise<string>;
@@ -15,11 +17,11 @@ export interface DashboardConnection {
   owner: PublicKey;
   agent: PublicKey;
   initialVault: PublicKey | null;
-  create(): Promise<TxResult & { vault?: PublicKey }>;
-  newDemo(): Promise<TxResult & { vault?: PublicKey; createSignature?: string }>;
-  fund(vault: PublicKey): Promise<TxResult>;
-  revoke(vault: PublicKey): Promise<TxResult>;
-  withdraw(vault: PublicKey, mint: PublicKey, amount: bigint): Promise<TxResult>;
+  create(onProgress?: ProgressCallback): Promise<TxResult & { vault?: PublicKey }>;
+  newDemo(onProgress?: ProgressCallback): Promise<TxResult & { vault?: PublicKey; createSignature?: string }>;
+  fund(vault: PublicKey, onProgress?: ProgressCallback): Promise<TxResult>;
+  revoke(vault: PublicKey, onProgress?: ProgressCallback): Promise<TxResult>;
+  withdraw(vault: PublicKey, mint: PublicKey, amount: bigint, onProgress?: ProgressCallback): Promise<TxResult>;
   trade?(vault: PublicKey, amount: bigint): Promise<TxResult>;
   readDetail?(signature: string, vault: VaultState): Promise<ActionDetail | undefined>;
 }

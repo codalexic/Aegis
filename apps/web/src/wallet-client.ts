@@ -3,9 +3,19 @@ import { WalletAegisClient, type WalletSigner } from "../../../packages/sdk/src/
 import type { ChainDeployment, TxResult } from "@aegis/sdk";
 import { NO_DEVNET_SOL } from "../../../packages/sdk/src/wallet-errors";
 import { actionDetail } from "./activity";
-import type { DashboardConnection } from "./client";
+import type { DashboardConnection, ProgressCallback } from "./client";
 import { getAssociatedTokenAddressSync } from "./browser-token";
 import { readWalletBalance } from "./funding";
+
+// Observe the existing send flow; building, simulation, validation, submission
+// and confirmation remain entirely in the SDK.
+class ProgressWalletClient extends WalletAegisClient {
+  onProgress?: ProgressCallback;
+  override rpc<T>(method: string, params: unknown[]): Promise<T> {
+    if (method === "sendTransaction") this.onProgress?.("Confirming on Solana…");
+    return super.rpc<T>(method, params);
+  }
+}
 
 export async function connectWalletDashboard(environment: "localnet" | "devnet", wallet: WalletSigner, signal?: AbortSignal): Promise<DashboardConnection> {
   const response = await fetch("/api/deployment", { cache: "no-store", signal });
@@ -13,7 +23,14 @@ export async function connectWalletDashboard(environment: "localnet" | "devnet",
   signal?.throwIfAborted();
   if (!response.ok) throw new Error(deployment.error ?? "Cannot load this cluster's deployment.");
   if (deployment.environment !== environment) throw new Error("Deployment environment mismatch.");
-  const client = new WalletAegisClient(deployment, { devnetRpcUrl: import.meta.env.VITE_DEVNET_RPC_URL }), agent = new PublicKey(deployment.agent);
+  const client = new ProgressWalletClient(deployment, { devnetRpcUrl: import.meta.env.VITE_DEVNET_RPC_URL }), agent = new PublicKey(deployment.agent);
+  const progressWallet: WalletSigner = {
+    publicKey: wallet.publicKey,
+    signTransaction: (transaction) => {
+      client.onProgress?.("Approve in Phantom…");
+      return wallet.signTransaction(transaction);
+    },
+  };
   const latestResponse = await fetch(`/api/actions/latest-vault?account=${wallet.publicKey.toBase58()}`, { cache: "no-store", signal });
   const latest: { vault?: string | null; message?: string } = await latestResponse.json();
   signal?.throwIfAborted();
@@ -25,23 +42,29 @@ export async function connectWalletDashboard(environment: "localnet" | "devnet",
       return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? BigInt(value) : null;
     } catch { return null; }
   };
-  const withSol = async <T extends TxResult>(need: bigint, action: () => Promise<T>): Promise<T | Extract<TxResult, { ok: false }>> => {
+  const withSol = async <T extends TxResult>(need: bigint, action: () => Promise<T>, onProgress?: ProgressCallback): Promise<T | Extract<TxResult, { ok: false }>> => {
+    onProgress?.("Preparing…");
     signal?.throwIfAborted();
     const balance = environment === "devnet" ? await getWalletSolBalance() : null;
     signal?.throwIfAborted();
     if (balance !== null && balance < need) return { ok: false, error: NO_DEVNET_SOL, origin: "client" };
-    return action();
+    client.onProgress = onProgress;
+    try {
+      const result = await action();
+      if (result.ok) onProgress?.("Done");
+      return result;
+    } finally { client.onProgress = undefined; }
   };
   // Conservative estimates: creation includes vault + token-account rent.
-  const create = () => withSol(10_000_000n, async () => {
+  const create = (onProgress?: ProgressCallback) => withSol(10_000_000n, async () => {
     const slot = await client.rpc<number>("getSlot", [{ commitment: "confirmed" }]);
     const time = await client.rpc<number | null>("getBlockTime", [slot]);
     signal?.throwIfAborted();
     if (time === null) throw new Error("Chain clock is unavailable.");
     const [vaultId] = crypto.getRandomValues(new BigUint64Array(1));
-    return client.createVault(wallet, { vaultId, agent, maxTradeRaw: 50_000_000n, budgetRaw: 100_000_000n, expiryUnix: BigInt(time) + 3600n });
-  });
-  const fund = (vault: PublicKey) => withSol(100_000n, () => client.fundVault(wallet, vault, 1_000_000_000n));
+    return client.createVault(progressWallet, { vaultId, agent, maxTradeRaw: 50_000_000n, budgetRaw: 100_000_000n, expiryUnix: BigInt(time) + 3600n });
+  }, onProgress);
+  const fund = (vault: PublicKey, onProgress?: ProgressCallback) => withSol(100_000n, () => client.fundVault(progressWallet, vault, 1_000_000_000n), onProgress);
   return {
     environment, walletMode: true, client, owner: wallet.publicKey, agent, initialVault: latest.vault ? new PublicKey(latest.vault) : null,
     ...(environment === "devnet" && { getWalletSolBalance }),
@@ -49,16 +72,16 @@ export async function connectWalletDashboard(environment: "localnet" | "devnet",
       ? import.meta.env.VITE_DEVNET_RPC_URL || deployment.rpcUrl : deployment.rpcUrl,
     getAssociatedTokenAddressSync(new PublicKey(deployment.inputMint), wallet.publicKey)),
     create,
-    newDemo: async () => {
-      const created = await create();
+    newDemo: async (onProgress) => {
+      const created = await create((stage) => onProgress?.(`Creating vault · ${stage}`));
       if (!created.ok || !created.vault) return created;
-      const funding = await fund(created.vault);
+      const funding = await fund(created.vault, (stage) => onProgress?.(`Funding vault · ${stage}`));
       return { ...funding, vault: created.vault, createSignature: created.signature,
         ...(!funding.ok && { error: `Vault created, but funding failed: ${funding.error}. Use Fund 1,000 to retry.` }) };
     },
     fund,
-    revoke: (vault) => withSol(100_000n, () => client.revoke(wallet, vault)),
-    withdraw: (vault, mint, amount) => withSol(100_000n, () => client.withdraw(wallet, vault, mint, amount)),
+    revoke: (vault, onProgress) => withSol(100_000n, () => client.revoke(progressWallet, vault), onProgress),
+    withdraw: (vault, mint, amount, onProgress) => withSol(100_000n, () => client.withdraw(progressWallet, vault, mint, amount), onProgress),
     faucet: async () => {
       signal?.throwIfAborted();
       const response = await fetch("/api/faucet", { method: "POST", headers: { "content-type": "application/json", "x-aegis-faucet": environment }, body: JSON.stringify({ wallet: wallet.publicKey.toBase58() }), signal });

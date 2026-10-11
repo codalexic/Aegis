@@ -15,6 +15,7 @@ import { Logo } from "./Logo";
 import { SidebarIllustration } from "./Illustration";
 import { TradeBars, type TradeBar } from "./TradeBars";
 import { Notice } from "./Notice";
+import { ProgressButton, Skeleton, VaultSkeleton, LoadingDashboard } from "./Progress";
 import { DevnetSolHint } from "./DevnetSolHint";
 import { needsFaucet, newFundedDemo, withWalletBalanceRefresh } from "./funding";
 import { trackActiveSection } from "./active-section";
@@ -168,6 +169,7 @@ function OwnerApp({ environment, walletMode, wallet, changed, isCurrent, request
   isCurrent(): boolean; requestWallet<T>(action: () => Promise<T>): Promise<T>;
 }) {
   const [connection, setConnection] = useState<DashboardConnection | null>(null);
+  const [actionsBusy, setActionsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     const controller = new AbortController();
@@ -189,11 +191,11 @@ function OwnerApp({ environment, walletMode, wallet, changed, isCurrent, request
     return () => controller.abort();
   }, [environment, walletMode, wallet.publicKey, wallet.signTransaction, isCurrent, requestWallet]);
 
-  const walletControl = (className: string) => walletMode && <button type="button" className={className} disabled={wallet.connecting || wallet.disconnecting} onClick={() => {
+  const walletControl = (className: string) => walletMode && <ProgressButton type="button" className={className} busy={wallet.connecting || wallet.disconnecting} progress={wallet.disconnecting ? "Disconnecting…" : "Connecting…"} disabled={actionsBusy} onClick={() => {
     void (wallet.connected ? wallet.disconnect() : requestWallet(() => wallet.connect())).catch(() => {});
   }}>
     <Icon name="wallet" size={16} />{wallet.connected ? "Disconnect" : "Connect wallet"}
-  </button>;
+  </ProgressButton>;
   const environmentPill = <div className="environment" title={environmentTitle(environment)}><span className="environment-dot" />{environmentShort(environment)}</div>;
   const startBar = <header className="start-bar">
     <a className="brand start-brand" href="/" aria-label="Aegis home"><Logo size={36} withWordmark /></a>
@@ -205,6 +207,7 @@ function OwnerApp({ environment, walletMode, wallet, changed, isCurrent, request
     return <Shell active="overview" hideNav>
       <div className={waitingForWallet ? "start" : "start connecting-screen"}>
         {startBar}
+        <span className="sr-only" role="status" aria-live="polite">{wallet.connecting ? "Approve connection in Phantom…" : wallet.disconnecting ? "Disconnecting wallet…" : ""}</span>
         {waitingForWallet ? <>
           <div className="start-hero">
             <h1>AI agents can be tricked. Aegis still enforces the limits.</h1>
@@ -215,14 +218,11 @@ function OwnerApp({ environment, walletMode, wallet, changed, isCurrent, request
           {environment === "devnet" && <TryIt />}
         </> : error
           ? <div className="connecting"><Notice tone="error" message={error} /></div>
-          : <div className="connecting" role="status" aria-live="polite" aria-busy="true">
-            <div className="connecting-mark" aria-hidden="true"><span className="connecting-ring" /><Logo size={40} /></div>
-            <p>Connecting to the vault…</p>
-          </div>}
+          : <LoadingDashboard />}
       </div>
     </Shell>;
   }
-  return <Dashboard key={`${environment}:${connection.owner.toBase58()}`} connection={connection} isCurrent={isCurrent} toolbar={<>{environmentPill}{walletControl("small rail-action")}</>} />;
+  return <Dashboard key={`${environment}:${connection.owner.toBase58()}`} connection={connection} isCurrent={isCurrent} onBusyChange={setActionsBusy} toolbar={<>{environmentPill}{walletControl("small rail-action")}</>} />;
 }
 
 const TRY_STEPS: { title: string; body: ReactNode }[] = [
@@ -266,16 +266,17 @@ function TryIt() {
 /* --------------------------------------------------------------------------
    Small presentational pieces
    -------------------------------------------------------------------------- */
-function Tile({ tone, icon, label, value, unit, sub, subTone, testId, children }: {
+function Tile({ tone, icon, label, value, unit, sub, subTone, testId, children, loading }: {
   tone: "lavender" | "mist" | "mint" | "cream"; icon: IconName; label: string; value: string; unit?: string;
-  sub?: ReactNode; subTone?: "good" | "bad" | "warning"; testId?: string; children?: ReactNode;
+  sub?: ReactNode; subTone?: "good" | "bad" | "warning"; testId?: string; children?: ReactNode; loading?: boolean;
 }) {
   return <div className={`tile tile--${tone}`}>
     <span className="tile-icon"><Icon name={icon} /></span>
     <span className="tile-label">{label}</span>
+    {loading ? <><Skeleton className="skeleton-value" /><Skeleton /></> : <>
     <div className="tile-value"><strong data-testid={testId} className={value === "—" ? "placeholder" : undefined}>{value}</strong>{unit && <small>{unit}</small>}</div>
     {sub && <span className={`tile-sub ${subTone ?? ""}`}>{sub}</span>}
-    {children}
+    {children}</>}
   </div>;
 }
 
@@ -293,18 +294,17 @@ export function FundingStep({ state, text, balance, hasFaucet, hasVault, finishe
 }) {
   if (finished) return <Step number={2} state={state} title="Add testUSDC"
     text="Start again with a funded vault.">
-    <button className="primary" disabled={locked}
-      data-busy={busy === "New demo vault" ? "true" : undefined} aria-busy={busy === "New demo vault" || undefined}
-      onClick={onNewDemo}>New demo vault</button>
+    <ProgressButton className="primary" disabled={locked} busy={busy === "New demo vault"} progress="Setting up…"
+      onClick={onNewDemo}>New demo vault</ProgressButton>
   </Step>;
-  const getTokens = needsFaucet(balance, hasFaucet);
+  const getTokens = busy === "Get testUSDC" || (busy !== "Fund vault" && needsFaucet(balance, hasFaucet));
   const isBusy = busy === (getTokens ? "Get testUSDC" : "Fund vault");
   return <Step number={2} state={state} title="Add testUSDC" text={<>
     {text}<br />Wallet: {balance === null ? "—" : amount(balance)} testUSDC
   </>}>
-    <button className={state === "next" ? "primary" : ""} disabled={!hasVault || locked}
-      data-busy={isBusy ? "true" : undefined} aria-busy={isBusy || undefined}
-      onClick={getTokens ? onFaucet : onFund}>{getTokens ? "Get 1,000 testUSDC" : "Fund 1,000"}</button>
+    <ProgressButton className={state === "next" ? "primary" : ""} disabled={!hasVault || locked}
+      busy={isBusy} progress={getTokens ? "Getting tokens…" : "Funding…"}
+      onClick={getTokens ? onFaucet : onFund}>{getTokens ? "Get 1,000 testUSDC" : "Fund 1,000"}</ProgressButton>
   </Step>;
 }
 
@@ -323,8 +323,8 @@ function KeyRow({ label, value, note }: { label: string; value: string; note?: s
    Dashboard
    -------------------------------------------------------------------------- */
 const alwaysCurrent = () => true;
-export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent }: {
-  connection: DashboardConnection; toolbar: ReactNode; isCurrent?(): boolean;
+export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBusyChange }: {
+  connection: DashboardConnection; toolbar: ReactNode; isCurrent?(): boolean; onBusyChange?(busy: boolean): void;
 }) {
   const mounted = useRef(true);
   useEffect(() => {
@@ -351,6 +351,11 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent }: {
   const polling = useRef<ReturnType<typeof startDashboardPolling> | null>(null);
   const { active, onNavigate } = useActiveSection(ready);
   const narrow = useMediaQuery("(max-width: 1240px)");
+  const [stage, setStage] = useState("");
+  const [reloading, setReloading] = useState(false);
+  const loading = !ready || reloading;
+  useEffect(() => { onBusyChange?.(!!busy || agentBusy || !ready); }, [busy, agentBusy, ready, onBusyChange]);
+  const reportProgress = (text: string) => { if (current()) setStage(text); };
 
   const refreshWalletBalance = useCallback(async () => {
     if (!current()) return;
@@ -410,6 +415,12 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent }: {
     finally { refreshing.current = false; }
   }, [environment, refreshState, refreshActivity, current]);
 
+  const refreshAfterAgent = async () => {
+    if (current()) setReloading(true);
+    try { await refresh(); }
+    finally { if (current()) setReloading(false); }
+  };
+
   useEffect(() => {
     const onError = (error: unknown) => {
       if (!current() || isWalletDisconnected(error)) return;
@@ -448,35 +459,39 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent }: {
     if (!current() || running.current || agentBusy) return;
     running.current = true;
     setBusy(label);
+    setStage(label === "Get testUSDC" ? "Getting testUSDC…" : label === "New demo vault" ? "Setting up demo vault…" : connection.walletMode ? "Preparing…" : `${label}…`);
     setNotice(null);
     try {
       // Keep actions locked through a fresh read, even if polling is hidden or
       // waiting for activity history. Also reconcile partial successes/failures.
-      const text = await withWalletBalanceRefresh(action, refreshWalletBalance);
+      const text = await withWalletBalanceRefresh(action, async () => {
+        if (current()) { setStage("Refreshing vault…"); setReloading(true); }
+        await refreshWalletBalance();
+      });
       if (current()) setNotice({ ok: true, text });
     } catch (error) {
       if (current() && !isWalletDisconnected(error)) setNotice({ ok: false, text: error });
     } finally {
       try { await refresh(); } catch { if (current()) setNotice((notice) => notice?.ok === false ? notice : { ok: false, text: "Could not refresh the vault. Retrying…" }); }
       running.current = false;
-      if (current()) setBusy(null);
+      if (current()) { setBusy(null); setStage(""); setReloading(false); }
     }
   }
 
   const create = () => run("Create vault", async () => {
-    const result = track(await connection.create(), { label: "Create vault", amount: "—" });
+    const result = track(await connection.create(reportProgress), { label: "Create vault", amount: "—" });
     if (!result.vault) throw new Error("No vault address was returned.");
     address.current = result.vault;
     return "Vault created. Next: add 1,000 testUSDC.";
   });
 
   const fund = () => run("Fund vault", async () => {
-    track(await connection.fund(address.current!), { label: "Fund vault", amount: "1,000 testUSDC" });
+    track(await connection.fund(address.current!, reportProgress), { label: "Fund vault", amount: "1,000 testUSDC" });
     return `Added 1,000 testUSDC. Next: ${environment === "mock" ? "try a trade" : "try the agent"} below.`;
   });
 
   const newDemo = () => run("New demo vault", async () => {
-    const result = await newFundedDemo(connection, walletBalance, refreshWalletBalance);
+    const result = await newFundedDemo(connection, walletBalance, refreshWalletBalance, reportProgress);
     if (!current()) return "";
     if (result.vault) {
       address.current = result.vault;
@@ -492,7 +507,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent }: {
   });
 
   const revoke = () => run("Revoke agent", async () => {
-    track(await connection.revoke(address.current!), { label: "Revoke agent", amount: "—" });
+    track(await connection.revoke(address.current!, reportProgress), { label: "Revoke agent", amount: "—" });
     return "Agent revoked. You can still withdraw your funds.";
   });
 
@@ -502,7 +517,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent }: {
       [state.inputMint, state.inputBalanceRaw, 6, "testUSDC"],
       [state.outputMint, state.outputBalanceRaw, 9, "testSOL"],
     ] as const) {
-      if (balance > 0n) track(await connection.withdraw(state.address, mint, balance), {
+      if (balance > 0n) track(await connection.withdraw(state.address, mint, balance, (stage) => reportProgress(`${symbol} · ${stage}`)), {
         label: "Withdraw", amount: `${amount(balance, decimals)} ${symbol}`,
       });
     }
@@ -533,7 +548,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent }: {
   const hasInput = !!vault && vault.inputBalanceRaw > 0n;
   const secondsLeft = vault ? (vault.expiryUnix > now ? vault.expiryUnix - now : 0n) : 0n;
   const lifePercent = vault ? Math.min(100, Number(secondsLeft * 100n / VAULT_LIFETIME)) : 0;
-  const locked = !!busy || agentBusy;
+  const locked = !!busy || agentBusy || loading;
   const blocked = activity.filter((item) => !item.ok).length;
   const swaps = activity.filter((item) => details.current.get(item.signature)?.label === "Agent swap");
   const allowedSwaps = swaps.filter((item) => item.ok).length;
@@ -554,9 +569,8 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent }: {
     : <>Fixed at vault creation.</>;
 
   /* ---- sidebar CTA + rail ---- */
-  const busyProps = (label: string) => busy === label ? { "data-busy": "true" as const, "aria-busy": true as const } : {};
   const cta = <>
-    <button className="primary" disabled={!ready || locked} {...busyProps("New demo vault")} onClick={() => void newDemo()}><Icon name="sparkle" size={16} />New demo vault</button>
+    <ProgressButton className="primary" disabled={!ready || locked} busy={busy === "New demo vault"} progress="Setting up…" onClick={() => void newDemo()}><Icon name="sparkle" size={16} />New demo vault</ProgressButton>
     <span className="sidebar-hint">Create and fund in one step.</span>
   </>;
 
@@ -600,33 +614,35 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent }: {
       {swaps.length > 0 && <span className="count-chip"><strong className={blocked === 0 ? "zero" : ""}>{blocked}</strong>{blocked === 1 ? "attack blocked" : "attacks blocked"}</span>}
     </div>
     <div className="dashboard-notice">
-      {busy ? <Notice tone="busy" message={busy === "Create vault" ? "Creating your vault…" : busy === "Fund vault" ? "Adding 1,000 testUSDC…" : busy === "New demo vault" ? "Creating and funding a demo vault…" : busy === "Withdraw all" ? "Moving everything back to your wallet…" : busy === "Revoke agent" ? "Stopping the agent…" : `${busy}…`} />
+      {busy ? <Notice tone="busy" message={`${busy} · ${stage}`} />
         : notice && (notice.ok
           ? <Notice tone="success" message={notice.text} />
           : <Notice tone="error" message={notice.text} onDismiss={() => setNotice(null)} />)}
+      {!busy && !ready && <Notice tone="busy" message="Loading vault…" />}
     </div>
 
-    <section id="overview" className="tiles" aria-label="Vault at a glance">
-      <Tile tone="lavender" icon="wallet" label="In the vault" value={vault ? amount(vault.inputBalanceRaw) : "0"} unit="testUSDC" testId="input-balance"
+    <section id="overview" className="tiles" aria-label="Vault at a glance" aria-busy={loading}>
+      <Tile loading={loading} tone="lavender" icon="wallet" label="In the vault" value={vault ? amount(vault.inputBalanceRaw) : "0"} unit="testUSDC" testId="input-balance"
         sub={<><span className="token-dot" aria-hidden="true" />{hasInput ? "Ready for the agent to trade" : "Fund the vault to start"}</>} />
-      <Tile tone="mist" icon="coins" label="Received from trades" value={vault ? amount(vault.outputBalanceRaw, 9) : "0"} unit="testSOL" testId="output-balance"
+      <Tile loading={loading} tone="mist" icon="coins" label="Received from trades" value={vault ? amount(vault.outputBalanceRaw, 9) : "0"} unit="testSOL" testId="output-balance"
         sub={<><span className="token-dot sol" aria-hidden="true" />{vault ? "100 testUSDC buys 1 testSOL" : "Nothing received yet"}</>} />
-      <Tile tone="mint" icon="chart" label="Budget left" value={vault ? amount(remaining) : "0"} unit="testUSDC" testId="remaining-budget">
+      <Tile loading={loading} tone="mint" icon="chart" label="Budget left" value={vault ? amount(remaining) : "0"} unit="testUSDC" testId="remaining-budget">
         <div className={`budget-section ${budgetLevel}`}>
           <progress aria-label="Remaining budget" aria-valuetext={vault ? `${amount(remaining)} of ${amount(vault.budgetRaw)} testUSDC remaining` : "No vault"} value={remainingBasisPoints.toString()} max="10000" />
           <span className="budget-number"></span>
         </div>
       </Tile>
-      <Tile tone="cream" icon="shield" label="Attacks blocked" value={String(blocked)} subTone={blocked > 0 ? "good" : undefined}
+      <Tile loading={loading} tone="cream" icon="shield" label="Attacks blocked" value={String(blocked)} subTone={blocked > 0 ? "good" : undefined}
         sub={<><Icon name={blocked > 0 ? "check" : "info"} size={14} />{swaps.length === 0 ? "No agent requests yet" : `${allowedSwaps} ${allowedSwaps === 1 ? "trade" : "trades"} allowed`}</>} />
     </section>
 
-    <section id="vault" className="card vault-card" aria-labelledby="vault-title">
-      <div className="card-heading"><h2 id="vault-title">Trading vault</h2><span className={`status ${status.toLowerCase().replace(" ", "-")}`} data-testid="vault-status"><span className="small-dot" aria-hidden="true" />{status}</span></div>
+    <section id="vault" className="card vault-card" aria-labelledby="vault-title" aria-busy={loading || !!busy}>
+      <div className="card-heading"><h2 id="vault-title">Trading vault</h2><span className={`status ${status.toLowerCase().replace(" ", "-")}`} data-testid="vault-status"><span className="small-dot" aria-hidden="true" />{loading ? "Loading…" : status}</span></div>
+      {loading ? <VaultSkeleton /> : <>
       {connection.getWalletSolBalance && <DevnetSolHint readBalance={connection.getWalletSolBalance} />}
       <div className="steps">
         <Step number={1} state={step1} title="Vault setup" text="">
-          <button className={step1 === "next" ? "primary" : ""} disabled={!ready || !!vault || locked} {...busyProps("Create vault")} onClick={() => void create()}>Create vault</button>
+          <ProgressButton className={step1 === "next" ? "primary" : ""} disabled={!ready || !!vault || locked} busy={busy === "Create vault"} progress="Creating…" onClick={() => void create()}>Create vault</ProgressButton>
         </Step>
         <FundingStep state={step2} balance={walletBalance} hasFaucet={!!connection.faucet} hasVault={!!vault} finished={finished} locked={locked} busy={busy}
           text={needsFaucet(walletBalance, !!connection.faucet) ? (vault ? "Get testUSDC before funding."
@@ -640,21 +656,22 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent }: {
       <div className="owner-controls">
         <p>{!vault ? <><strong>Owner controls.</strong> Once set up, funds stay withdrawable after revocation or expiry.</> : <><strong>Owner controls.</strong> Funds stay withdrawable after revocation or expiry.</>}</p>
         <div className="buttons">
-          <button className="danger" disabled={!vault || vault.revoked || locked} {...busyProps("Revoke agent")} onClick={() => void revoke()}>Revoke agent</button>
-          <button disabled={!hasBalance || locked} {...busyProps("Withdraw all")} onClick={() => void withdraw()}>Withdraw all</button>
+          <ProgressButton className="danger" disabled={!vault || vault.revoked || locked} busy={busy === "Revoke agent"} progress="Revoking…" onClick={() => void revoke()}>Revoke agent</ProgressButton>
+          <ProgressButton disabled={!hasBalance || locked} busy={busy === "Withdraw all"} progress="Withdrawing…" onClick={() => void withdraw()}>Withdraw all</ProgressButton>
         </div>
       </div>
       {vault && <p className="vault-address"><Icon name="vault" size={14} />Vault <code title={vault.address.toBase58()} aria-label={vault.address.toBase58()}>{shorten(vault.address.toBase58())}</code></p>}
+      </>}
     </section>
 
     {narrow && <div className="rail rail--inline">{rail}</div>}
 
-    {environment !== "mock" ? <AgentConsole environment={environment} walletMode={connection.walletMode} key={address.current?.toBase58()} vault={vault} finished={finished} disabled={!!busy} onBusy={setAgentBusy} onComplete={refresh} />
+    {environment !== "mock" ? <AgentConsole environment={environment} walletMode={connection.walletMode} key={address.current?.toBase58()} vault={vault} finished={finished} disabled={!!busy || loading} onBusy={setAgentBusy} onComplete={refreshAfterAgent} />
       : <section id="agent" className="card trade-card" aria-labelledby="trade-title">
         <div><h2 id="trade-title">Try an agent trade</h2><p className="muted">Try an amount above the per-trade cap.</p></div>
         <form onSubmit={trade}>
           <label htmlFor="trade-amount">Amount <span>testUSDC</span></label>
-          <div className="trade-controls"><input id="trade-amount" inputMode="decimal" value={tradeAmount} onChange={(event) => setTradeAmount(event.target.value)} disabled={!vault || finished || !!busy} autoComplete="off" /><button className="primary" disabled={!vault || finished || !!busy} {...busyProps("Agent trade")} type="submit">Swap</button></div>
+          <div className="trade-controls"><input id="trade-amount" inputMode="decimal" value={tradeAmount} onChange={(event) => setTradeAmount(event.target.value)} disabled={!vault || finished || !!busy} autoComplete="off" /><ProgressButton className="primary" disabled={!vault || finished || !!busy} busy={busy === "Agent trade"} progress="Swapping…" type="submit">Swap</ProgressButton></div>
         </form>
       </section>}
 

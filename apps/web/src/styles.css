@@ -78,9 +78,21 @@ button:disabled { background: var(--mist); color: var(--ink-3); border-color: va
 /* in-place busy state on the pressed action button (App.tsx sets data-busy + aria-busy) */
 button[data-busy] { color: var(--ink-2); border-color: var(--line-2); background: #fff; box-shadow: none; }
 button[data-busy] > svg { display: none; }
-button[data-busy]::before { content: ""; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line-2); border-top-color: var(--ink); animation: spin 700ms linear infinite; flex-shrink: 0; }
+.progress-spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin 700ms linear infinite; flex-shrink: 0; }
+.progress-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 button.primary[data-busy] { background: var(--accent); border-color: var(--accent); color: rgba(255, 255, 255, .72); }
-button.primary[data-busy]::before { border-color: rgba(255, 255, 255, .3); border-top-color: #fff; }
+
+/* Static placeholders also work without motion, and keep the existing palette. */
+.skeleton { display: block; width: 100%; height: 14px; border-radius: 6px; background: currentColor; opacity: .12; }
+.skeleton-short { width: 60%; }
+.skeleton-value { width: 65%; height: 36px; margin: 12px 0; }
+.skeleton-circle { width: 32px; height: 32px; border-radius: 50%; }
+.skeleton-button { width: 120px; height: 42px; border-radius: 12px; }
+.vault-skeleton { display: grid; gap: 24px; padding: 22px 0; }
+.skeleton-row { display: grid; grid-template-columns: 32px minmax(0, 1fr) 120px; align-items: center; gap: 16px; }
+.skeleton-row > div { display: grid; gap: 10px; }
+.loading-dashboard.shell--dark { display: grid; gap: 24px; background: transparent; box-shadow: none; }
+.loading-dashboard .tile, .loading-dashboard .card { color: var(--ink); }
 
 /* --------------------------------------------------------------------------
    Shell: sidebar · content · rail
@@ -543,6 +555,8 @@ progress::-moz-progress-bar { border-radius: 3px; background: var(--budget-color
 .agent-placeholder { padding: 14px 16px; border-radius: 12px; border: 1px dashed var(--line-2); color: var(--ink-3); font-size: 13px; text-align: center; background: #fff; }
 .agent-running { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-radius: 12px; background: #fff; box-shadow: var(--shadow-card); font-size: 14px; }
 .agent-running::before { content: ""; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line-2); border-top-color: var(--ink); animation: spin 700ms linear infinite; flex-shrink: 0; }
+.agent-running strong { display: block; color: var(--ink); font-size: 16px; }
+.agent-running p { margin-top: 4px; font-size: 13px; }
 .agent-outcome { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: center; gap: 14px; padding: 16px 18px; border-radius: 14px; animation: result-in 180ms ease-out; }
 .agent-outcome.executed { background: var(--good-bg); color: var(--good-ink); }
 .agent-outcome.blocked { background: var(--bad-bg); color: var(--bad-ink); }

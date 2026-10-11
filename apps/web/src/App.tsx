@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode, type CSSProperties } from "react";
 import { PublicKey } from "@solana/web3.js";
 import type { AegisEnvironment, Activity, TxResult, VaultState } from "@aegis/sdk";
 import { rawAmountToUi, uiAmountToRaw } from "../../../packages/sdk/src/amounts";
@@ -17,7 +17,6 @@ import { TradeBars, type TradeBar } from "./TradeBars";
 import { Notice } from "./Notice";
 import { DevnetSolHint } from "./DevnetSolHint";
 import { needsFaucet, newFundedDemo, withWalletBalanceRefresh } from "./funding";
-import { trackActiveSection } from "./active-section";
 
 const nowUnix = () => BigInt(Math.floor(Date.now() / 1000));
 const shorten = (value: string) => `${value.slice(0, 4)}…${value.slice(-4)}`;
@@ -50,26 +49,100 @@ const environmentTitle = (environment: AegisEnvironment) => environment === "dev
 /* --------------------------------------------------------------------------
    Shell: sidebar · content · rail. Pure layout; all state lives in Dashboard.
    -------------------------------------------------------------------------- */
-const NAV: { id: string; label: string; icon: IconName }[] = [
-  { id: "overview", label: "Overview", icon: "home" },
-  { id: "vault", label: "Vault", icon: "vault" },
-  { id: "agent", label: "Agent", icon: "robot" },
-  { id: "activity", label: "Activity", icon: "activity" },
-];
+const NAV = [
+  { id: "vault", label: "Vault", icon: "vault" as IconName },
+  { id: "agent", label: "Agent", icon: "robot" as IconName },
+  { id: "stats", label: "Stats", icon: "chart" as IconName },
+  { id: "activity", label: "Activity", icon: "activity" as IconName },
+] as const;
+type PageId = (typeof NAV)[number]["id"];
 
-function Shell({ active, onNavigate, cta, rail, hideNav, children }: {
-  active: string; onNavigate?: (event: MouseEvent<HTMLAnchorElement>, id: string) => void;
-  cta?: ReactNode; rail?: ReactNode; hideNav?: boolean; children: ReactNode;
+const PAGE_TITLE: Record<PageId, { eyebrow?: string; title: string }> = {
+  vault: { eyebrow: "Your vault", title: "AI agents can be tricked. Aegis still enforces the limits." },
+  agent: { eyebrow: "Agent", title: "Push the limits. Aegis blocks what you forbid." },
+  stats: { eyebrow: "Stats", title: "Requests against the per-trade cap." },
+  activity: { eyebrow: "Activity", title: "Every trade and every blocked attempt." },
+};
+
+function pageFromHash(): PageId {
+  const hash = typeof window === "undefined" ? "" : window.location?.hash ?? "";
+  const raw = hash.replace(/^#\/?/, "");
+  if (raw === "overview" || raw === "home") return "vault";
+  return NAV.some((item) => item.id === raw) ? raw as PageId : "vault";
+}
+
+/** Hash routes (`#/vault`) so the sidebar opens one page at a time. */
+function usePage(): [PageId, (id: PageId) => void] {
+  const [page, setPage] = useState<PageId>(pageFromHash);
+  useEffect(() => {
+    const onHash = () => setPage(pageFromHash());
+    window.addEventListener("hashchange", onHash);
+    if (!window.location.hash) window.location.replace(`#/${pageFromHash()}`);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  useEffect(() => {
+    document.querySelector<HTMLElement>(".content")?.scrollTo({ top: 0 });
+  }, [page]);
+  const go = useCallback((id: PageId) => {
+    const next = `#/${id}`;
+    if (window.location.hash !== next) window.location.hash = next;
+    else setPage(id);
+  }, []);
+  return [page, go];
+}
+
+function Nav({ active }: { active: string }) {
+  const navRef = useRef<HTMLElement>(null);
+  const [pill, setPill] = useState<{ x: number; y: number; w: number; h: number; ready: boolean }>({
+    x: 0, y: 0, w: 0, h: 0, ready: false,
+  });
+
+  const measure = useCallback(() => {
+    const nav = navRef.current;
+    const link = nav?.querySelector<HTMLElement>("a[aria-current='true']");
+    if (!nav || !link) return;
+    setPill({ x: link.offsetLeft, y: link.offsetTop, w: link.offsetWidth, h: link.offsetHeight, ready: true });
+  }, []);
+
+  useLayoutEffect(() => { measure(); }, [active, measure]);
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav || typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measure);
+      return () => window.removeEventListener("resize", measure);
+    }
+    const ro = new ResizeObserver(measure);
+    ro.observe(nav);
+    window.addEventListener("resize", measure);
+    return () => { ro.disconnect(); window.removeEventListener("resize", measure); };
+  }, [measure]);
+
+  const pillStyle = {
+    transform: `translate3d(${pill.x}px, ${pill.y}px, 0)`,
+    width: pill.w,
+    height: pill.h,
+  } satisfies CSSProperties;
+
+  return <nav className="nav" aria-label="Pages" ref={navRef}>
+    <span className={`nav-pill${pill.ready ? " is-ready" : ""}`} style={pillStyle} aria-hidden="true" />
+    {NAV.map((item) => (
+      <a key={item.id} href={`#/${item.id}`} aria-current={active === item.id ? "true" : undefined}>
+        <Icon name={item.icon} size={18} />{item.label}
+      </a>
+    ))}
+  </nav>;
+}
+
+function Shell({ active, cta, rail, hideNav, children }: {
+  active: string; cta?: ReactNode; rail?: ReactNode; hideNav?: boolean; children: ReactNode;
 }) {
   if (hideNav) {
     return <div className="shell shell--start"><main className="content">{children}</main></div>;
   }
   return <div className={`shell shell--dark${rail ? "" : " shell--no-rail"}`}>
     <aside className="sidebar">
-      <a className="brand" href="/" aria-label="Aegis home"><Logo size={30} withWordmark /></a>
-      <nav className="nav" aria-label="Sections">
-        {NAV.map((item) => <a key={item.id} href={`#${item.id}`} onClick={(event) => onNavigate?.(event, item.id)} aria-current={active === item.id ? "true" : undefined}><Icon name={item.icon} size={18} />{item.label}</a>)}
-      </nav>
+      <a className="brand" href="#/vault" aria-label="Aegis home"><Logo size={30} withWordmark /></a>
+      <Nav active={active} />
       <div className="sidebar-foot">
         <SidebarIllustration className="sidebar-illustration" />
         {cta}
@@ -78,38 +151,6 @@ function Shell({ active, onNavigate, cta, rail, hideNav, children }: {
     <main className="content">{children}</main>
     {rail ? <aside className="rail">{rail}</aside> : null}
   </div>;
-}
-
-/** Highlights the sidebar link for whichever section is nearest the top of the viewport. */
-function useActiveSection(ready: boolean) {
-  const [active, setActive] = useState(() => {
-    const hash = typeof window === "undefined" ? "" : window.location?.hash;
-    return NAV.find((item) => `#${item.id}` === hash)?.id ?? NAV[0].id;
-  });
-  const tracker = useRef<ReturnType<typeof trackActiveSection> | null>(null);
-  useEffect(() => {
-    tracker.current = trackActiveSection(NAV.map((item) => item.id), setActive);
-    return () => { tracker.current?.stop(); tracker.current = null; };
-  }, [ready]);
-  const onNavigate = (event: MouseEvent<HTMLAnchorElement>, id: string) => {
-    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    event.preventDefault();
-    if (tracker.current?.select(id) && window.location.hash !== `#${id}`) window.history.pushState(null, "", `#${id}`);
-  };
-  return { active, onNavigate };
-}
-
-/** True while the viewport matches `query`; tracks changes so the rail can move inline below 1240px. */
-function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
-  useEffect(() => {
-    const mql = window.matchMedia(query);
-    const on = () => setMatches(mql.matches);
-    on();
-    mql.addEventListener("change", on);
-    return () => mql.removeEventListener("change", on);
-  }, [query]);
-  return matches;
 }
 
 export function App() {
@@ -149,7 +190,7 @@ export function App() {
 
   if (!connection) {
     const waitingForWallet = walletMode && !wallet.connected;
-    return <Shell active="overview" hideNav>
+    return <Shell active="vault" hideNav>
       <div className={waitingForWallet ? "start" : "start connecting-screen"}>
         {startBar}
         {waitingForWallet ? <>
@@ -157,7 +198,7 @@ export function App() {
             <h1>AI agents can be tricked. Aegis still enforces the limits.</h1>
             {error
               ? <Notice tone="error" message={error} />
-              : <p className="connecting-hint" role="status">Devnet SOL covers transaction fees.</p>}
+              : <p className="connecting-hint" role="status">You only need a wallet and a bit of SOL on Solana Devnet to use your agent safely with us.</p>}
           </div>
           {environment === "devnet" && <TryIt />}
         </> : error
@@ -169,7 +210,7 @@ export function App() {
       </div>
     </Shell>;
   }
-  return <Dashboard key={`${environment}:${connection.owner.toBase58()}`} connection={connection} toolbar={<>{environmentPill}{walletControl("small rail-action")}</>} />;
+  return <Dashboard key={`${environment}:${connection.owner.toBase58()}`} connection={connection} toolbar={<>{environmentPill}{walletControl("start-connect small rail-action")}</>} />;
 }
 
 const TRY_STEPS: { title: string; body: ReactNode }[] = [
@@ -178,24 +219,24 @@ const TRY_STEPS: { title: string; body: ReactNode }[] = [
     body: <>Download from <a href="https://phantom.com/download" target="_blank" rel="noreferrer">phantom.com</a></>,
   },
   {
-    title: "Switch to devnet",
-    body: "In Phantom: Settings → Developer Settings → Testnet Mode → Solana Devnet.",
+    title: "Point Phantom at Devnet",
+    body: "In Phantom: Settings → Developer Settings → turn on Testnet Mode → choose Solana Devnet. Your mainnet funds stay untouched.",
   },
   {
     title: "Connect here",
-    body: "Use the top-right button; approve in Phantom.",
+    body: "Hit Connect wallet in the top right, then approve the request in Phantom. That wallet is your identity for this demo.",
   },
   {
-    title: "Try the demo",
-    body: "Create and fund a vault, then test the agent.",
+    title: "Fund a vault and try to break it",
+    body: "Open a New demo vault to get 1,000 testUSDC under the agent's limits - then run the attack scenarios and see what Aegis blocks.",
   },
 ];
 
 function TryIt() {
   return <aside className="try-it" aria-labelledby="try-it-title">
     <header className="try-it-head">
-      <h2 id="try-it-title">Get started</h2>
-      <p className="try-it-lead">You’ll approve transactions in Phantom.</p>
+      <h2 id="try-it-title">How to try it?</h2>
+      <p className="try-it-lead">A quick walkthrough on Solana Devnet for you to get started.</p>
     </header>
     <ol className="try-it-steps">
       {TRY_STEPS.map((step, index) => <li key={step.title} data-step={index + 1}>
@@ -206,7 +247,7 @@ function TryIt() {
         </div>
       </li>)}
     </ol>
-    <p className="try-it-foot">Need devnet SOL? Use the <a href="https://faucet.solana.com" target="_blank" rel="noreferrer">Solana Faucet</a>.</p>
+    <p className="try-it-foot">Out of fee SOL? Use the <a href="https://faucet.solana.com" target="_blank" rel="noreferrer">Solana Faucet</a>.</p>
   </aside>;
 }
 
@@ -218,7 +259,7 @@ function Tile({ tone, icon, label, value, unit, sub, subTone, testId, children }
   sub?: ReactNode; subTone?: "good" | "bad" | "warning"; testId?: string; children?: ReactNode;
 }) {
   return <div className={`tile tile--${tone}`}>
-    <span className="tile-icon"><Icon name={icon} /></span>
+    <span className="tile-icon"><Icon name={icon} size={22} /></span>
     <span className="tile-label">{label}</span>
     <div className="tile-value"><strong data-testid={testId} className={value === "—" ? "placeholder" : undefined}>{value}</strong>{unit && <small>{unit}</small>}</div>
     {sub && <span className={`tile-sub ${subTone ?? ""}`}>{sub}</span>}
@@ -238,7 +279,7 @@ export function FundingStep({ state, text, balance, hasFaucet, hasVault, finishe
   state: "done" | "next" | "todo"; text: string; balance: bigint | null; hasFaucet: boolean;
   hasVault: boolean; finished: boolean; locked: boolean; busy: string | null; onFaucet(): void; onFund(): void; onNewDemo(): void;
 }) {
-  if (finished) return <Step number={2} state={state} title="Add testUSDC"
+  if (finished) return <Step number={2} state={state} title="Add 1,000 testUSDC"
     text="Start again with a funded vault.">
     <button className="primary" disabled={locked}
       data-busy={busy === "New demo vault" ? "true" : undefined} aria-busy={busy === "New demo vault" || undefined}
@@ -246,8 +287,8 @@ export function FundingStep({ state, text, balance, hasFaucet, hasVault, finishe
   </Step>;
   const getTokens = needsFaucet(balance, hasFaucet);
   const isBusy = busy === (getTokens ? "Get testUSDC" : "Fund vault");
-  return <Step number={2} state={state} title="Add testUSDC" text={<>
-    {text}<br />Wallet: {balance === null ? "—" : amount(balance)} testUSDC
+  return <Step number={2} state={state} title="Add 1,000 testUSDC" text={<>
+    {text} Wallet: {balance === null ? "—" : amount(balance)} testUSDC
   </>}>
     <button className={state === "next" ? "primary" : ""} disabled={!hasVault || locked}
       data-busy={isBusy ? "true" : undefined} aria-busy={isBusy || undefined}
@@ -278,6 +319,7 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
   const [walletBalance, setWalletBalance] = useState<bigint | null>(null);
   const balanceRequest = useRef(0);
   const [activity, setActivity] = useState<Activity[]>([]);
+  const [activityReady, setActivityReady] = useState(false);
   const [now, setNow] = useState(nowUnix);
   const [busy, setBusy] = useState<string | null>(null);
   const [agentBusy, setAgentBusy] = useState(false);
@@ -287,8 +329,7 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
   const refreshing = useRef(false);
   const currentState = useRef<VaultState | null>(null);
   const polling = useRef<ReturnType<typeof startDashboardPolling> | null>(null);
-  const { active, onNavigate } = useActiveSection(ready);
-  const narrow = useMediaQuery("(max-width: 1240px)");
+  const [page, go] = usePage();
 
   const refreshWalletBalance = useCallback(async () => {
     const request = ++balanceRequest.current;
@@ -300,7 +341,10 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
   const refreshState = useCallback(async () => {
     setNow(nowUnix());
     await refreshWalletBalance();
-    if (!address.current) return;
+    if (!address.current) {
+      setActivityReady(true);
+      return;
+    }
     const selected = address.current;
     try {
       const state = await client.getVault(selected);
@@ -312,7 +356,7 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
       if (address.current !== selected) return;
       if (error instanceof Error && error.message === "VaultNotFound") {
         currentState.current = null;
-        setVault(null); setActivity([]); setReady(true); return;
+        setVault(null); setActivity([]); setReady(true); setActivityReady(true); return;
       }
       throw error;
     }
@@ -320,19 +364,26 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
 
   const refreshActivity = useCallback(async () => {
     const selected = address.current, state = currentState.current;
-    if (!selected || !state || !state.address.equals(selected)) return;
-    const history = await client.listActivity(selected);
-    const read = async (item: Activity) => {
-      const detail = await connection.readDetail!(item.signature, state);
-      if (detail && address.current === selected) details.current.set(item.signature, detail);
-    };
-    if (connection.readDetail) {
-      const missing = history.filter((item) => !details.current.has(item.signature));
-      if (environment === "devnet") {
-        for (const item of missing) await read(item);
-      } else await Promise.all(missing.map(read));
+    if (!selected || !state || !state.address.equals(selected)) {
+      setActivityReady(true);
+      return;
     }
-    if (address.current === selected) setActivity(history);
+    try {
+      const history = await client.listActivity(selected);
+      const read = async (item: Activity) => {
+        const detail = await connection.readDetail!(item.signature, state);
+        if (detail && address.current === selected) details.current.set(item.signature, detail);
+      };
+      if (connection.readDetail) {
+        const missing = history.filter((item) => !details.current.has(item.signature));
+        if (environment === "devnet") {
+          for (const item of missing) await read(item);
+        } else await Promise.all(missing.map(read));
+      }
+      if (address.current === selected) setActivity(history);
+    } finally {
+      if (address.current === selected) setActivityReady(true);
+    }
   }, [client, connection, environment]);
 
   const refresh = useCallback(async () => {
@@ -395,6 +446,7 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
     const result = track(await connection.create(), { label: "Create vault", amount: "—" });
     if (!result.vault) throw new Error("No vault address was returned.");
     address.current = result.vault;
+    setActivityReady(false);
     return "Vault created. Next: add 1,000 testUSDC.";
   });
 
@@ -411,6 +463,7 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
       setVault(null);
       setActivity([]);
       setReady(false);
+      setActivityReady(false);
     }
     if (result.createSignature) track({ ok: true, signature: result.createSignature }, { label: "Create vault", amount: "—" });
     track(result, { label: "Fund vault", amount: "1,000 testUSDC" });
@@ -438,7 +491,7 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
 
   function trade(event: FormEvent) {
     event.preventDefault();
-    if (finished) return;
+    if (!vault || vault.revoked || now >= vault.expiryUnix) return;
     void run("Agent trade", async () => {
       let raw: bigint;
       try { raw = uiAmountToRaw(tradeAmount, 6); }
@@ -461,9 +514,9 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
   const secondsLeft = vault ? (vault.expiryUnix > now ? vault.expiryUnix - now : 0n) : 0n;
   const lifePercent = vault ? Math.min(100, Number(secondsLeft * 100n / VAULT_LIFETIME)) : 0;
   const locked = !!busy || agentBusy;
-  const blocked = activity.filter((item) => !item.ok).length;
   const swaps = activity.filter((item) => details.current.get(item.signature)?.label === "Agent swap");
   const allowedSwaps = swaps.filter((item) => item.ok).length;
+  const blocked = swaps.length - allowedSwaps;
   // Oldest → newest for the chart; activity arrives newest first.
   const bars: TradeBar[] = swaps.slice(0, 16).reverse().map((item) => ({
     amount: Number((details.current.get(item.signature)?.amount ?? "0").replace(/[^0-9.]/g, "")) || 0,
@@ -475,56 +528,30 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
   const step1 = vault ? "done" : "next";
   const step2 = hasInput ? "done" : vault && !finished ? "next" : "todo";
   const step3 = swaps.length > 0 ? "done" : hasInput && !finished ? "next" : "todo";
-  const guardLead = !vault ? <>Applies once the vault is created.</>
-    : vault.revoked ? <>Agent is <strong>revoked</strong>.</>
-    : status === "Expired" ? <>Trading permission has <strong>expired</strong>.</>
-    : <>Fixed at vault creation.</>;
+  const stepsDone = (step1 === "done" ? 1 : 0) + (step2 === "done" ? 1 : 0) + (step3 === "done" ? 1 : 0);
+  const guardLead = !vault ? <>No vault yet. Create one and the guardrails switch on.</>
+    : vault.revoked ? <>Agent is <strong>revoked</strong>. It can no longer trade; your funds stay withdrawable.</>
+    : status === "Expired" ? <>Trading permission has <strong>expired</strong>. Withdraw any time.</>
+    : <>Agent may spend up to <strong>{amount(vault.maxTradeRaw)} testUSDC</strong> per trade.</>;
 
-  /* ---- sidebar CTA + rail ---- */
   const busyProps = (label: string) => busy === label ? { "data-busy": "true" as const, "aria-busy": true as const } : {};
   const cta = <>
     <button className="primary" disabled={!ready || locked} {...busyProps("New demo vault")} onClick={() => void newDemo()}><Icon name="sparkle" size={16} />New demo vault</button>
-    <span className="sidebar-hint">Create and fund in one step.</span>
-  </>;
+      </>;
 
-  const rail = <>
-    <div className="rail-top">{toolbar}<span className="avatar" title={owner.toBase58()} aria-label={`Owner ${owner.toBase58()}`}>{owner.toBase58().slice(0, 2).toUpperCase()}</span></div>
-    <section className="rail-card tinted" aria-labelledby="guard-title">
-      <div className="rail-heading"><h2 id="guard-title">Guardrails</h2><span className="rail-badge"><Icon name="shield" size={16} /></span></div>
-      <p className="rail-lead">{guardLead}</p>
-      <p className="rail-sub">Enforced on-chain. The agent cannot change them.</p>
-      <div className="guard-rows">
-        <div className="guard-row"><span className="label">Per-trade cap</span><span className="value">{vault ? amount(vault.maxTradeRaw) : "50"}<small>testUSDC</small></span></div>
-        <div className="guard-row"><span className="label">Total budget</span><span className="value">{vault ? amount(vault.budgetRaw) : "100"}<small>testUSDC</small></span></div>
-        <div className="guard-row"><span className="label">Spent so far</span><span className={`value ${vault ? "" : "placeholder"}`} data-testid="spent">{vault ? amount(vault.spentRaw) : "—"}<small>testUSDC</small></span>
-          <div className={`meter ${budgetLevel}`} role="img" aria-label={vault ? `${spentPercent}% of the budget spent` : "No vault"}><span style={{ width: `${spentPercent}%` }} /></div></div>
-        <div className="guard-row"><span className="label">Time left</span><span className="value" data-testid="expiry">{vault ? countdown(vault.expiryUnix, now) : "1 hour, from creation"}</span>
-          <div className="meter neutral" role="img" aria-label={vault ? `${lifePercent}% of the hour remaining` : "No vault"}><span style={{ width: `${lifePercent}%` }} /></div></div>
-        <div className="guard-row"><span className="label">Output goes to</span><span className="value"><Icon name="lock" size={14} /> This vault only</span></div>
-      </div>
-    </section>
-    <section className="rail-card" aria-labelledby="chart-title">
-      <div className="rail-heading"><h2 id="chart-title">Agent requests</h2></div>
-      <div className="chart-hero"><strong>{blocked}</strong><small>blocked · {swaps.length} {swaps.length === 1 ? "request" : "requests"} so far</small></div>
-      <TradeBars trades={bars} cap={capUi} unit="testUSDC" />
-      <div className="chart-legend" aria-hidden="true"><span><i />Allowed</span><span><i className="bad" />Blocked by Aegis</span></div>
-    </section>
-    <section className="rail-card" aria-labelledby="keys-title">
-      <div className="rail-heading"><h2 id="keys-title">Addresses</h2></div>
-      <div className="keys">
-        <KeyRow label="Owner" value={owner.toBase58()} />
-        <KeyRow label="Agent" value={agent.toBase58()} note={vault?.revoked ? "revoked" : undefined} />
-        {vault && <KeyRow label="Vault" value={vault.address.toBase58()} />}
-      </div>
-    </section>
-  </>;
+  const heading = PAGE_TITLE[page];
 
-  return <Shell active={active} onNavigate={onNavigate} cta={cta} rail={narrow ? undefined : rail}>
-    {narrow && <div className="rail-top">{toolbar}</div>}
+  return <Shell active={page} cta={cta}>
+    <div className="page-view" key={page}>
     <div className="content-top">
-      <div><p className="eyebrow">{environmentName(environment)} · Test money, no real value</p>
-        <h1>AI agents can be tricked. Aegis still enforces the limits.</h1></div>
-      {swaps.length > 0 && <span className="count-chip"><strong className={blocked === 0 ? "zero" : ""}>{blocked}</strong>{blocked === 1 ? "attack blocked" : "attacks blocked"}</span>}
+      <div>
+        <p className="eyebrow">{heading.eyebrow} · {environmentName(environment)}</p>
+        <h1>{heading.title}</h1>
+      </div>
+      <div className="content-toolbar">
+        {toolbar}
+        <span className="avatar" title={owner.toBase58()} aria-label={`Owner ${owner.toBase58()}`}>{owner.toBase58().slice(0, 2).toUpperCase()}</span>
+      </div>
     </div>
     <div className="dashboard-notice">
       {busy ? <Notice tone="busy" message={busy === "Create vault" ? "Creating your vault…" : busy === "Fund vault" ? "Adding 1,000 testUSDC…" : busy === "New demo vault" ? "Creating and funding a demo vault…" : busy === "Withdraw all" ? "Moving everything back to your wallet…" : busy === "Revoke agent" ? "Stopping the agent…" : `${busy}…`} />
@@ -532,76 +559,174 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
           ? <Notice tone="success" message={notice.text} />
           : <Notice tone="error" message={notice.text} onDismiss={() => setNotice(null)} />)}
     </div>
+    {connection.getWalletSolBalance && <DevnetSolHint readBalance={connection.getWalletSolBalance} />}
 
-    <section id="overview" className="tiles" aria-label="Vault at a glance">
-      <Tile tone="lavender" icon="wallet" label="In the vault" value={vault ? amount(vault.inputBalanceRaw) : "0"} unit="testUSDC" testId="input-balance"
-        sub={<><span className="token-dot" aria-hidden="true" />{hasInput ? "Ready for the agent to trade" : "Fund the vault to start"}</>} />
-      <Tile tone="mist" icon="coins" label="Received from trades" value={vault ? amount(vault.outputBalanceRaw, 9) : "0"} unit="testSOL" testId="output-balance"
-        sub={<><span className="token-dot sol" aria-hidden="true" />{vault ? "100 testUSDC buys 1 testSOL" : "Nothing received yet"}</>} />
-      <Tile tone="mint" icon="chart" label="Budget left" value={vault ? amount(remaining) : "0"} unit="testUSDC" testId="remaining-budget">
-        <div className={`budget-section ${budgetLevel}`}>
-          <progress aria-label="Remaining budget" aria-valuetext={vault ? `${amount(remaining)} of ${amount(vault.budgetRaw)} testUSDC remaining` : "No vault"} value={remainingBasisPoints.toString()} max="10000" />
-          <span className="budget-number"></span>
+    {page === "vault" && <>
+      <section className="tiles" aria-label="Vault at a glance">
+        <Tile tone="lavender" icon="wallet" label="In the vault" value={vault ? amount(vault.inputBalanceRaw) : "0"} unit="testUSDC" testId="input-balance"
+          sub={<><span className="token-dot" aria-hidden="true" />{hasInput ? "Ready for the agent to trade" : "Fund the vault to start"}</>} />
+        <Tile tone="mist" icon="coins" label="Received from trades" value={vault ? amount(vault.outputBalanceRaw, 9) : "0"} unit="testSOL" testId="output-balance"
+          sub={<><span className="token-dot sol" aria-hidden="true" />{vault ? "100 testUSDC buys 1 testSOL" : "Nothing received yet"}</>} />
+        <Tile tone="mint" icon="chart" label="Budget left" value={vault ? amount(remaining) : "0"} unit="testUSDC" testId="remaining-budget">
+          <div className={`budget-section ${budgetLevel}`}>
+            <progress aria-label="Remaining budget" aria-valuetext={vault ? `${amount(remaining)} of ${amount(vault.budgetRaw)} testUSDC remaining` : "No vault"} value={remainingBasisPoints.toString()} max="10000" />
+            <span className="budget-number">{vault ? <><strong>{amount(vault.spentRaw)}</strong> spent of {amount(vault.budgetRaw)} total</> : "Create a vault to activate"}</span>
+          </div>
+        </Tile>
+        <Tile tone="cream" icon="shield" label="Attacks blocked" value={String(blocked)} subTone={blocked > 0 ? "good" : undefined}
+          sub={<><Icon name={blocked > 0 ? "check" : "info"} size={14} />{swaps.length === 0 ? "No agent requests yet" : `${allowedSwaps} ${allowedSwaps === 1 ? "trade" : "trades"} allowed`}</>} />
+      </section>
+
+      <section className="go-live" aria-labelledby="vault-setup-title">
+        <div className="go-live-head">
+          <div>
+            <h2 id="vault-setup-title">{stepsDone === 3 ? "Vault ready" : "Set up your vault"}</h2>
+            <p className="go-live-lead">{stepsDone === 3
+              ? "Limits are live. Try the agent, or revoke and withdraw whenever you want."
+              : "Create, fund, then stress-test the agent. Everything below stays under your control."}</p>
+          </div>
+          <div className="go-live-progress" aria-label={`${stepsDone} of 3 steps done`}>
+            <span>{stepsDone} of 3 done</span>
+            <div className="go-live-track" aria-hidden="true"><span style={{ width: `${(stepsDone / 3) * 100}%` }} /></div>
+          </div>
         </div>
-      </Tile>
-      <Tile tone="cream" icon="shield" label="Attacks blocked" value={String(blocked)} subTone={blocked > 0 ? "good" : undefined}
-        sub={<><Icon name={blocked > 0 ? "check" : "info"} size={14} />{swaps.length === 0 ? "No agent requests yet" : `${allowedSwaps} ${allowedSwaps === 1 ? "trade" : "trades"} allowed`}</>} />
-    </section>
-
-    <section id="vault" className="card vault-card" aria-labelledby="vault-title">
-      <div className="card-heading"><h2 id="vault-title">Trading vault</h2><span className={`status ${status.toLowerCase().replace(" ", "-")}`} data-testid="vault-status"><span className="small-dot" aria-hidden="true" />{status}</span></div>
-      {connection.getWalletSolBalance && <DevnetSolHint readBalance={connection.getWalletSolBalance} />}
-      <div className="steps">
-        <Step number={1} state={step1} title="Vault setup" text="">
-          <button className={step1 === "next" ? "primary" : ""} disabled={!ready || !!vault || locked} {...busyProps("Create vault")} onClick={() => void create()}>Create vault</button>
-        </Step>
-        <FundingStep state={step2} balance={walletBalance} hasFaucet={!!connection.faucet} hasVault={!!vault} finished={finished} locked={locked} busy={busy}
-          text={needsFaucet(walletBalance, !!connection.faucet) ? (vault ? "Get testUSDC before funding."
-              : "Set up your vault first.")
-            : "Transfer from your wallet."}
-          onFaucet={() => void run("Get testUSDC", connection.faucet!)} onFund={() => void fund()} onNewDemo={() => void newDemo()} />
-        <Step number={3} state={step3} title="Try the agent" text="Trade normally, then test an attack.">
-          <a className="step-ok" href="#agent">Go to agent <Icon name="arrow" size={14} /></a>
-        </Step>
-      </div>
-      <div className="owner-controls">
-        <p>{!vault ? <><strong>Owner controls.</strong> Once set up, funds stay withdrawable after revocation or expiry.</> : <><strong>Owner controls.</strong> Funds stay withdrawable after revocation or expiry.</>}</p>
-        <div className="buttons">
-          <button className="danger" disabled={!vault || vault.revoked || locked} {...busyProps("Revoke agent")} onClick={() => void revoke()}>Revoke agent</button>
-          <button disabled={!hasBalance || locked} {...busyProps("Withdraw all")} onClick={() => void withdraw()}>Withdraw all</button>
+        <div className="go-live-meta">
+          <span className={`status ${status.toLowerCase().replace(" ", "-")}`} data-testid="vault-status"><span className="small-dot" aria-hidden="true" />{status}</span>
         </div>
+        <div className="steps">
+          <Step number={1} state={step1} title="Create a vault" text={vault ? "Your vault is open with a 50 testUSDC per-trade cap and a 100 testUSDC total budget." : "Opens a vault with a 50 testUSDC per-trade cap and a 100 testUSDC total budget. Or use New demo vault for both steps at once."}>
+            <button className={step1 === "next" ? "primary" : ""} disabled={!ready || !!vault || locked} {...busyProps("Create vault")} onClick={() => void create()}>Create vault</button>
+          </Step>
+          <FundingStep state={step2} balance={walletBalance} hasFaucet={!!connection.faucet} hasVault={!!vault} finished={finished} locked={locked} busy={busy}
+            text={needsFaucet(walletBalance, !!connection.faucet) ? (vault ? "Get test money in your wallet, then fund the vault."
+                : "Create a vault first; it needs no testUSDC. Then get test money in your wallet and fund the vault.")
+              : "Move test money from your wallet into the vault. The agent can trade with it, but never beyond the guardrails."}
+            onFaucet={() => void run("Get testUSDC", connection.faucet!)} onFund={() => void fund()} onNewDemo={() => void newDemo()} />
+          <Step number={3} state={step3} title="Try the agent" text="Run a normal trade, then try to trick it. Anything outside the rules is blocked on-chain.">
+            <button type="button" className="step-ok" onClick={() => go("agent")}>Open agent <Icon name="arrow" size={14} /></button>
+          </Step>
+        </div>
+      </section>
+
+      <div className="panel-grid">
+        <section className="rail-card tinted" aria-labelledby="guard-title">
+          <div className="rail-heading"><h2 id="guard-title">Guardrails</h2><span className="rail-badge"><Icon name="shield" size={16} /></span></div>
+          <p className="rail-lead">{guardLead}</p>
+          <p className="rail-sub">Enforced by the blockchain itself. The agent cannot change or get around them.</p>
+          <div className="guard-rows">
+            <div className="guard-row"><span className="label">Per-trade cap</span><span className="value">{vault ? amount(vault.maxTradeRaw) : "50"}<small>testUSDC</small></span></div>
+            <div className="guard-row"><span className="label">Total budget</span><span className="value">{vault ? amount(vault.budgetRaw) : "100"}<small>testUSDC</small></span></div>
+            <div className="guard-row"><span className="label">Spent so far</span><span className="value" data-testid="spent">{vault ? amount(vault.spentRaw) : "0"}<small>testUSDC</small></span>
+              <div className={`meter ${budgetLevel}`} role="img" aria-label={vault ? `${spentPercent}% of the budget spent` : "No vault"}><span style={{ width: `${spentPercent}%` }} /></div></div>
+            <div className="guard-row"><span className="label">Time left</span><span className="value" data-testid="expiry">{vault ? countdown(vault.expiryUnix, now) : "1 hour, from creation"}</span>
+              <div className="meter neutral" role="img" aria-label={vault ? `${lifePercent}% of the hour remaining` : "No vault"}><span style={{ width: `${lifePercent}%` }} /></div></div>
+            <div className="guard-row"><span className="label">Funds go to</span><span className="value"><Icon name="lock" size={14} /> This vault only</span></div>
+          </div>
+        </section>
+        <section className="rail-card addresses-card" aria-labelledby="keys-title">
+          <div className="rail-heading"><h2 id="keys-title">Addresses</h2></div>
+          <div className="keys">
+            <KeyRow label="Owner" value={owner.toBase58()} />
+            <KeyRow label="Agent" value={agent.toBase58()} note={vault?.revoked ? "revoked" : undefined} />
+            {vault && <KeyRow label="Vault" value={vault.address.toBase58()} />}
+          </div>
+          {vault && <div className="owner-panel">
+            <div className="owner-panel-copy">
+              <strong>You stay in control</strong>
+              <p>Stop the agent or take everything out any time.</p>
+            </div>
+            <div className="owner-panel-actions">
+              <button type="button" className="danger" disabled={vault.revoked || locked} {...busyProps("Revoke agent")} onClick={() => void revoke()}>Revoke agent</button>
+              <button type="button" className="primary" disabled={!hasBalance || locked} {...busyProps("Withdraw all")} onClick={() => void withdraw()}>Withdraw all</button>
+            </div>
+          </div>}
+        </section>
       </div>
-      {vault && <p className="vault-address"><Icon name="vault" size={14} />Vault <code title={vault.address.toBase58()} aria-label={vault.address.toBase58()}>{shorten(vault.address.toBase58())}</code></p>}
-    </section>
+    </>}
 
-    {narrow && <div className="rail rail--inline">{rail}</div>}
+    {page === "stats" && <section className="rail-card chart-card" aria-labelledby="chart-title">
+      <div className="rail-heading">
+        <h2 id="chart-title">Agent requests vs cap</h2>
+        <span className="chart-cap-pill">cap {capUi} testUSDC</span>
+      </div>
+      {!activityReady ? <div className="skel" role="status" aria-busy="true" aria-label="Loading stats">
+        <div className="chart-stats">
+          <div className="chart-stat skel-block"><span className="skel-line skel-line--lg" /><span className="skel-line skel-line--sm" /></div>
+          <div className="chart-stat skel-block"><span className="skel-line skel-line--lg" /><span className="skel-line skel-line--sm" /></div>
+          <div className="chart-stat skel-block"><span className="skel-line skel-line--lg" /><span className="skel-line skel-line--sm" /></div>
+        </div>
+        <div className="chart-plot skel-plot" aria-hidden="true">
+          <span className="skel-bar" style={{ height: "28%" }} />
+          <span className="skel-bar" style={{ height: "44%" }} />
+          <span className="skel-bar" style={{ height: "36%" }} />
+          <span className="skel-bar" style={{ height: "72%" }} />
+          <span className="skel-bar" style={{ height: "52%" }} />
+          <span className="skel-bar" style={{ height: "88%" }} />
+        </div>
+      </div> : <>
+        <div className="chart-stats">
+          <div className="chart-stat"><strong>{swaps.length}</strong><span>requests</span></div>
+          <div className={`chart-stat${allowedSwaps > 0 ? " is-ok" : ""}`}><strong>{allowedSwaps}</strong><span>allowed</span></div>
+          <div className={`chart-stat${blocked > 0 ? " is-bad" : ""}`}><strong>{blocked}</strong><span>blocked</span></div>
+        </div>
+        {swaps.length > 0 ? <>
+          <div className="chart-plot" key={bars.map((b) => `${b.amount}-${b.ok}`).join("|")}>
+            <TradeBars trades={bars} cap={capUi} unit="testUSDC" />
+          </div>
+          <div className="chart-legend" aria-hidden="true">
+            <span><i />Allowed</span>
+            <span><i className="bad" />Blocked</span>
+          </div>
+        </> : <div className="empty-activity">
+          <span aria-hidden="true"><Icon name="chart" /></span>
+          <strong>No agent requests yet</strong>
+          <p>Run a trade from Agent. Allowed and blocked amounts will show up here against the per-trade cap.</p>
+          <button type="button" className="primary" onClick={() => go("agent")}>Open agent <Icon name="arrow" size={14} /></button>
+        </div>}
+      </>}
+    </section>}
 
-    {environment !== "mock" ? <AgentConsole environment={environment} walletMode={connection.walletMode} key={address.current?.toBase58()} vault={vault} finished={finished} disabled={!!busy} onBusy={setAgentBusy} onComplete={refresh} />
-      : <section id="agent" className="card trade-card" aria-labelledby="trade-title">
-        <div><h2 id="trade-title">Try an agent trade</h2><p className="muted">Try an amount above the per-trade cap.</p></div>
+    {page === "agent" && (environment !== "mock"
+      ? <AgentConsole environment={environment} walletMode={connection.walletMode} key={address.current?.toBase58()} vault={vault} finished={finished} disabled={!!busy} onBusy={setAgentBusy} onComplete={refresh} />
+      : <section className="card trade-card" aria-labelledby="trade-title">
+        <div><h2 id="trade-title">Try an agent trade</h2><p className="muted">20 testUSDC is within the 50 cap and goes through. Try 60 to watch the cap block it.</p></div>
         <form onSubmit={trade}>
           <label htmlFor="trade-amount">Amount <span>testUSDC</span></label>
           <div className="trade-controls"><input id="trade-amount" inputMode="decimal" value={tradeAmount} onChange={(event) => setTradeAmount(event.target.value)} disabled={!vault || finished || !!busy} autoComplete="off" /><button className="primary" disabled={!vault || finished || !!busy} {...busyProps("Agent trade")} type="submit">Swap</button></div>
         </form>
-      </section>}
+      </section>)}
 
-    <section id="activity" className="card activity-card" aria-labelledby="activity-title">
-      <div className="card-heading"><h2 id="activity-title">Vault activity</h2><span className="muted">{activity.length === 0 ? "" : `${activity.length} ${activity.length === 1 ? "event" : "events"}`}</span></div>
-      {activity.length === 0 ? <div className="empty-activity"><span aria-hidden="true"><Icon name="activity" /></span><strong>No activity yet</strong><p>Transactions appear here, newest first.</p></div> : <div className="table-scroll"><table>
-        <thead><tr><th>Time</th><th>Action</th><th>Amount</th><th>Result</th></tr></thead>
-        <tbody>{activity.map((item) => <tr key={item.signature}>
-          <td><time>{timeLabel(item.blockTime)}</time></td>
-          <td><span className="action-name">{details.current.get(item.signature)?.label ?? "Transaction"}</span>
-            {environment !== "mock" ? <a className="signature" title={`${item.signature}${environment === "localnet" ? " · Explorer uses your local chain. Allow local network access if prompted." : " · Solana devnet"}`} aria-label={`View transaction ${item.signature} on Solana Explorer`}
-              href={explorerTransactionUrl(item.signature, environment)} target="_blank" rel="noopener noreferrer"><code>{shorten(item.signature)}</code><Icon name="external" size={12} /></a>
-              : <code className="signature">{shorten(item.signature)}</code>}</td>
-          <td className="activity-amount">{groupThousands(details.current.get(item.signature)?.amount ?? "—")}</td>
-          <td><span className={`result ${item.ok ? "ok" : "blocked"}`} title={item.ok ? undefined : item.error}><Icon name={item.ok ? "check" : "x"} size={14} />{item.ok ? "Success" : blockedTitle(item.error ?? "Failed")}</span>
-            {!item.ok && vault && <span className="rejection-reason">{rejectionReason(item.error ?? "Failed", vault,
-              details.current.get(item.signature)?.amount.replace(/ testUSDC$/, ""))}</span>}</td>
-        </tr>)}</tbody>
-      </table></div>}
-    </section>
-    <footer><span>Aegis</span><span>{environmentShort(environment)} · Test money, no real value</span></footer>
+    {page === "activity" && <section className="card activity-card" aria-labelledby="activity-title">
+      <div className="card-heading"><h2 id="activity-title">Vault activity</h2><span className="muted">{!activityReady || activity.length === 0 ? "" : `${activity.length} ${activity.length === 1 ? "event" : "events"}`}</span></div>
+      {!activityReady ? <div className="skel skel--activity" role="status" aria-busy="true" aria-label="Loading activity">
+        {Array.from({ length: 5 }, (_, i) => (
+          <div key={i} className="skel-row" style={{ ["--i" as string]: i }} aria-hidden="true">
+            <span className="skel-line skel-line--sm" />
+            <span className="skel-line" />
+            <span className="skel-line skel-line--md" />
+            <span className="skel-pill" />
+          </div>
+        ))}
+      </div> : activity.length === 0 ? <div className="empty-activity activity-in"><span aria-hidden="true"><Icon name="activity" /></span><strong>No activity yet</strong><p>Create your vault to begin. Every trade and every blocked attempt will show up here, newest first.</p></div> : <div className="table-scroll activity-in">
+        <table>
+          <thead><tr><th>Time</th><th>Action</th><th>Amount</th><th>Result</th></tr></thead>
+          <tbody>{activity.map((item, index) => <tr key={item.signature} style={{ ["--i" as string]: index }}>
+            <td><time>{timeLabel(item.blockTime)}</time></td>
+            <td><span className="action-name">{details.current.get(item.signature)?.label ?? "Transaction"}</span>
+              {environment !== "mock" ? <a className="signature" title={`${item.signature}${environment === "localnet" ? " · Explorer uses your local chain. Allow local network access if prompted." : " · Solana devnet"}`} aria-label={`View transaction ${item.signature} on Solana Explorer`}
+                href={explorerTransactionUrl(item.signature, environment)} target="_blank" rel="noopener noreferrer"><code>{shorten(item.signature)}</code><Icon name="external" size={12} /></a>
+                : <code className="signature">{shorten(item.signature)}</code>}</td>
+            <td className="activity-amount">{groupThousands(details.current.get(item.signature)?.amount ?? "—")}</td>
+            <td><span className={`result ${item.ok ? "ok" : "blocked"}`} title={item.ok ? undefined : item.error}><Icon name={item.ok ? "check" : "x"} size={14} />{item.ok ? "Success" : blockedTitle(item.error ?? "Failed")}</span>
+              {!item.ok && vault && <span className="rejection-reason">{rejectionReason(item.error ?? "Failed", vault,
+                details.current.get(item.signature)?.amount.replace(/ testUSDC$/, ""))}</span>}</td>
+          </tr>)}</tbody>
+        </table>
+      </div>}
+    </section>}
+
+    <footer><span>Aegis · Bounded autonomy</span><span>{environmentName(environment)} · Test money, no real value</span></footer>
+    </div>
   </Shell>;
 }
+

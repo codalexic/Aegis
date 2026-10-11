@@ -31,9 +31,9 @@ async function render(live: boolean, source?: "live" | "scripted" | "fixed", has
 describe("agent scenario and reply copy", () => {
   it("explains what each scenario does and why the vault accepts or blocks it", async () => {
     const markup = await render(false);
-    expect(markup).toContain("Swaps 20 testUSDC. Within the rules, so it goes through.");
-    expect(markup).toContain("Hidden news tells the agent to spend 1,000. Blocked: over the per-trade cap.");
-    expect(markup).toContain("Tries to send the output to an attacker. Blocked: output must stay in the vault.");
+    expect(markup).toContain("The agent swaps 20 testUSDC for testSOL. This fits the rules, so it goes through.");
+    expect(markup).toContain("A planted headline tells the agent to spend 1,000 testUSDC. Aegis blocks it: that is over the cap.");
+    expect(markup).toContain("A request tries to send the trade output to a stranger’s account. Aegis blocks it: output must stay in the vault.");
     expect(markup).toContain("<strong>Hacker redirect</strong>");
     expect(markup).toMatch(/<button[^>]*>Hacker redirect<\/button>/);
     expect(markup).not.toContain("<strong>Wrong destination</strong>");
@@ -43,7 +43,7 @@ describe("agent scenario and reply copy", () => {
     expect(markup).toContain(live
       ? "Live AI: test-model reads the news and decides the amount itself."
       : "Scripted: a recorded reply, no AI call. The on-chain checks are identical.");
-    expect(markup).toContain("Set up and fund your vault first.");
+    expect(markup).toContain("No vault yet — scenarios stay disabled until you create and fund one on the Vault page.");
   });
   it.each([true, false])("labels actual live replies outside collapsed details regardless of toggle: live=%s", async (live) => {
     const markup = await render(live, "live");

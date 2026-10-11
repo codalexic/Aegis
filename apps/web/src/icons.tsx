@@ -4,7 +4,8 @@ export type IconName =
   | "home" | "vault" | "robot" | "activity" | "settings"
   | "wallet" | "coins" | "shield" | "bolt" | "chart"
   | "check" | "x" | "arrow" | "external" | "info"
-  | "clock" | "lock" | "copy" | "alert" | "sparkle";
+  | "clock" | "lock" | "copy" | "alert" | "sparkle"
+  | "swap" | "news" | "redirect";
 
 // Every glyph is drawn on a 24x24 grid for a 1.75 stroke with round caps and joins.
 // The only solid parts are ~1-unit dots, so the set still reads as one stroke family.
@@ -32,24 +33,25 @@ const glyphs: Record<IconName, JSX.Element> = {
     <circle cx="12" cy="12" r="3" />
   </>),
   wallet: (<>
-    <rect x="3" y="7" width="18" height="13" rx="2.5" />
-    <path d="M7 7V5.5A1.5 1.5 0 0 1 8.5 4h7A1.5 1.5 0 0 1 17 5.5V7" />
-    <path d="M21 12.5h-3.5a1.5 1.5 0 0 0 0 3H21" />
+    <path d="M3.5 8.5A2.5 2.5 0 0 1 6 6h12a2.5 2.5 0 0 1 2.5 2.5v9A2.5 2.5 0 0 1 18 20H6A2.5 2.5 0 0 1 3.5 17.5Z" />
+    <path d="M20.5 12.5H16a2 2 0 0 0 0 4h4.5" />
+    <circle cx="16" cy="14.5" r="1" fill="currentColor" stroke="none" />
   </>),
   coins: (<>
-    <ellipse cx="12" cy="7.5" rx="7" ry="3" />
-    <path d="M5 7.5V12a7 3 0 0 0 14 0V7.5" />
-    <path d="M5 12v4.5a7 3 0 0 0 14 0V12" />
+    <circle cx="9.5" cy="14" r="5.5" />
+    <path d="M14.2 16.8A5.5 5.5 0 1 0 14.2 7.2" />
+    <path d="M7.5 14h4M9.5 12v4" />
   </>),
   shield: (<>
-    <path d="M12 3 5 5.75v5.5c0 4.6 2.9 8.2 7 9.75 4.1-1.55 7-5.15 7-9.75v-5.5Z" />
-    <path d="M9 12.25l2.25 2.25L15.25 10" />
+    <path d="M12 3.25 4.75 6v5.4c0 4.85 3.05 8.55 7.25 10.1 4.2-1.55 7.25-5.25 7.25-10.1V6Z" />
+    <path d="M9.25 12.1l2.1 2.1 3.7-3.85" />
   </>),
   bolt: <path d="M13 2.5 5 13.5h6l-1 8 8-11h-6Z" />,
   chart: (<>
-    <rect x="4" y="14" width="4" height="6" rx="1" />
-    <rect x="10" y="9" width="4" height="11" rx="1" />
-    <rect x="16" y="4" width="4" height="16" rx="1" />
+    <path d="M3.5 19.5h17" />
+    <path d="M7 16.5V11" strokeWidth={2.25} />
+    <path d="M12 16.5V7.5" strokeWidth={2.25} />
+    <path d="M17 16.5V4.5" strokeWidth={2.25} />
   </>),
   check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
   x: <path d="M6.5 6.5l11 11M17.5 6.5l-11 11" />,
@@ -79,6 +81,20 @@ const glyphs: Record<IconName, JSX.Element> = {
     <circle cx="12" cy="17" r="1.05" fill="currentColor" stroke="none" />
   </>),
   sparkle: <path d="M12 3c.6 4.9 3.7 8.2 9 9-5.3.8-8.4 4.1-9 9-.6-4.9-3.7-8.2-9-9 5.3-.8 8.4-4.1 9-9Z" />,
+  swap: (<>
+    <path d="M7 8h10l-2.5-2.5" />
+    <path d="M17 16H7l2.5 2.5" />
+  </>),
+  news: (<>
+    <rect x="4" y="4.5" width="16" height="15" rx="2" />
+    <path d="M8 9h8M8 12.5h8M8 16h5" />
+  </>),
+  redirect: (<>
+    <path d="M5 12h7.5a3.5 3.5 0 0 0 3.5-3.5V5.5" />
+    <path d="M13.5 8l2.5-2.5L18.5 8" />
+    <path d="M12.5 12v6.5" />
+    <path d="M10 16.5 12.5 19 15 16.5" />
+  </>),
 };
 
 export function Icon({ name, size = 20, className }: { name: IconName; size?: number; className?: string }): JSX.Element {

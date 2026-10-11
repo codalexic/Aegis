@@ -15,11 +15,8 @@ import { Logo } from "./Logo";
 import { SidebarIllustration } from "./Illustration";
 import { TradeBars, type TradeBar } from "./TradeBars";
 import { Notice } from "./Notice";
-import { ProgressButton, Skeleton, VaultSkeleton, LoadingDashboard } from "./Progress";
 import { DevnetSolHint } from "./DevnetSolHint";
 import { needsFaucet, newFundedDemo, withWalletBalanceRefresh } from "./funding";
-import { trackActiveSection } from "./active-section";
-import { isWalletDisconnected, WALLET_CHANGED, WALLET_REQUEST_FAILED } from "./wallet-lifecycle";
 
 const nowUnix = () => BigInt(Math.floor(Date.now() / 1000));
 const shorten = (value: string) => `${value.slice(0, 4)}…${value.slice(-4)}`;
@@ -156,120 +153,35 @@ function Shell({ active, cta, rail, hideNav, children }: {
   </div>;
 }
 
-/** Highlights the sidebar link for whichever section is nearest the top of the viewport. */
-function useActiveSection(ready: boolean) {
-  const [active, setActive] = useState(() => {
-    const hash = typeof window === "undefined" ? "" : window.location?.hash;
-    return NAV.find((item) => `#${item.id}` === hash)?.id ?? NAV[0].id;
-  });
-  const tracker = useRef<ReturnType<typeof trackActiveSection> | null>(null);
-  useEffect(() => {
-    tracker.current = trackActiveSection(NAV.map((item) => item.id), setActive);
-    return () => { tracker.current?.stop(); tracker.current = null; };
-  }, [ready]);
-  const onNavigate = (event: MouseEvent<HTMLAnchorElement>, id: string) => {
-    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    event.preventDefault();
-    if (tracker.current?.select(id) && window.location.hash !== `#${id}`) window.history.pushState(null, "", `#${id}`);
-  };
-  return { active, onNavigate };
-}
-
-/** True while the viewport matches `query`; tracks changes so the rail can move inline below 1240px. */
-function useMediaQuery(query: string): boolean {
-  const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
-  useEffect(() => {
-    const mql = window.matchMedia(query);
-    const on = () => setMatches(mql.matches);
-    on();
-    mql.addEventListener("change", on);
-    return () => mql.removeEventListener("change", on);
-  }, [query]);
-  return matches;
-}
-
-export function App({
-  environment = import.meta.env.AEGIS_ENV as AegisEnvironment,
-  walletMode = import.meta.env.AEGIS_WALLET === true,
-}: { environment?: AegisEnvironment; walletMode?: boolean } = {}) {
+export function App() {
+  const environment = import.meta.env.AEGIS_ENV as AegisEnvironment;
   const wallet = useWallet();
+  const walletMode = import.meta.env.AEGIS_WALLET === true;
   const walletAddress = wallet.publicKey?.toBase58();
-  const adapter = wallet.wallet?.adapter;
-  const generation = useRef(0);
-  const [revision, setRevision] = useState(0);
-  const [changed, setChanged] = useState(false);
-  const [requestError, setRequestError] = useState<string | null>(null);
-  useEffect(() => {
-    if (!adapter) return;
-    setRevision(generation.current);
-    const reset = (disconnected: boolean) => {
-      // Invalidate work synchronously with the event, before React renders.
-      setRevision(++generation.current);
-      setChanged(disconnected);
-      setRequestError(null);
-    };
-    const onConnect = () => reset(false);
-    const onDisconnect = () => reset(true);
-    adapter.on("connect", onConnect);
-    adapter.on("disconnect", onDisconnect);
-    return () => {
-      ++generation.current;
-      adapter.off("connect", onConnect);
-      adapter.off("disconnect", onDisconnect);
-    };
-  }, [adapter]);
-
-  const isCurrent = useCallback(() => !walletMode || (generation.current === revision
-    && adapter?.publicKey?.toBase58() === walletAddress), [walletMode, revision, adapter, walletAddress]);
-  const requestWallet = useCallback(async <T,>(action: () => Promise<T>): Promise<T> => {
-    const started = generation.current;
-    setRequestError(null);
-    try { return await action(); }
-    catch (error) {
-      if (generation.current === started && !isWalletDisconnected(error)) setRequestError(WALLET_REQUEST_FAILED);
-      throw error;
-    }
-  }, []);
-  return <>
-    <OwnerApp key={`${environment}:${walletMode ? `${walletAddress}:${revision}` : "server"}`}
-      environment={environment} walletMode={walletMode} wallet={wallet} changed={changed}
-      isCurrent={isCurrent} requestWallet={requestWallet} />
-    {requestError && <Notice tone="error" message={requestError} className="wallet-error" onDismiss={() => setRequestError(null)} />}
-  </>;
-}
-
-function OwnerApp({ environment, walletMode, wallet, changed, isCurrent, requestWallet }: {
-  environment: AegisEnvironment; walletMode: boolean; wallet: ReturnType<typeof useWallet>; changed: boolean;
-  isCurrent(): boolean; requestWallet<T>(action: () => Promise<T>): Promise<T>;
-}) {
+  const activeWallet = useRef(walletAddress);
+  activeWallet.current = walletAddress;
   const [connection, setConnection] = useState<DashboardConnection | null>(null);
-  const [actionsBusy, setActionsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    const controller = new AbortController();
-    const current = () => !controller.signal.aborted && isCurrent();
+    let active = true;
     setConnection(null); setError(null);
     if (walletMode && (!wallet.publicKey || !wallet.signTransaction)) return;
     const pending = walletMode ? connectWalletDashboard(environment as "localnet" | "devnet", {
       publicKey: wallet.publicKey!, signTransaction: async (transaction) => {
-        if (!current()) throw new DOMException("Wallet changed.", "AbortError");
-        const signed = await requestWallet(() => wallet.signTransaction!(transaction));
-        if (!current()) throw new DOMException("Wallet changed.", "AbortError");
+        if (activeWallet.current !== walletAddress) throw new Error("Wallet changed.");
+        const signed = await wallet.signTransaction!(transaction);
+        if (activeWallet.current !== walletAddress) throw new Error("Wallet changed.");
         return signed;
       },
-    }, controller.signal) : connectDashboard(environment);
-    void pending.then((value) => { if (current()) setConnection(value); })
-      .catch((reason: unknown) => {
-        if (current() && !isWalletDisconnected(reason)) setError(reason instanceof Error ? reason.message : "Connection failed.");
-      });
-    return () => controller.abort();
-  }, [environment, walletMode, wallet.publicKey, wallet.signTransaction, isCurrent, requestWallet]);
+    }) : connectDashboard(environment);
+    void pending.then((value) => { if (active) setConnection(value); })
+      .catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : "Connection failed."); });
+    return () => { active = false; };
+  }, [environment, walletMode, walletAddress, wallet.signTransaction]);
 
-  const walletControl = (className: string) => walletMode && <ProgressButton type="button" className={className} busy={wallet.connecting || wallet.disconnecting} progress={wallet.disconnecting ? "Disconnecting…" : "Connecting…"} disabled={actionsBusy} onClick={() => {
-    void (wallet.connected ? wallet.disconnect() : requestWallet(() => wallet.connect())).catch(() => {});
-  }}>
+  const walletControl = (className: string) => walletMode && <button type="button" className={className} disabled={wallet.connecting || wallet.disconnecting} onClick={() => void (wallet.connected ? wallet.disconnect() : wallet.connect()).catch(() => {})}>
     <Icon name="wallet" size={16} />{wallet.connected ? "Disconnect" : "Connect wallet"}
-  </ProgressButton>;
+  </button>;
   const environmentPill = <div className="environment" title={environmentTitle(environment)}><span className="environment-dot" />{environmentShort(environment)}</div>;
   const startBar = <header className="start-bar">
     <a className="brand start-brand" href="/" aria-label="Aegis home"><Logo size={36} withWordmark /></a>
@@ -281,22 +193,24 @@ function OwnerApp({ environment, walletMode, wallet, changed, isCurrent, request
     return <Shell active="vault" hideNav>
       <div className={waitingForWallet ? "start" : "start connecting-screen"}>
         {startBar}
-        <span className="sr-only" role="status" aria-live="polite">{wallet.connecting ? "Approve connection in Phantom…" : wallet.disconnecting ? "Disconnecting wallet…" : ""}</span>
         {waitingForWallet ? <>
           <div className="start-hero">
             <h1>AI agents can be tricked. Aegis still enforces the limits.</h1>
             {error
               ? <Notice tone="error" message={error} />
-              : <p className="connecting-hint" role="status">{changed ? WALLET_CHANGED : "Devnet SOL covers transaction fees."}</p>}
+              : <p className="connecting-hint" role="status">You only need a wallet and a bit of SOL on Solana Devnet to use your agent safely with us.</p>}
           </div>
           {environment === "devnet" && <TryIt />}
         </> : error
           ? <div className="connecting"><Notice tone="error" message={error} /></div>
-          : <LoadingDashboard />}
+          : <div className="connecting" role="status" aria-live="polite" aria-busy="true">
+            <div className="connecting-mark" aria-hidden="true"><span className="connecting-ring" /><Logo size={40} /></div>
+            <p>Connecting to the vault…</p>
+          </div>}
       </div>
     </Shell>;
   }
-  return <Dashboard key={`${environment}:${connection.owner.toBase58()}`} connection={connection} isCurrent={isCurrent} onBusyChange={setActionsBusy} toolbar={<>{environmentPill}{walletControl("small rail-action")}</>} />;
+  return <Dashboard key={`${environment}:${connection.owner.toBase58()}`} connection={connection} toolbar={<>{environmentPill}{walletControl("start-connect small rail-action")}</>} />;
 }
 
 const TRY_STEPS: { title: string; body: ReactNode }[] = [
@@ -340,17 +254,16 @@ function TryIt() {
 /* --------------------------------------------------------------------------
    Small presentational pieces
    -------------------------------------------------------------------------- */
-function Tile({ tone, icon, label, value, unit, sub, subTone, testId, children, loading }: {
+function Tile({ tone, icon, label, value, unit, sub, subTone, testId, children }: {
   tone: "lavender" | "mist" | "mint" | "cream"; icon: IconName; label: string; value: string; unit?: string;
-  sub?: ReactNode; subTone?: "good" | "bad" | "warning"; testId?: string; children?: ReactNode; loading?: boolean;
+  sub?: ReactNode; subTone?: "good" | "bad" | "warning"; testId?: string; children?: ReactNode;
 }) {
   return <div className={`tile tile--${tone}`}>
     <span className="tile-icon"><Icon name={icon} size={22} /></span>
     <span className="tile-label">{label}</span>
-    {loading ? <><Skeleton className="skeleton-value" /><Skeleton /></> : <>
     <div className="tile-value"><strong data-testid={testId} className={value === "—" ? "placeholder" : undefined}>{value}</strong>{unit && <small>{unit}</small>}</div>
     {sub && <span className={`tile-sub ${subTone ?? ""}`}>{sub}</span>}
-    {children}</>}
+    {children}
   </div>;
 }
 
@@ -368,17 +281,18 @@ export function FundingStep({ state, text, balance, hasFaucet, hasVault, finishe
 }) {
   if (finished) return <Step number={2} state={state} title="Add 1,000 testUSDC"
     text="Start again with a funded vault.">
-    <ProgressButton className="primary" disabled={locked} busy={busy === "New demo vault"} progress="Setting up…"
-      onClick={onNewDemo}>New demo vault</ProgressButton>
+    <button className="primary" disabled={locked}
+      data-busy={busy === "New demo vault" ? "true" : undefined} aria-busy={busy === "New demo vault" || undefined}
+      onClick={onNewDemo}>New demo vault</button>
   </Step>;
-  const getTokens = busy === "Get testUSDC" || (busy !== "Fund vault" && needsFaucet(balance, hasFaucet));
+  const getTokens = needsFaucet(balance, hasFaucet);
   const isBusy = busy === (getTokens ? "Get testUSDC" : "Fund vault");
   return <Step number={2} state={state} title="Add 1,000 testUSDC" text={<>
     {text} Wallet: {balance === null ? "—" : amount(balance)} testUSDC
   </>}>
-    <ProgressButton className={state === "next" ? "primary" : ""} disabled={!hasVault || locked}
-      busy={isBusy} progress={getTokens ? "Getting tokens…" : "Funding…"}
-      onClick={getTokens ? onFaucet : onFund}>{getTokens ? "Get 1,000 testUSDC" : "Fund 1,000"}</ProgressButton>
+    <button className={state === "next" ? "primary" : ""} disabled={!hasVault || locked}
+      data-busy={isBusy ? "true" : undefined} aria-busy={isBusy || undefined}
+      onClick={getTokens ? onFaucet : onFund}>{getTokens ? "Get 1,000 testUSDC" : "Fund 1,000"}</button>
   </Step>;
 }
 
@@ -396,16 +310,7 @@ function KeyRow({ label, value, note }: { label: string; value: string; note?: s
 /* --------------------------------------------------------------------------
    Dashboard
    -------------------------------------------------------------------------- */
-const alwaysCurrent = () => true;
-export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBusyChange }: {
-  connection: DashboardConnection; toolbar: ReactNode; isCurrent?(): boolean; onBusyChange?(busy: boolean): void;
-}) {
-  const mounted = useRef(true);
-  useEffect(() => {
-    mounted.current = true;
-    return () => { mounted.current = false; };
-  }, []);
-  const current = useCallback(() => mounted.current && isCurrent(), [isCurrent]);
+export function Dashboard({ connection, toolbar }: { connection: DashboardConnection; toolbar: ReactNode }) {
   const { client, owner, agent, environment } = connection;
   const address = useRef<PublicKey | null>(connection.initialVault);
   const details = useRef(new Map<string, ActionDetail>());
@@ -424,87 +329,77 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
   const refreshing = useRef(false);
   const currentState = useRef<VaultState | null>(null);
   const polling = useRef<ReturnType<typeof startDashboardPolling> | null>(null);
-  const { active, onNavigate } = useActiveSection(ready);
-  const narrow = useMediaQuery("(max-width: 1240px)");
-  const [stage, setStage] = useState("");
-  const [reloading, setReloading] = useState(false);
-  const loading = !ready || reloading;
-  useEffect(() => { onBusyChange?.(!!busy || agentBusy || !ready); }, [busy, agentBusy, ready, onBusyChange]);
-  const reportProgress = (text: string) => { if (current()) setStage(text); };
+  const [page, go] = usePage();
 
   const refreshWalletBalance = useCallback(async () => {
-    if (!current()) return;
     const request = ++balanceRequest.current;
     const balance = await connection.getWalletBalance?.().catch(() => null) ?? null;
     // A slow poll started before confirmation must not overwrite the fresh balance.
-    if (current() && request === balanceRequest.current) setWalletBalance(balance);
-  }, [connection, current]);
+    if (request === balanceRequest.current) setWalletBalance(balance);
+  }, [connection]);
 
   const refreshState = useCallback(async () => {
-    if (!current()) return;
     setNow(nowUnix());
     await refreshWalletBalance();
-    if (!current() || !address.current) return;
+    if (!address.current) {
+      setActivityReady(true);
+      return;
+    }
     const selected = address.current;
     try {
       const state = await client.getVault(selected);
-      if (!current() || address.current !== selected) return;
+      if (address.current !== selected) return;
       currentState.current = state;
       setVault(state);
       setReady(true);
     } catch (error) {
-      if (!current() || address.current !== selected) return;
+      if (address.current !== selected) return;
       if (error instanceof Error && error.message === "VaultNotFound") {
         currentState.current = null;
         setVault(null); setActivity([]); setReady(true); setActivityReady(true); return;
       }
       throw error;
     }
-  }, [client, refreshWalletBalance, current]);
+  }, [client, refreshWalletBalance]);
 
   const refreshActivity = useCallback(async () => {
     const selected = address.current, state = currentState.current;
-    if (!current() || !selected || !state || !state.address.equals(selected)) return;
-    const history = await client.listActivity(selected);
-    if (!current() || address.current !== selected) return;
-    const read = async (item: Activity) => {
-      if (!current() || address.current !== selected) return;
-      const detail = await connection.readDetail!(item.signature, state);
-      if (current() && detail && address.current === selected) details.current.set(item.signature, detail);
-    };
-    if (connection.readDetail) {
-      const missing = history.filter((item) => !details.current.has(item.signature));
-      if (environment === "devnet") {
-        for (const item of missing) await read(item);
-      } else await Promise.all(missing.map(read));
+    if (!selected || !state || !state.address.equals(selected)) {
+      setActivityReady(true);
+      return;
     }
-    if (current() && address.current === selected) setActivity(history);
-  }, [client, connection, environment, current]);
+    try {
+      const history = await client.listActivity(selected);
+      const read = async (item: Activity) => {
+        const detail = await connection.readDetail!(item.signature, state);
+        if (detail && address.current === selected) details.current.set(item.signature, detail);
+      };
+      if (connection.readDetail) {
+        const missing = history.filter((item) => !details.current.has(item.signature));
+        if (environment === "devnet") {
+          for (const item of missing) await read(item);
+        } else await Promise.all(missing.map(read));
+      }
+      if (address.current === selected) setActivity(history);
+    } finally {
+      if (address.current === selected) setActivityReady(true);
+    }
+  }, [client, connection, environment]);
 
   const refresh = useCallback(async () => {
-    if (!current()) return;
     if (environment === "devnet") { await polling.current?.refresh(); return; }
     if (refreshing.current) return;
     refreshing.current = true;
     try { await refreshState(); await refreshActivity(); }
     finally { refreshing.current = false; }
-  }, [environment, refreshState, refreshActivity, current]);
-
-  const refreshAfterAgent = async () => {
-    if (current()) setReloading(true);
-    try { await refresh(); }
-    finally { if (current()) setReloading(false); }
-  };
+  }, [environment, refreshState, refreshActivity]);
 
   useEffect(() => {
-    const onError = (error: unknown) => {
-      if (!current() || isWalletDisconnected(error)) return;
-      setNotice((current) => current?.ok === false ? current : {
-        ok: false, text: isRateLimited(error) ? RPC_RATE_LIMITED : environment === "localnet"
-          ? "Lost contact with the test chain. Is the local validator still running?"
-          : "Could not refresh the vault. Retrying…",
-      });
-    };
+    const onError = (error: unknown) => setNotice((current) => current?.ok === false ? current : {
+      ok: false, text: isRateLimited(error) ? RPC_RATE_LIMITED : environment === "localnet"
+        ? "Lost contact with the test chain. Is the local validator still running?"
+        : "Could not refresh the vault. Retrying…",
+    });
     if (environment === "devnet") {
       const scheduler = startDashboardPolling({ state: refreshState, activity: refreshActivity, onError });
       polling.current = scheduler;
@@ -515,7 +410,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
     void refresh().catch(onError);
     const timer = window.setInterval(() => { void refresh().catch(onError); }, 2_000);
     return () => window.clearInterval(timer);
-  }, [refresh, refreshState, refreshActivity, environment, current]);
+  }, [refresh, refreshState, refreshActivity, environment]);
 
   useEffect(() => {
     if (!notice?.ok) return;
@@ -524,37 +419,31 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
   }, [notice]);
 
   function track<T extends TxResult>(result: T, detail: ActionDetail): T {
-    if (!current()) throw new DOMException("Wallet changed.", "AbortError");
     if (result.signature) details.current.set(result.signature, detail);
     if (!result.ok) throw Object.assign(new Error(result.error), { detail: result.detail });
     return result;
   }
 
   async function run(label: string, action: () => Promise<string>) {
-    if (!current() || running.current || agentBusy) return;
+    if (running.current || agentBusy) return;
     running.current = true;
     setBusy(label);
-    setStage(label === "Get testUSDC" ? "Getting testUSDC…" : label === "New demo vault" ? "Setting up demo vault…" : connection.walletMode ? "Preparing…" : `${label}…`);
     setNotice(null);
     try {
       // Keep actions locked through a fresh read, even if polling is hidden or
       // waiting for activity history. Also reconcile partial successes/failures.
-      const text = await withWalletBalanceRefresh(action, async () => {
-        if (current()) { setStage("Refreshing vault…"); setReloading(true); }
-        await refreshWalletBalance();
-      });
-      if (current()) setNotice({ ok: true, text });
+      setNotice({ ok: true, text: await withWalletBalanceRefresh(action, refreshWalletBalance) });
     } catch (error) {
-      if (current() && !isWalletDisconnected(error)) setNotice({ ok: false, text: error });
+      setNotice({ ok: false, text: error });
     } finally {
-      try { await refresh(); } catch { if (current()) setNotice((notice) => notice?.ok === false ? notice : { ok: false, text: "Could not refresh the vault. Retrying…" }); }
+      try { await refresh(); } catch { setNotice((current) => current?.ok === false ? current : { ok: false, text: "Could not refresh the vault. Retrying…" }); }
       running.current = false;
-      if (current()) { setBusy(null); setStage(""); setReloading(false); }
+      setBusy(null);
     }
   }
 
   const create = () => run("Create vault", async () => {
-    const result = track(await connection.create(reportProgress), { label: "Create vault", amount: "—" });
+    const result = track(await connection.create(), { label: "Create vault", amount: "—" });
     if (!result.vault) throw new Error("No vault address was returned.");
     address.current = result.vault;
     setActivityReady(false);
@@ -562,13 +451,12 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
   });
 
   const fund = () => run("Fund vault", async () => {
-    track(await connection.fund(address.current!, reportProgress), { label: "Fund vault", amount: "1,000 testUSDC" });
+    track(await connection.fund(address.current!), { label: "Fund vault", amount: "1,000 testUSDC" });
     return `Added 1,000 testUSDC. Next: ${environment === "mock" ? "try a trade" : "try the agent"} below.`;
   });
 
   const newDemo = () => run("New demo vault", async () => {
-    const result = await newFundedDemo(connection, walletBalance, refreshWalletBalance, reportProgress);
-    if (!current()) return "";
+    const result = await newFundedDemo(connection, walletBalance, refreshWalletBalance);
     if (result.vault) {
       address.current = result.vault;
       details.current.clear();
@@ -584,7 +472,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
   });
 
   const revoke = () => run("Revoke agent", async () => {
-    track(await connection.revoke(address.current!, reportProgress), { label: "Revoke agent", amount: "—" });
+    track(await connection.revoke(address.current!), { label: "Revoke agent", amount: "—" });
     return "Agent revoked. You can still withdraw your funds.";
   });
 
@@ -594,7 +482,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       [state.inputMint, state.inputBalanceRaw, 6, "testUSDC"],
       [state.outputMint, state.outputBalanceRaw, 9, "testSOL"],
     ] as const) {
-      if (balance > 0n) track(await connection.withdraw(state.address, mint, balance, (stage) => reportProgress(`${symbol} · ${stage}`)), {
+      if (balance > 0n) track(await connection.withdraw(state.address, mint, balance), {
         label: "Withdraw", amount: `${amount(balance, decimals)} ${symbol}`,
       });
     }
@@ -625,9 +513,8 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
   const hasInput = !!vault && vault.inputBalanceRaw > 0n;
   const secondsLeft = vault ? (vault.expiryUnix > now ? vault.expiryUnix - now : 0n) : 0n;
   const lifePercent = vault ? Math.min(100, Number(secondsLeft * 100n / VAULT_LIFETIME)) : 0;
-  const locked = !!busy || agentBusy || loading;
-  const blocked = activity.filter((item) => !item.ok).length;
-  const swaps = activity.filter((item) => details.current.get(item.signature)?.label === "Agent swap");
+  const locked = !!busy || agentBusy || !ready;
+  const swaps = activityReady ? activity.filter((item) => details.current.get(item.signature)?.label === "Agent swap") : [];
   const allowedSwaps = swaps.filter((item) => item.ok).length;
   const blocked = swaps.length - allowedSwaps;
   // Oldest → newest for the chart; activity arrives newest first.
@@ -638,55 +525,23 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
   const capUi = vault ? Number(rawAmountToUi(vault.maxTradeRaw, 6)) : 50;
   // A revoked or expired vault is finished: nothing is "next" except starting over.
   const finished = !!vault && (vault.revoked || status === "Expired");
-  // Completion records what happened, even after trades or withdrawals empty the vault.
-  const hasFunded = !!vault && (hasInput || vault.spentRaw > 0n || vault.outputBalanceRaw > 0n ||
-    activity.some((item) => item.ok && details.current.get(item.signature)?.label === "Fund vault"));
-  const hasAgentRequest = !!vault && (vault.spentRaw > 0n || swaps.length > 0);
-  const step1 = vault ? "done" : "next";
-  const step2 = hasFunded ? "done" : vault && !finished ? "next" : "todo";
-  const step3 = hasAgentRequest ? "done" : hasInput && !finished ? "next" : "todo";
-  const guardLead = !vault ? <>Applies once the vault is created.</>
-    : vault.revoked ? <>Agent is <strong>revoked</strong>.</>
-    : status === "Expired" ? <>Trading permission has <strong>expired</strong>.</>
-    : <>Fixed at vault creation.</>;
+  const step1 = !ready ? "todo" : vault ? "done" : "next";
+  const step2 = !ready ? "todo" : hasInput ? "done" : vault && !finished ? "next" : "todo";
+  const step3 = !ready ? "todo" : swaps.length > 0 ? "done" : hasInput && !finished ? "next" : "todo";
+  const stepsDone = (step1 === "done" ? 1 : 0) + (step2 === "done" ? 1 : 0) + (step3 === "done" ? 1 : 0);
+  const guardLead = !ready ? <>Loading vault state…</>
+    : !vault ? <>No vault yet. Create one and the guardrails switch on.</>
+    : vault.revoked ? <>Agent is <strong>revoked</strong>. It can no longer trade; your funds stay withdrawable.</>
+    : status === "Expired" ? <>Trading permission has <strong>expired</strong>. Withdraw any time.</>
+    : <>Agent may spend up to <strong>{amount(vault.maxTradeRaw)} testUSDC</strong> per trade.</>;
 
-  /* ---- sidebar CTA + rail ---- */
+  const busyProps = (label: string) => busy === label ? { "data-busy": "true" as const, "aria-busy": true as const } : {};
   const cta = <>
-    <ProgressButton className="primary" disabled={!ready || locked} busy={busy === "New demo vault"} progress="Setting up…" onClick={() => void newDemo()}><Icon name="sparkle" size={16} />New demo vault</ProgressButton>
-    <span className="sidebar-hint">Create and fund in one step.</span>
-  </>;
+    <button className="primary" disabled={!ready || locked} {...busyProps("New demo vault")} onClick={() => void newDemo()}><Icon name="sparkle" size={16} />New demo vault</button>
+      </>;
 
-  const rail = <>
-    <div className="rail-top">{toolbar}<span className="avatar" title={owner.toBase58()} aria-label={`Owner ${owner.toBase58()}`}>{owner.toBase58().slice(0, 2).toUpperCase()}</span></div>
-    <section className="rail-card tinted" aria-labelledby="guard-title">
-      <div className="rail-heading"><h2 id="guard-title">Guardrails</h2><span className="rail-badge"><Icon name="shield" size={16} /></span></div>
-      <p className="rail-lead">{guardLead}</p>
-      <p className="rail-sub">Enforced on-chain. The agent cannot change them.</p>
-      <div className="guard-rows">
-        <div className="guard-row"><span className="label">Per-trade cap</span><span className="value">{vault ? amount(vault.maxTradeRaw) : "50"}<small>testUSDC</small></span></div>
-        <div className="guard-row"><span className="label">Total budget</span><span className="value">{vault ? amount(vault.budgetRaw) : "100"}<small>testUSDC</small></span></div>
-        <div className="guard-row"><span className="label">Spent so far</span><span className={`value ${vault ? "" : "placeholder"}`} data-testid="spent">{vault ? amount(vault.spentRaw) : "—"}<small>testUSDC</small></span>
-          <div className={`meter ${budgetLevel}`} role="img" aria-label={vault ? `${spentPercent}% of the budget spent` : "No vault"}><span style={{ width: `${spentPercent}%` }} /></div></div>
-        <div className="guard-row"><span className="label">Time left</span><span className="value" data-testid="expiry">{vault ? countdown(vault.expiryUnix, now) : "1 hour, from creation"}</span>
-          <div className="meter neutral" role="img" aria-label={vault ? `${lifePercent}% of the hour remaining` : "No vault"}><span style={{ width: `${lifePercent}%` }} /></div></div>
-        <div className="guard-row"><span className="label">Output goes to</span><span className="value"><Icon name="lock" size={14} /> This vault only</span></div>
-      </div>
-    </section>
-    <section className="rail-card" aria-labelledby="chart-title">
-      <div className="rail-heading"><h2 id="chart-title">Agent requests</h2></div>
-      <div className="chart-hero"><strong>{blocked}</strong><small>blocked · {swaps.length} {swaps.length === 1 ? "request" : "requests"} so far</small></div>
-      <TradeBars trades={bars} cap={capUi} unit="testUSDC" />
-      <div className="chart-legend" aria-hidden="true"><span><i />Allowed</span><span><i className="bad" />Blocked by Aegis</span></div>
-    </section>
-    <section className="rail-card" aria-labelledby="keys-title">
-      <div className="rail-heading"><h2 id="keys-title">Addresses</h2></div>
-      <div className="keys">
-        <KeyRow label="Owner" value={owner.toBase58()} />
-        <KeyRow label="Agent" value={agent.toBase58()} note={vault?.revoked ? "revoked" : undefined} />
-        {vault && <KeyRow label="Vault" value={vault.address.toBase58()} />}
-      </div>
-    </section>
-  </>;
+  const heading = PAGE_TITLE[page];
+  const loading = <p className="page-loading" role="status">Loading…</p>;
 
   return <Shell active={page} cta={cta}>
     <div className="page-view" key={page}>
@@ -701,52 +556,57 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       </div>
     </div>
     <div className="dashboard-notice">
-      {busy ? <Notice tone="busy" message={`${busy} · ${stage}`} />
+      {busy ? <Notice tone="busy" message={busy === "Create vault" ? "Creating your vault…" : busy === "Fund vault" ? "Adding 1,000 testUSDC…" : busy === "New demo vault" ? "Creating and funding a demo vault…" : busy === "Withdraw all" ? "Moving everything back to your wallet…" : busy === "Revoke agent" ? "Stopping the agent…" : `${busy}…`} />
         : notice && (notice.ok
           ? <Notice tone="success" message={notice.text} />
           : <Notice tone="error" message={notice.text} onDismiss={() => setNotice(null)} />)}
-      {!busy && !ready && <Notice tone="busy" message="Loading vault…" />}
     </div>
+    {connection.getWalletSolBalance && <DevnetSolHint readBalance={connection.getWalletSolBalance} />}
 
-    <section id="overview" className="tiles" aria-label="Vault at a glance" aria-busy={loading}>
-      <Tile loading={loading} tone="lavender" icon="wallet" label="In the vault" value={vault ? amount(vault.inputBalanceRaw) : "0"} unit="testUSDC" testId="input-balance"
-        sub={<><span className="token-dot" aria-hidden="true" />{hasInput ? "Ready for the agent to trade" : "Fund the vault to start"}</>} />
-      <Tile loading={loading} tone="mist" icon="coins" label="Received from trades" value={vault ? amount(vault.outputBalanceRaw, 9) : "0"} unit="testSOL" testId="output-balance"
-        sub={<><span className="token-dot sol" aria-hidden="true" />{vault ? "100 testUSDC buys 1 testSOL" : "Nothing received yet"}</>} />
-      <Tile loading={loading} tone="mint" icon="chart" label="Budget left" value={vault ? amount(remaining) : "0"} unit="testUSDC" testId="remaining-budget">
-        <div className={`budget-section ${budgetLevel}`}>
-          <progress aria-label="Remaining budget" aria-valuetext={vault ? `${amount(remaining)} of ${amount(vault.budgetRaw)} testUSDC remaining` : "No vault"} value={remainingBasisPoints.toString()} max="10000" />
-          <span className="budget-number"></span>
-        </div>
-      </Tile>
-      <Tile loading={loading} tone="cream" icon="shield" label="Attacks blocked" value={String(blocked)} subTone={blocked > 0 ? "good" : undefined}
-        sub={<><Icon name={blocked > 0 ? "check" : "info"} size={14} />{swaps.length === 0 ? "No agent requests yet" : `${allowedSwaps} ${allowedSwaps === 1 ? "trade" : "trades"} allowed`}</>} />
-    </section>
-
-    <section id="vault" className="card vault-card" aria-labelledby="vault-title" aria-busy={loading || !!busy}>
-      <div className="card-heading"><h2 id="vault-title">Trading vault</h2><span className={`status ${status.toLowerCase().replace(" ", "-")}`} data-testid="vault-status"><span className="small-dot" aria-hidden="true" />{loading ? "Loading…" : status}</span></div>
-      {loading ? <VaultSkeleton /> : <>
-      {connection.getWalletSolBalance && <DevnetSolHint readBalance={connection.getWalletSolBalance} />}
-      <div className="steps">
-        <Step number={1} state={step1} title={vault ? "Vault created" : "Vault setup"} text="">
-          <div className="step-action">
-            {!vault && <ProgressButton className={step1 === "next" ? "primary" : ""} disabled={!ready || locked} busy={busy === "Create vault"} progress="Creating…" onClick={() => void create()}>Create vault</ProgressButton>}
+    {page === "vault" && (!ready ? loading : <>
+      <section className="tiles" aria-label="Vault at a glance">
+        <Tile tone="cream" icon="wallet" label="In the vault" value={vault ? amount(vault.inputBalanceRaw) : "0"} unit="testUSDC" testId="input-balance"
+          sub={<><span className="token-dot" aria-hidden="true" />{hasInput ? "Ready for the agent to trade" : "Fund the vault to start"}</>} />
+        <Tile tone="cream" icon="coins" label="Received from trades" value={vault ? amount(vault.outputBalanceRaw, 9) : "0"} unit="testSOL" testId="output-balance"
+          sub={<><span className="token-dot sol" aria-hidden="true" />{vault ? "100 testUSDC buys 1 testSOL" : "Nothing received yet"}</>} />
+        <Tile tone="cream" icon="chart" label="Budget left" value={vault ? amount(remaining) : "0"} unit="testUSDC" testId="remaining-budget">
+          <div className={`budget-section ${budgetLevel}`}>
+            <progress aria-label="Remaining budget" aria-valuetext={vault ? `${amount(remaining)} of ${amount(vault.budgetRaw)} testUSDC remaining` : "No vault"} value={remainingBasisPoints.toString()} max="10000" />
+            <span className="budget-number">{vault ? <><strong>{amount(vault.spentRaw)}</strong> spent of {amount(vault.budgetRaw)} total</> : "Create a vault to activate"}</span>
           </div>
-        </Step>
-        <FundingStep state={step2} balance={walletBalance} hasFaucet={!!connection.faucet} hasVault={!!vault} finished={finished} locked={locked} busy={busy}
-          text={needsFaucet(walletBalance, !!connection.faucet) ? (vault ? "Get testUSDC before funding."
-              : "Set up your vault first.")
-            : "Transfer from your wallet."}
-          onFaucet={() => void run("Get testUSDC", connection.faucet!)} onFund={() => void fund()} onNewDemo={() => void newDemo()} />
-        <Step number={3} state={step3} title="Try the agent" text="Trade normally, then test an attack.">
-          <a className="step-ok" href="#agent">Go to agent <Icon name="arrow" size={14} /></a>
-        </Step>
-      </div>
-      <div className="owner-controls">
-        <p>{!vault ? <><strong>Owner controls.</strong> Once set up, funds stay withdrawable after revocation or expiry.</> : <><strong>Owner controls.</strong> Funds stay withdrawable after revocation or expiry.</>}</p>
-        <div className="buttons">
-          <ProgressButton className="danger" disabled={!vault || vault.revoked || locked} busy={busy === "Revoke agent"} progress="Revoking…" onClick={() => void revoke()}>Revoke agent</ProgressButton>
-          <ProgressButton disabled={!hasBalance || locked} busy={busy === "Withdraw all"} progress="Withdrawing…" onClick={() => void withdraw()}>Withdraw all</ProgressButton>
+        </Tile>
+        <Tile tone="cream" icon="shield" label="Attacks blocked" value={activityReady ? String(blocked) : "—"} subTone={blocked > 0 ? "good" : undefined}
+          sub={<><Icon name={blocked > 0 ? "check" : "info"} size={14} />{!activityReady ? "Loading activity" : swaps.length === 0 ? "No agent requests yet" : `${allowedSwaps} ${allowedSwaps === 1 ? "trade" : "trades"} allowed`}</>} />
+      </section>
+
+      <section className="go-live" aria-labelledby="vault-setup-title">
+        <div className="go-live-head">
+          <div>
+            <h2 id="vault-setup-title">{stepsDone === 3 ? "Vault ready" : "Set up your vault"}</h2>
+            <p className="go-live-lead">{stepsDone === 3
+              ? "Limits are live. Try the agent, or revoke and withdraw whenever you want."
+              : "Create, fund, then stress-test the agent. Everything below stays under your control."}</p>
+          </div>
+          <div className="go-live-progress" aria-label={`${stepsDone} of 3 steps done`}>
+            <span>{stepsDone} of 3 done</span>
+            <div className="go-live-track" aria-hidden="true"><span style={{ width: `${(stepsDone / 3) * 100}%` }} /></div>
+          </div>
+        </div>
+        <div className="go-live-meta">
+          <span className={`status ${status.toLowerCase().replace(" ", "-")}`} data-testid="vault-status"><span className="small-dot" aria-hidden="true" />{status}</span>
+        </div>
+        <div className="steps">
+          <Step number={1} state={step1} title={vault ? "Vault created" : "Create a vault"} text={vault ? "Your vault is open with a 50 testUSDC per-trade cap and a 100 testUSDC total budget." : "Opens a vault with a 50 testUSDC per-trade cap and a 100 testUSDC total budget. Or use New demo vault for both steps at once."}>
+            {!vault && <button className={step1 === "next" ? "primary" : ""} disabled={!ready || locked} {...busyProps("Create vault")} onClick={() => void create()}>Create vault</button>}
+          </Step>
+          <FundingStep state={step2} balance={walletBalance} hasFaucet={!!connection.faucet} hasVault={!!vault} finished={finished} locked={locked} busy={busy}
+            text={needsFaucet(walletBalance, !!connection.faucet) ? (vault ? "Get test money in your wallet, then fund the vault."
+                : "Create a vault first; it needs no testUSDC. Then get test money in your wallet and fund the vault.")
+              : "Move test money from your wallet into the vault. The agent can trade with it, but never beyond the guardrails."}
+            onFaucet={() => void run("Get testUSDC", connection.faucet!)} onFund={() => void fund()} onNewDemo={() => void newDemo()} />
+          <Step number={3} state={step3} title="Try the agent" text="Run a normal trade, then try to trick it. Anything outside the rules is blocked on-chain.">
+            <button type="button" className="step-ok" onClick={() => go("agent")}>Open agent <Icon name="arrow" size={14} /></button>
+          </Step>
         </div>
       </section>
 
@@ -784,18 +644,43 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
           </div>}
         </section>
       </div>
-      {vault && <p className="vault-address"><Icon name="vault" size={14} />Vault <code title={vault.address.toBase58()} aria-label={vault.address.toBase58()}>{shorten(vault.address.toBase58())}</code></p>}
+    </>)}
+
+    {page === "stats" && <section className="rail-card chart-card" aria-labelledby="chart-title">
+      <div className="rail-heading">
+        <h2 id="chart-title">Agent requests vs cap</h2>
+        <span className="chart-cap-pill">cap {capUi} testUSDC</span>
+      </div>
+      {!ready || !activityReady ? loading : <>
+        <div className="chart-stats">
+          <div className="chart-stat"><strong>{swaps.length}</strong><span>requests</span></div>
+          <div className={`chart-stat${allowedSwaps > 0 ? " is-ok" : ""}`}><strong>{allowedSwaps}</strong><span>allowed</span></div>
+          <div className={`chart-stat${blocked > 0 ? " is-bad" : ""}`}><strong>{blocked}</strong><span>blocked</span></div>
+        </div>
+        {swaps.length > 0 ? <>
+          <div className="chart-plot" key={bars.map((b) => `${b.amount}-${b.ok}`).join("|")}>
+            <TradeBars trades={bars} cap={capUi} unit="testUSDC" />
+          </div>
+          <div className="chart-legend" aria-hidden="true">
+            <span><i />Allowed</span>
+            <span><i className="bad" />Blocked</span>
+          </div>
+        </> : <div className="empty-activity">
+          <span aria-hidden="true"><Icon name="chart" /></span>
+          <strong>No agent requests yet</strong>
+          <p>Run a trade from Agent. Allowed and blocked amounts will show up here against the per-trade cap.</p>
+          <button type="button" className="primary" onClick={() => go("agent")}>Open agent <Icon name="arrow" size={14} /></button>
+        </div>}
       </>}
-    </section>
+    </section>}
 
-    {narrow && <div className="rail rail--inline">{rail}</div>}
-
-    {environment !== "mock" ? <AgentConsole environment={environment} walletMode={connection.walletMode} key={address.current?.toBase58()} vault={vault} finished={finished} disabled={!!busy || loading} onBusy={setAgentBusy} onComplete={refreshAfterAgent} />
-      : <section id="agent" className="card trade-card" aria-labelledby="trade-title">
-        <div><h2 id="trade-title">Try an agent trade</h2><p className="muted">Try an amount above the per-trade cap.</p></div>
+    {page === "agent" && (!ready ? loading : environment !== "mock"
+      ? <AgentConsole environment={environment} walletMode={connection.walletMode} key={address.current?.toBase58()} vault={vault} finished={finished} disabled={!!busy} onBusy={setAgentBusy} onComplete={refresh} />
+      : <section className="card trade-card" aria-labelledby="trade-title">
+        <div><h2 id="trade-title">Try an agent trade</h2><p className="muted">20 testUSDC is within the 50 cap and goes through. Try 60 to watch the cap block it.</p></div>
         <form onSubmit={trade}>
           <label htmlFor="trade-amount">Amount <span>testUSDC</span></label>
-          <div className="trade-controls"><input id="trade-amount" inputMode="decimal" value={tradeAmount} onChange={(event) => setTradeAmount(event.target.value)} disabled={!vault || finished || !!busy} autoComplete="off" /><ProgressButton className="primary" disabled={!vault || finished || !!busy} busy={busy === "Agent trade"} progress="Swapping…" type="submit">Swap</ProgressButton></div>
+          <div className="trade-controls"><input id="trade-amount" inputMode="decimal" value={tradeAmount} onChange={(event) => setTradeAmount(event.target.value)} disabled={!vault || finished || !!busy} autoComplete="off" /><button className="primary" disabled={!vault || finished || !!busy} {...busyProps("Agent trade")} type="submit">Swap</button></div>
         </form>
       </section>)}
 

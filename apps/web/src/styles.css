@@ -854,8 +854,9 @@ progress::-moz-progress-bar { border-radius: 3px; background: var(--budget-color
 .step strong { display: block; font-size: 14px; }
 .step p { font-size: 13px; color: var(--ink-2); }
 .step.done strong { color: var(--ink-2); }
-.step.todo { opacity: .55; }
-.step .step-ok { display: inline-flex; align-items: center; gap: 6px; margin: 0; padding: 0; border: 0; background: none; font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--line-2); cursor: pointer; }
+/* Keep the setup row and its status aligned when its one-time action is gone. */
+.step-action { min-height: 42px; }
+.step .step-ok { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--ink); white-space: nowrap; text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--line-2); }
 .step .step-ok:hover { text-decoration-color: currentColor; }
 .owner-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 10px; padding: 14px 16px; border-top: 0; border-radius: 14px; background: #fff; box-shadow: var(--shadow-card); }
 .owner-controls p { font-size: 13px; color: var(--ink-2); }
@@ -1077,7 +1078,7 @@ footer { display: flex; justify-content: space-between; gap: 16px; padding-top: 
   .go-live-progress { text-align: left; width: 100%; min-width: 0; }
   .panel-grid { grid-template-columns: minmax(0, 1fr); }
   .step, .scenario { grid-template-columns: 38px minmax(0, 1fr); }
-  .step > button, .step > .step-ok, .scenario > button { grid-column: 2; justify-self: start; }
+  .step > button, .step > .step-action, .step > .step-ok, .scenario > button { grid-column: 2; justify-self: start; }
   .scenario { grid-template-columns: 48px minmax(0, 1fr); }
   .trade-card { flex-direction: column; align-items: stretch; }
   .trade-card form { width: 100%; }

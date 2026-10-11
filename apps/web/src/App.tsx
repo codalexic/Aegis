@@ -728,8 +728,10 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       {loading ? <VaultSkeleton /> : <>
       {connection.getWalletSolBalance && <DevnetSolHint readBalance={connection.getWalletSolBalance} />}
       <div className="steps">
-        <Step number={1} state={step1} title="Vault setup" text="">
-          <ProgressButton className={step1 === "next" ? "primary" : ""} disabled={!ready || !!vault || locked} busy={busy === "Create vault"} progress="Creating…" onClick={() => void create()}>Create vault</ProgressButton>
+        <Step number={1} state={step1} title={vault ? "Vault created" : "Vault setup"} text="">
+          <div className="step-action">
+            {!vault && <ProgressButton className={step1 === "next" ? "primary" : ""} disabled={!ready || locked} busy={busy === "Create vault"} progress="Creating…" onClick={() => void create()}>Create vault</ProgressButton>}
+          </div>
         </Step>
         <FundingStep state={step2} balance={walletBalance} hasFaucet={!!connection.faucet} hasVault={!!vault} finished={finished} locked={locked} busy={busy}
           text={needsFaucet(walletBalance, !!connection.faucet) ? (vault ? "Get testUSDC before funding."

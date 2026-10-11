@@ -11,6 +11,7 @@ import type { LocalnetDeployment } from "../../../packages/sdk/src/anchor";
 import { LocalnetReader } from "../src/localnet-reader";
 import { AccountLayout, getAssociatedTokenAddressSync as browserAta } from "../src/browser-token";
 import { isOnCurve } from "../src/browser-curve";
+import { RpcError, RPC_RATE_LIMITED } from "../../../packages/sdk/src/errors";
 
 afterEach(() => vi.unstubAllGlobals());
 const key = (byte: number) => new PublicKey(new Uint8Array(32).fill(byte));
@@ -47,6 +48,13 @@ describe("browser read-only boundary", () => {
     const { reader, tokens } = await fixture();
     expect(await reader.getVault(vault)).toMatchObject({ inputBalanceRaw: 9_007_199_254_740_993n, outputBalanceRaw: 9_007_199_254_740_993n, spentRaw: 20_000_000n });
     expect(AccountLayout.decode(Buffer.from(tokens[0].data[0], "base64")).amount).toBe(9_007_199_254_740_993n);
+  });
+
+  it("does not relabel token-balance RPC rate limits as account mismatches", async () => {
+    const { reader, info } = await fixture();
+    const rpc = vi.spyOn(reader, "rpc").mockResolvedValueOnce({ value: info }).mockRejectedValueOnce(new RpcError(RPC_RATE_LIMITED));
+    await expect(reader.getVault(vault)).rejects.toThrow(RPC_RATE_LIMITED);
+    rpc.mockRestore();
   });
 
   it.each(["owner", "executable", "size", "discriminator"])("rejects invalid vault %s", async (field) => {

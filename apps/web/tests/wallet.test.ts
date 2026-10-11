@@ -5,6 +5,7 @@ import { encode as encodeSignature } from "@coral-xyz/anchor/dist/esm/utils/byte
 import { WalletTransaction } from "../../../packages/sdk/src/wallet-transaction";
 import deployment from "../../../deployments/localnet.json";
 import { DEVNET_RPC_URL, DEVNET_WS_URL } from "../../../packages/sdk/src/devnet";
+import { RPC_RATE_LIMITED, WALLET_REJECTED } from "../../../packages/sdk/src/errors";
 
 afterEach(() => vi.restoreAllMocks());
 const owner = Keypair.generate();
@@ -63,6 +64,33 @@ describe("wallet-adapter owner signing", () => {
       return transaction;
     });
     expect(await client.createVault(wallet, params)).toEqual({ ok: false, origin: "client", error: "SigningFailed" });
+    expect(rpc.mock.calls.some(([method]) => method === "sendTransaction")).toBe(false);
+  });
+
+  it.each(["getLatestBlockhash", "simulateTransaction", "sendTransaction", "getSignatureStatuses"])("never calls a 429 from %s SigningFailed", async (stage) => {
+    const { client, rpc, wallet, sign } = fixture();
+    const original = rpc.getMockImplementation()!;
+    rpc.mockImplementation(async (method, params) => {
+      if (method === stage) throw Object.assign(new Error("429 Too Many Requests: private provider context"), { status: 429 });
+      return original(method, params);
+    });
+    expect(await client.createVault(wallet, params)).toMatchObject({ ok: false, origin: "rpc", error: RPC_RATE_LIMITED });
+    expect(sign).toHaveBeenCalledTimes(["getLatestBlockhash", "simulateTransaction"].includes(stage) ? 0 : 1);
+  });
+
+  it.each([
+    { cause: { code: 429 } }, new Error("429 Too Many Requests"),
+  ])("preserves a rate limit wrapped by the wallet adapter", async (error) => {
+    const { client, rpc, wallet, sign } = fixture();
+    sign.mockRejectedValue(error);
+    expect(await client.createVault(wallet, params)).toEqual({ ok: false, origin: "rpc", error: RPC_RATE_LIMITED });
+    expect(rpc.mock.calls.some(([method]) => method === "sendTransaction")).toBe(false);
+  });
+
+  it.each([{ code: 4001 }, new Error("User rejected the request."), { cause: { code: 4001 } }])("identifies Phantom rejection separately from invalid signatures", async (error) => {
+    const { client, rpc, wallet, sign } = fixture();
+    sign.mockRejectedValue(error);
+    expect(await client.createVault(wallet, params)).toEqual({ ok: false, origin: "client", error: WALLET_REJECTED });
     expect(rpc.mock.calls.some(([method]) => method === "sendTransaction")).toBe(false);
   });
 

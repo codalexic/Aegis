@@ -178,6 +178,7 @@ Set these exact variables in **Project → Settings → Environment Variables**:
 | `ENABLE_EXPERIMENTAL_COREPACK` | `1`, so Vercel uses pinned pnpm `12.9.1`. |
 | `AI_MODEL` | Optional Gemini model ID; defaults to `gemini-3.1-flash-lite`. |
 | `AEGIS_PUBLIC_ORIGIN` | Optional canonical HTTPS site origin; set for a custom domain. Otherwise uses Vercel's `VERCEL_PROJECT_PRODUCTION_URL` in Production and `VERCEL_URL` in Preview. |
+| `VITE_DEVNET_RPC_URL` | Optional public browser HTTPS devnet RPC URL, set at build time; defaults to `https://api.devnet.solana.com`. |
 
 **Never paste `.keys/devnet-deployer.json` anywhere, including Vercel or chat.
 It controls program upgrades and must never leave this machine.** The faucet
@@ -201,6 +202,23 @@ quotas. Enable the documented Vercel Firewall rule (six API POSTs/IP/minute acro
 endpoints) before sharing; its counters are per region. No database is required.
 
 ### Deployment
+
+Set `VITE_DEVNET_RPC_URL` to a browser-accessible devnet provider endpoint before
+building, then redeploy. For local builds it can also be set in the root `.env`.
+This URL is visible in the JavaScript bundle and network requests: use only a
+public endpoint or a provider credential explicitly intended for public browser
+use, restricted to the site's origin. Never put a private API key, signing key,
+or server secret in a `VITE_` variable. Server RPC and localnet settings are unchanged.
+Custom endpoints are checked against the devnet genesis hash before use.
+
+The devnet dashboard polls vault state every 10 seconds (two RPC requests) and
+activity every 20 seconds (one signature request), without overlapping polls.
+After the initial load, an idle visible dashboard with a vault makes **15 RPC
+requests per minute**, excluding retries and user actions; a hidden tab starts
+no polls. Without a vault it makes no periodic RPC requests. Activity starts with
+the latest 20 signatures and then loads only newer entries, caching transaction
+details. Confirmed owner actions refresh state and activity immediately; RPC
+backoff or an in-flight poll can delay that refresh.
 
 1. Sign in to Vercel and import this GitHub repository. Use the repository root,
    Framework **Other**, Node **24.x**, and enable Fluid Compute. Keep the build

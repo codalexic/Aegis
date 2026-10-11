@@ -12,7 +12,7 @@ export function SidebarIllustration({ className }: { className?: string }): JSX.
       className={className}
       viewBox="0 0 220 160"
       width="100%"
-      height="auto"
+      style={{ height: "auto" }}
       role="img"
       aria-label="A friendly robot sitting beside a locked vault, holding a shield with a check mark"
       fill="none"

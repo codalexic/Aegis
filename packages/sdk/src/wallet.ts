@@ -10,7 +10,7 @@ import idl from "../../../artifacts/idl/aegis.json";
 import { AEGIS_PROGRAM_ID, deriveSwapAccounts, deriveVaultAuthorityPda, deriveVaultPda } from "./addresses";
 import { ChainReader } from "./chain-reader";
 import { isU64 } from "./amounts";
-import { ClientError, failure, transactionErrorName } from "./errors";
+import { ClientError, RpcError, RPC_RATE_LIMITED, WALLET_REJECTED, isRateLimited, isWalletRejected, failure, transactionErrorName } from "./errors";
 import type { CreateVaultParams, TxResult } from "./types";
 import { WalletTransaction, type WalletSigner } from "./wallet-transaction";
 export type { WalletSigner } from "./wallet-transaction";
@@ -99,7 +99,11 @@ export class WalletAegisClient extends ChainReader {
             signed.signatures[0].length !== 64 || !signed.signatures[0].some((byte) => byte !== 0)) throw new Error();
         const publicKey = await crypto.subtle.importKey("raw", new Uint8Array(owner.publicKey.toBytes()), "Ed25519", false, ["verify"]);
         if (!await crypto.subtle.verify("Ed25519", publicKey, new Uint8Array(signed.signatures[0]), new Uint8Array(expectedMessage))) throw new Error();
-      } catch { throw new ClientError("SigningFailed"); }
+      } catch (error) {
+        if (isRateLimited(error)) throw new RpcError(RPC_RATE_LIMITED);
+        if (isWalletRejected(error)) throw new ClientError(WALLET_REJECTED);
+        throw new ClientError("SigningFailed");
+      }
       // Submit our reviewed message with the wallet's signature, preserving its
       // identity even if the RPC accepts the transaction but loses the response.
       const submitted = new WalletTransaction(MessageV0.deserialize(expectedMessage));

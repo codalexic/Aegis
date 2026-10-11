@@ -16,6 +16,7 @@ export default defineConfig(({ mode }) => {
   if (signing !== undefined && signing !== "wallet" && signing !== "server") throw new Error("AEGIS_SIGNING must be wallet or server.");
   const walletMode = environment === "devnet" || (environment === "localnet" && signing === "wallet");
   const settings = { ...loadEnv(mode, workspaceRoot, "AEGIS_"), ...process.env };
+  const devnetRpcUrl = process.env.VITE_DEVNET_RPC_URL ?? loadEnv(mode, workspaceRoot, "VITE_DEVNET_RPC_URL").VITE_DEVNET_RPC_URL;
   return {
     plugins: [
       ...(environment === "localnet" && !walletMode ? [ownerApiPlugin(workspaceRoot)] : []),
@@ -29,8 +30,9 @@ export default defineConfig(({ mode }) => {
         }
       } },
     ],
-    // Expose only the environment label, never the contents of the root .env file.
-    define: { "import.meta.env.AEGIS_ENV": JSON.stringify(environment), "import.meta.env.AEGIS_WALLET": JSON.stringify(walletMode), "process.env.ANCHOR_BROWSER": "true" },
+    // Explicit public settings only; never expose the contents of the root .env file.
+    define: { "import.meta.env.AEGIS_ENV": JSON.stringify(environment), "import.meta.env.AEGIS_WALLET": JSON.stringify(walletMode),
+      "import.meta.env.VITE_DEVNET_RPC_URL": JSON.stringify(devnetRpcUrl ?? "https://api.devnet.solana.com"), "process.env.ANCHOR_BROWSER": "true" },
     server: {
       // Runtime lastVault updates should not restart the browser session.
       watch: { ignored: ["**/deployments/localnet.json", "**/deployments/localnet.json.tmp"] },

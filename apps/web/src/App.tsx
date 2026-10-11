@@ -7,6 +7,8 @@ import type { ActionDetail } from "./activity";
 import { AgentConsole, blockedTitle, rejectionReason } from "./AgentConsole";
 import { useWallet } from "./wallet-react";
 import { connectWalletDashboard } from "./wallet-client";
+import { startDashboardPolling } from "./polling";
+import { isRateLimited, RPC_RATE_LIMITED } from "../../../packages/sdk/src/errors";
 import { explorerTransactionUrl } from "../../../packages/sdk/src/explorer";
 import { Icon, type IconName } from "./icons";
 import { Logo } from "./Logo";
@@ -187,40 +189,73 @@ function Dashboard({ connection, toolbar }: { connection: DashboardConnection; t
   const [tradeAmount, setTradeAmount] = useState("20");
   const [ready, setReady] = useState(environment === "mock" || !connection.initialVault);
   const refreshing = useRef(false);
+  const currentState = useRef<VaultState | null>(null);
+  const polling = useRef<ReturnType<typeof startDashboardPolling> | null>(null);
   const active = useActiveSection(ready);
   const narrow = useMediaQuery("(max-width: 1240px)");
 
-  const refresh = useCallback(async () => {
+  const refreshState = useCallback(async () => {
     setNow(nowUnix());
-    if (!address.current || refreshing.current) return;
+    if (!address.current) return;
     const selected = address.current;
-    refreshing.current = true;
     try {
-      let state: VaultState;
-      try { state = await client.getVault(selected); } catch (error) {
-        if (address.current !== selected) return;
-        if (error instanceof Error && error.message === "VaultNotFound") { setVault(null); setActivity([]); setReady(true); return; }
-        throw error;
-      }
-      const history = await client.listActivity(selected);
-      if (connection.readDetail) await Promise.all(history.filter((item) => !details.current.has(item.signature)).map(async (item) => {
-        const detail = await connection.readDetail!(item.signature, state);
-        if (detail) details.current.set(item.signature, detail);
-      }));
+      const state = await client.getVault(selected);
       if (address.current !== selected) return;
+      currentState.current = state;
       setVault(state);
-      setActivity(history);
       setReady(true);
-    } finally { refreshing.current = false; }
-  }, [client, connection]);
+    } catch (error) {
+      if (address.current !== selected) return;
+      if (error instanceof Error && error.message === "VaultNotFound") {
+        currentState.current = null;
+        setVault(null); setActivity([]); setReady(true); return;
+      }
+      throw error;
+    }
+  }, [client]);
+
+  const refreshActivity = useCallback(async () => {
+    const selected = address.current, state = currentState.current;
+    if (!selected || !state || !state.address.equals(selected)) return;
+    const history = await client.listActivity(selected);
+    const read = async (item: Activity) => {
+      const detail = await connection.readDetail!(item.signature, state);
+      if (detail && address.current === selected) details.current.set(item.signature, detail);
+    };
+    if (connection.readDetail) {
+      const missing = history.filter((item) => !details.current.has(item.signature));
+      if (environment === "devnet") {
+        for (const item of missing) await read(item);
+      } else await Promise.all(missing.map(read));
+    }
+    if (address.current === selected) setActivity(history);
+  }, [client, connection, environment]);
+
+  const refresh = useCallback(async () => {
+    if (environment === "devnet") { await polling.current?.refresh(); return; }
+    if (refreshing.current) return;
+    refreshing.current = true;
+    try { await refreshState(); await refreshActivity(); }
+    finally { refreshing.current = false; }
+  }, [environment, refreshState, refreshActivity]);
 
   useEffect(() => {
-    void refresh().catch(() => setNotice({ ok: false, text: environment === "localnet" ? "Lost contact with the test chain. Is the local validator still running?" : environment === "devnet" ? "Lost contact with Solana devnet. Check your internet connection." : "Could not refresh the vault." }));
-    const timer = window.setInterval(() => {
-      void refresh().catch(() => setNotice({ ok: false, text: "Could not refresh the vault. Retrying…" }));
-    }, 2_000);
+    const onError = (error: unknown) => setNotice((current) => current?.ok === false ? current : {
+      ok: false, text: isRateLimited(error) ? RPC_RATE_LIMITED : environment === "localnet"
+        ? "Lost contact with the test chain. Is the local validator still running?"
+        : "Could not refresh the vault. Retrying…",
+    });
+    if (environment === "devnet") {
+      const scheduler = startDashboardPolling({ state: refreshState, activity: refreshActivity, onError });
+      polling.current = scheduler;
+      // Countdown is local UI work, independent of RPC polling.
+      const clock = window.setInterval(() => setNow(nowUnix()), 1000);
+      return () => { scheduler.stop(); polling.current = null; window.clearInterval(clock); };
+    }
+    void refresh().catch(onError);
+    const timer = window.setInterval(() => { void refresh().catch(onError); }, 2_000);
     return () => window.clearInterval(timer);
-  }, [refresh, environment]);
+  }, [refresh, refreshState, refreshActivity, environment]);
 
   useEffect(() => {
     if (!notice?.ok) return;
@@ -244,7 +279,7 @@ function Dashboard({ connection, toolbar }: { connection: DashboardConnection; t
     } catch (error) {
       setNotice({ ok: false, text: error instanceof Error ? error.message : "Action failed." });
     } finally {
-      try { await refresh(); } catch { setNotice({ ok: false, text: "Could not refresh the vault. Retrying…" }); }
+      try { await refresh(); } catch { setNotice((current) => current?.ok === false ? current : { ok: false, text: "Could not refresh the vault. Retrying…" }); }
       running.current = false;
       setBusy(null);
     }

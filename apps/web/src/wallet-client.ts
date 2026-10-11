@@ -9,7 +9,7 @@ export async function connectWalletDashboard(environment: "localnet" | "devnet",
   const deployment: ChainDeployment & { error?: string } = await response.json();
   if (!response.ok) throw new Error(deployment.error ?? "Cannot load this cluster's deployment.");
   if (deployment.environment !== environment) throw new Error("Deployment environment mismatch.");
-  const client = new WalletAegisClient(deployment), agent = new PublicKey(deployment.agent);
+  const client = new WalletAegisClient(deployment, { devnetRpcUrl: import.meta.env.VITE_DEVNET_RPC_URL }), agent = new PublicKey(deployment.agent);
   const latestResponse = await fetch(`/api/actions/latest-vault?account=${wallet.publicKey.toBase58()}`, { cache: "no-store" });
   const latest: { vault?: string | null; message?: string } = await latestResponse.json();
   if (!latestResponse.ok) throw new Error(latest.message ?? "Cannot find the wallet's latest vault.");

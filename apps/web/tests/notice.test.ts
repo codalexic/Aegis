@@ -1,0 +1,109 @@
+import { readFileSync } from "node:fs";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+import aegisIdl from "../../../artifacts/idl/aegis.json";
+import dexIdl from "../../../artifacts/idl/demo_dex.json";
+import { RPC_RATE_LIMITED, WALLET_REJECTED } from "../../../packages/sdk/src/errors";
+import { describeError, PROGRAM_ERROR_MESSAGES } from "../src/errors";
+import { Notice } from "../src/Notice";
+
+const clientCodes = [
+  "RpcError", "RateLimited", "WalletRejected", "UserRejected", "SigningFailed",
+  "InsufficientFunds", "InsufficientFundsForFee", "InsufficientFundsForRent",
+  "VaultNotFound", "VaultAlreadyExists", "DeploymentProgramMismatch", "DeploymentAccountMismatch",
+  "DeploymentClusterMismatch", "InvalidDevnetRpcUrl", "InvalidTransaction",
+  "TransactionExpired", "ConfirmationTimedOut", "TransactionFailed",
+];
+const knownCodes = [...new Set([...clientCodes, ...[aegisIdl, dexIdl].flatMap((idl) => idl.errors.map(({ name }) => name))])];
+const renderError = (message: unknown) => renderToStaticMarkup(createElement(Notice, { tone: "error", message }));
+
+describe("notice error copy", () => {
+  it.each(knownCodes)("never shows known code %s raw", (code) => {
+    const detail = describeError(new Error(code));
+    expect(detail.text).toMatch(/[.!]$/);
+    expect(detail.text).not.toBe("Something went wrong. Try again.");
+    expect(detail.code).toBeUndefined();
+    expect(renderError(code)).not.toContain(code);
+  });
+
+  it("covers every literal client error emitted by the SDK", () => {
+    for (const file of ["chain-reader.ts", "wallet.ts", "anchor.ts"]) {
+      const source = readFileSync(new URL(`../../../packages/sdk/src/${file}`, import.meta.url), "utf8");
+      for (const [, code] of source.matchAll(/new ClientError\("(\w+)"\)/g)) {
+        expect(knownCodes, `${file}: ${code}`).toContain(code);
+      }
+    }
+  });
+
+  it("reuses the program explanations", () => {
+    for (const { name } of aegisIdl.errors) expect(describeError(name).text).toBe(PROGRAM_ERROR_MESSAGES[name]);
+  });
+
+  it("explains RPC congestion and recognizes wallet and rate-limit wrappers", () => {
+    expect(describeError("RpcError").text).toBe("The Solana devnet RPC is busy or rate limited. Wait a few seconds and try again.");
+    expect(describeError(RPC_RATE_LIMITED)).toEqual(describeError("RpcError"));
+    expect(describeError({ cause: { status: 429 } })).toEqual(describeError("RpcError"));
+    expect(describeError(WALLET_REJECTED)).toEqual(describeError("WalletRejected"));
+    expect(describeError({ cause: { code: 4001 } })).toEqual(describeError("WalletRejected"));
+    expect(describeError({ code: "SigningFailed", message: "wallet adapter details" })).toEqual(describeError("SigningFailed"));
+  });
+
+  it.each(["insufficient SOL for fees", "insufficient funds for fee", "insufficient lamports"])("explains %s", (message) => {
+    expect(describeError(new Error(message))).toEqual(describeError("InsufficientFundsForFee"));
+  });
+
+  it.each([...knownCodes, "FutureFundingError"])("handles %s inside partial-success funding messages", (code) => {
+    const detail = describeError(`Vault created, but funding failed: ${code}. Use Fund 1,000 to retry.`);
+    expect(detail.text).toBe(`Vault created, but funding failed. ${describeError(code).text} Use Fund 1,000 to retry.`);
+    expect(detail.text).not.toContain(code);
+    expect(detail.code).toBe(code === "FutureFundingError" ? code : undefined);
+  });
+
+  it("preserves useful faucet cooldown copy", () => {
+    const text = "Faucet limited: wait 10 minutes after the last activity in your testUSDC account.";
+    expect(describeError(text)).toEqual({ text });
+  });
+
+  it.each(["FutureError", "CustomProgramError(6010)", "UNKNOWN_CODE", "constructor"])("shows %s only as a small diagnostic", (code) => {
+    expect(describeError(code)).toEqual({ text: "Something went wrong. Try again.", code });
+    expect(renderError(code)).toContain(`<p>Something went wrong. Try again.</p><small class="notice-code">${code}</small>`);
+  });
+
+  it("handles numeric unknown codes and missing errors", () => {
+    expect(describeError({ code: 12345, message: "internal detail" })).toEqual({ text: "Something went wrong. Try again.", code: "12345" });
+    expect(describeError(null)).toEqual({ text: "Something went wrong. Try again." });
+  });
+});
+
+describe("shared notice layout", () => {
+  it.each(["error", "success", "info", "busy"] as const)("renders %s with text grouped between the indicator and dismiss button", (tone) => {
+    const markup = renderToStaticMarkup(createElement(Notice, {
+      tone, message: "A message long enough to wrap across two lines on a narrow screen.", onDismiss: () => {},
+    })).replace(/<svg\b[^>]*>[\s\S]*?<\/svg>/g, "<svg></svg>");
+    expect(markup).toBe(`<div class="notice ${tone}" role="${tone === "error" ? "alert" : "status"}">${tone === "busy" ? "" : "<svg></svg>"}<div class="notice-content"><p>A message long enough to wrap across two lines on a narrow screen.</p></div><button type="button" class="icon-button notice-dismiss" aria-label="Dismiss"><svg></svg></button></div>`);
+  });
+
+  it("omits the dismiss control when no dismissal action is provided", () => {
+    expect(renderError("RpcError")).not.toContain("<button");
+  });
+
+  it("centers every variant and keeps the controls fixed while the message wraps", () => {
+    const css = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
+    const rule = (selector: string) => css.slice(css.indexOf(`${selector} {`)).split("}")[0];
+    expect(rule(".notice")).toContain("display: flex;");
+    expect(rule(".notice")).toContain("flex-direction: row;");
+    expect(rule(".notice")).toContain("flex-wrap: nowrap;");
+    expect(rule(".notice")).toContain("align-items: center;");
+    expect(rule(".notice")).toContain("padding: 12px 16px;");
+    expect(rule(".notice-content")).toContain("flex: 1;");
+    expect(rule(".notice-content")).toContain("min-width: 0;");
+    for (const selector of [".notice > svg", ".notice.busy::before", ".notice-dismiss.icon-button"]) {
+      expect(rule(selector)).toContain("flex-shrink: 0;");
+      expect(rule(selector)).not.toContain("margin-top");
+    }
+    expect(rule(".notice-dismiss.icon-button")).toContain("margin-left: auto;");
+    expect(rule(".notice-code")).toContain("font-size: 11px;");
+    expect(rule(".notice-code")).toContain("color: var(--ink-2);");
+  });
+});

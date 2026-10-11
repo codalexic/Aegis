@@ -14,6 +14,7 @@ import { Icon, type IconName } from "./icons";
 import { Logo } from "./Logo";
 import { SidebarIllustration } from "./Illustration";
 import { TradeBars, type TradeBar } from "./TradeBars";
+import { Notice } from "./Notice";
 
 const nowUnix = () => BigInt(Math.floor(Date.now() / 1000));
 const shorten = (value: string) => `${value.slice(0, 4)}…${value.slice(-4)}`;
@@ -132,7 +133,7 @@ export function App() {
 
   if (!connection) return <Shell active="overview" rail={narrow ? undefined : <div className="rail-top">{environmentPill}{walletButton}</div>}>
     {narrow && <div className="rail rail--inline"><div className="rail-top">{environmentPill}{walletButton}</div></div>}
-    <div className="connecting"><p role={error ? "alert" : "status"}>{error ?? (walletMode && !wallet.connected ? `Connect Phantom (set to Solana devnet). Your wallet needs a little devnet SOL for fees.` : "Connecting to the vault…")}</p></div>
+    <div className="connecting">{error ? <Notice tone="error" message={error} /> : <p role="status">{walletMode && !wallet.connected ? `Connect Phantom (set to Solana devnet). Your wallet needs a little devnet SOL for fees.` : "Connecting to the vault…"}</p>}</div>
   </Shell>;
   return <Dashboard key={`${environment}:${connection.owner.toBase58()}`} connection={connection} toolbar={<>{environmentPill}{walletButton}</>} />;
 }
@@ -185,7 +186,7 @@ function Dashboard({ connection, toolbar }: { connection: DashboardConnection; t
   const [now, setNow] = useState(nowUnix);
   const [busy, setBusy] = useState<string | null>(null);
   const [agentBusy, setAgentBusy] = useState(false);
-  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  const [notice, setNotice] = useState<{ ok: true; text: string } | { ok: false; text: unknown } | null>(null);
   const [tradeAmount, setTradeAmount] = useState("20");
   const [ready, setReady] = useState(environment === "mock" || !connection.initialVault);
   const refreshing = useRef(false);
@@ -277,7 +278,7 @@ function Dashboard({ connection, toolbar }: { connection: DashboardConnection; t
     try {
       setNotice({ ok: true, text: await action() });
     } catch (error) {
-      setNotice({ ok: false, text: error instanceof Error ? error.message : "Action failed." });
+      setNotice({ ok: false, text: error });
     } finally {
       try { await refresh(); } catch { setNotice((current) => current?.ok === false ? current : { ok: false, text: "Could not refresh the vault. Retrying…" }); }
       running.current = false;
@@ -425,10 +426,10 @@ function Dashboard({ connection, toolbar }: { connection: DashboardConnection; t
       <p className="muted">Get free devnet SOL for wallet fees at <a href="https://faucet.solana.com" target="_blank" rel="noreferrer">Solana Faucet</a>. Approve vault creation and funding in Phantom, then try the agent buttons. Test tokens have no monetary value.</p>
     </aside>}
     <div className="dashboard-notice">
-      {busy ? <p className="notice busy" role="status">{busy === "Create vault" ? "Creating your vault…" : busy === "Fund vault" ? "Adding 1,000 testUSDC…" : busy === "New demo vault" ? "Creating and funding a demo vault…" : busy === "Withdraw all" ? "Moving everything back to your wallet…" : busy === "Revoke agent" ? "Stopping the agent…" : `${busy}…`}</p>
+      {busy ? <Notice tone="busy" message={busy === "Create vault" ? "Creating your vault…" : busy === "Fund vault" ? "Adding 1,000 testUSDC…" : busy === "New demo vault" ? "Creating and funding a demo vault…" : busy === "Withdraw all" ? "Moving everything back to your wallet…" : busy === "Revoke agent" ? "Stopping the agent…" : `${busy}…`} />
         : notice && (notice.ok
-          ? <p className="notice success" role="status"><Icon name="check" size={16} />{notice.text}</p>
-          : <p className="notice error" role="alert"><Icon name="alert" size={16} />{notice.text}<button type="button" className="icon-button notice-dismiss" aria-label="Dismiss" onClick={() => setNotice(null)}><Icon name="x" size={14} /></button></p>)}
+          ? <Notice tone="success" message={notice.text} />
+          : <Notice tone="error" message={notice.text} onDismiss={() => setNotice(null)} />)}
     </div>
 
     <section id="overview" className="tiles" aria-label="Vault at a glance">

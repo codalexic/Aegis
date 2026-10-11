@@ -3,6 +3,8 @@ import type { VaultState } from "@aegis/sdk";
 import { rawAmountToUi } from "../../../packages/sdk/src/amounts";
 import type { Step } from "../../../scripts/agent/run";
 import { Icon, type IconName } from "./icons";
+import { PROGRAM_ERROR_MESSAGES } from "./errors";
+import { Notice } from "./Notice";
 
 type Scenario = "normal" | "injected" | "attacker";
 const decimal = (value: string) => {
@@ -13,14 +15,8 @@ const decimal = (value: string) => {
 export function rejectionReason(error: string, vault: VaultState, requested?: string): string {
   switch (error) {
     case "CapExceeded": return `Per-trade cap is ${decimal(rawAmountToUi(vault.maxTradeRaw, 6))} testUSDC; the agent asked for ${decimal(requested ?? "an oversized trade")}.`;
-    case "BudgetExceeded": return "This trade exceeds the vault’s remaining total budget.";
-    case "AccountMismatch": return "The output must stay in the vault; the attacker tried to redirect it.";
-    case "Revoked": return "The owner revoked the agent’s trading permission.";
-    case "Expired": return "The vault’s trading permission has expired.";
-    case "Unauthorized": return "This signer does not have permission to trade from the vault.";
-    case "InvalidAmount": return "The requested amount is invalid.";
-    case "SwapResultMismatch": return "The exchange did not deliver the required token balances.";
-    default: return "The transaction failed. Check the vault state before retrying.";
+    default: return Object.hasOwn(PROGRAM_ERROR_MESSAGES, error) ? PROGRAM_ERROR_MESSAGES[error]
+      : "The transaction failed. Check the vault state before retrying.";
   }
 }
 
@@ -153,7 +149,7 @@ export function AgentConsole({ vault, disabled, onBusy, onComplete, environment 
             case "model_reply": return <div key={index}><h3>{step.source === "live" ? "Model reply" : step.source === "scripted" ? "Scripted reply" : "Fixed hacker request · No AI"}</h3><pre>{typeof step.reply === "string" ? step.reply : JSON.stringify(step.reply, null, 2)}</pre></div>;
             case "request": return <div key={index}><h3>Request sent to the vault</h3><p>{decimal(step.amountUsdc)} testUSDC</p>{step.outputVault && <p className="agent-destination">Redirect output to <code>{step.outputVault}</code></p>}</div>;
             case "balances": return <div key={index}><h3>After</h3><p className="muted">{decimal(step.inputUsdc)} testUSDC · {step.outputSol} testSOL · {step.remainingUsdc} testUSDC budget left</p></div>;
-            case "notice": return step.code === "error" ? <p key={index} className="notice error" role="alert">{step.message} Use Scripted to retry without AI.</p> : null;
+            case "notice": return step.code === "error" ? <div key={index}><Notice tone="error" message={step.message} /><p>Use Scripted to retry without AI.</p></div> : null;
             default: return null;
           }
         })}

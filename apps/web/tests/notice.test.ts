@@ -9,7 +9,8 @@ import { describeError, PROGRAM_ERROR_MESSAGES } from "../src/errors";
 import { Notice } from "../src/Notice";
 
 const clientCodes = [
-  "RpcError", "RateLimited", "WalletRejected", "UserRejected", "SigningFailed",
+  "RpcError", "RpcRateLimited", "RateLimited", "WalletRejected", "UserRejected", "SigningFailed",
+  "WalletModifiedTransaction", "InvalidWalletSignature", "WalletSigningError",
   "InsufficientFunds", "InsufficientFundsForFee", "InsufficientFundsForRent",
   "VaultNotFound", "VaultAlreadyExists", "DeploymentProgramMismatch", "DeploymentAccountMismatch",
   "DeploymentClusterMismatch", "InvalidDevnetRpcUrl", "InvalidTransaction",
@@ -63,6 +64,13 @@ describe("notice error copy", () => {
   it("preserves useful faucet cooldown copy", () => {
     const text = "Faucet limited: wait 10 minutes after the last activity in your testUSDC account.";
     expect(describeError(text)).toEqual({ text });
+  });
+
+  it.each(["WalletSigningError", "Vault created, but funding failed: WalletSigningError. Use Fund 1,000 to retry."])("keeps wallet details muted for %s", (message) => {
+    const error = Object.assign(new Error(message), { detail: "Wallet connection timed out." });
+    expect(describeError(error).detail).toBe("Wallet connection timed out.");
+    expect(renderError(error)).toContain('<small class="notice-code">Wallet connection timed out.</small>');
+    expect(describeError(error).text).not.toContain("Wallet connection timed out.");
   });
 
   it.each(["FutureError", "CustomProgramError(6010)", "UNKNOWN_CODE", "constructor"])("shows %s only as a small diagnostic", (code) => {

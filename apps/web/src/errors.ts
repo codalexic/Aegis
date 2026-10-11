@@ -19,10 +19,14 @@ const SOL_NEEDED = "Your wallet needs more SOL for transaction fees or account r
 const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   ...PROGRAM_ERROR_MESSAGES,
   RpcError: RPC_BUSY,
+  RpcRateLimited: RPC_BUSY,
   RateLimited: "Too many requests. Wait a few seconds and try again.",
   WalletRejected: WALLET_REJECTED,
   UserRejected: WALLET_REJECTED,
   SigningFailed: "The wallet could not sign the transaction. Check Phantom and try again.",
+  WalletModifiedTransaction: "Phantom changed the transaction in a way Aegis cannot safely approve. Nothing was sent. Try again.",
+  InvalidWalletSignature: "The wallet returned an invalid signature. Nothing was sent. Reconnect Phantom and try again.",
+  WalletSigningError: "Phantom could not sign the transaction. Check your wallet and try again.",
   InsufficientFunds: "There are not enough funds for this transaction. Check your token balance and SOL for fees.",
   InsufficientFundsForFee: SOL_NEEDED,
   InsufficientFundsForRent: SOL_NEEDED,
@@ -38,22 +42,25 @@ const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   TransactionFailed: "The transaction failed. Check your balance and try again.",
 };
 
-export interface ErrorDescription { text: string; code?: string }
+export interface ErrorDescription { text: string; code?: string; detail?: string }
 const FALLBACK = "Something went wrong. Try again.";
 
 export function describeError(error: unknown): ErrorDescription {
-  const value = error && typeof error === "object" ? error as { message?: unknown; code?: unknown } : undefined;
+  const value = error && typeof error === "object" ? error as { message?: unknown; code?: unknown; detail?: unknown } : undefined;
   const message = typeof error === "string" ? error.trim() : typeof value?.message === "string" ? value.message.trim() : "";
 
   // Both signing paths wrap a funding failure after successfully creating a vault.
   const funding = /^Vault created, but funding failed: (.+)\. Use Fund 1,000 to retry\.$/s.exec(message);
   if (funding) {
-    const detail = describeError(funding[1]);
+    const detail = describeError({ message: funding[1], detail: value?.detail });
     return { ...detail, text: `Vault created, but funding failed. ${detail.text} Use Fund 1,000 to retry.` };
   }
 
   for (const code of [value?.code, message]) {
-    if (typeof code === "string" && Object.hasOwn(ERROR_MESSAGES, code)) return { text: ERROR_MESSAGES[code] };
+    if (typeof code === "string" && Object.hasOwn(ERROR_MESSAGES, code)) return {
+      text: ERROR_MESSAGES[code],
+      ...(["WalletSigningError", "WalletModifiedTransaction"].includes(code) && typeof value?.detail === "string" && { detail: value.detail }),
+    };
   }
   if (isWalletRejected(error)) return { text: WALLET_REJECTED };
   if (isRateLimited(error)) return { text: RPC_BUSY };

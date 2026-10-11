@@ -1,4 +1,5 @@
 import { Buffer } from "buffer";
+import { ed25519 } from "@noble/curves/ed25519";
 import { MessageV0, PublicKey, type TransactionInstruction } from "@solana/web3.js";
 import { BorshInstructionCoder } from "@coral-xyz/anchor/dist/esm/coder/borsh/instruction.js";
 import { convertIdlToCamelCase } from "@coral-xyz/anchor/dist/esm/idl.js";
@@ -13,6 +14,8 @@ import { isU64 } from "./amounts";
 import { ClientError, RpcError, RPC_RATE_LIMITED, WALLET_REJECTED, isRateLimited, isWalletRejected, failure, transactionErrorName } from "./errors";
 import type { CreateVaultParams, TxResult } from "./types";
 import { WalletTransaction, type WalletSigner } from "./wallet-transaction";
+import { validateWalletMessage } from "./wallet-validation";
+import { debugWalletFailure, walletErrorDetail } from "./wallet-diagnostics";
 export type { WalletSigner } from "./wallet-transaction";
 
 const associatedTokenProgram = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
@@ -85,45 +88,86 @@ export class WalletAegisClient extends ChainReader {
 
   private async send(owner: WalletSigner, build: () => Promise<TransactionInstruction[]>): Promise<TxResult> {
     let signature: string | undefined;
+    let step = "build";
     try {
       const instructions = await build();
+      step = "getLatestBlockhash";
       const { value: lifetime } = await this.rpc<{ value: { blockhash: string; lastValidBlockHeight: number } }>("getLatestBlockhash", [{ commitment: "confirmed" }]);
       const transaction = new WalletTransaction(MessageV0.compile({ payerKey: owner.publicKey, recentBlockhash: lifetime.blockhash, instructions }));
       const expectedMessage = Buffer.from(transaction.message.serialize());
+      step = "simulateTransaction";
       const { value: simulation } = await this.rpc<{ value: { err: unknown; logs?: string[] } }>("simulateTransaction", [Buffer.from(transaction.serialize()).toString("base64"), { encoding: "base64", commitment: "confirmed", sigVerify: false }]);
-      if (simulation.err) return { ok: false, origin: "program", error: transactionErrorName(simulation.err, simulation.logs) };
+      if (simulation.err) {
+        const error = transactionErrorName(simulation.err, simulation.logs);
+        debugWalletFailure(step, "SimulationFailed", error);
+        return { ok: false, origin: "program", error };
+      }
       let signed;
+      step = "wallet.signTransaction";
       try {
         signed = await owner.signTransaction(transaction);
-        if (!expectedMessage.equals(Buffer.from(signed.message.serialize())) || signed.signatures.length !== 1 ||
-            signed.signatures[0].length !== 64 || !signed.signatures[0].some((byte) => byte !== 0)) throw new Error();
-        const publicKey = await crypto.subtle.importKey("raw", new Uint8Array(owner.publicKey.toBytes()), "Ed25519", false, ["verify"]);
-        if (!await crypto.subtle.verify("Ed25519", publicKey, new Uint8Array(signed.signatures[0]), new Uint8Array(expectedMessage))) throw new Error();
       } catch (error) {
         if (isRateLimited(error)) throw new RpcError(RPC_RATE_LIMITED);
         if (isWalletRejected(error)) throw new ClientError(WALLET_REJECTED);
-        throw new ClientError("SigningFailed");
+        throw new ClientError("WalletSigningError", walletErrorDetail(error));
       }
-      // Submit our reviewed message with the wallet's signature, preserving its
-      // identity even if the RPC accepts the transaction but loses the response.
-      const submitted = new WalletTransaction(MessageV0.deserialize(expectedMessage));
-      submitted.addSignature(owner.publicKey, signed.signatures[0]);
-      signature = encodeSignature(signed.signatures[0]);
-      const returned = await this.rpc<string>("sendTransaction", [Buffer.from(submitted.serialize()).toString("base64"), { encoding: "base64", skipPreflight: false, preflightCommitment: "confirmed", maxRetries: 3 }]);
+      step = "validateWalletMessage";
+      let walletMessage: Uint8Array;
+      const expected = MessageV0.deserialize(expectedMessage);
+      try {
+        walletMessage = new Uint8Array(signed.message.serialize());
+        const actual = MessageV0.deserialize(walletMessage);
+        if (!Buffer.from(actual.serialize()).equals(Buffer.from(walletMessage))) {
+          throw new ClientError("WalletModifiedTransaction", "Wallet returned a noncanonical message.");
+        }
+        validateWalletMessage(expected, actual);
+      } catch (error) {
+        if (error instanceof ClientError) throw error;
+        throw new ClientError("WalletModifiedTransaction", "Wallet returned an unreadable or unsupported message.");
+      }
+      step = "verifyWalletSignature";
+      let ownerSignature: Uint8Array;
+      try {
+        if (signed.signatures.length !== 1) throw new Error();
+        ownerSignature = new Uint8Array(signed.signatures[0]);
+        if (ownerSignature.length !== 64 || !ed25519.verify(ownerSignature, walletMessage, expected.staticAccountKeys[0].toBytes(), { zip215: false })) throw new Error();
+      } catch {
+        throw new ClientError("InvalidWalletSignature");
+      }
+      step = "serializeWalletTransaction";
+      let submitted: Buffer;
+      try {
+        submitted = Buffer.from(signed.serialize());
+        // Validate the exact bytes returned by the wallet before submitting them.
+        if (!submitted.equals(Buffer.from([1, ...ownerSignature, ...walletMessage]))) throw new Error();
+      } catch {
+        throw new ClientError("WalletModifiedTransaction", "Wallet returned inconsistent transaction bytes.");
+      }
+      signature = encodeSignature(ownerSignature);
+      step = "sendTransaction";
+      const returned = await this.rpc<string>("sendTransaction", [submitted.toString("base64"), { encoding: "base64", skipPreflight: false, preflightCommitment: "confirmed", maxRetries: 3 }]);
       if (returned !== signature) throw new ClientError("RpcError");
       for (let attempt = 0; attempt < 120; attempt++) {
+        step = "getSignatureStatuses";
         const { value: [status] } = await this.rpc<{ value: ({ err: unknown; confirmationStatus: string } | null)[] }>("getSignatureStatuses", [[signature], { searchTransactionHistory: true }]);
         if (status && ["confirmed", "finalized"].includes(status.confirmationStatus)) {
           if (status.err) {
             const landed = await this.getTransaction(signature).catch(() => null);
-            return { ok: false, signature, origin: "program", error: transactionErrorName(status.err, landed?.meta?.logMessages) };
+            const error = transactionErrorName(status.err, landed?.meta?.logMessages);
+            debugWalletFailure(step, "TransactionFailed", error);
+            return { ok: false, signature, origin: "program", error };
           }
           return { ok: true, signature };
         }
+        step = "getBlockHeight";
         if (await this.rpc<number>("getBlockHeight", [{ commitment: "confirmed" }]) > lifetime.lastValidBlockHeight) throw new ClientError("TransactionExpired");
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
       throw new ClientError("ConfirmationTimedOut");
-    } catch (error) { return failure(error, signature); }
+    } catch (error) {
+      const result = failure(error, signature);
+      debugWalletFailure(step, result.error, result.detail);
+      return result;
+    }
   }
 }

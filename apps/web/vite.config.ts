@@ -4,6 +4,7 @@ import { ownerApiPlugin } from "./server/owner-api";
 import { agentApiPlugin } from "./server/agent-api";
 import { faucetApiPlugin } from "./server/faucet-api";
 import { actionsPlugin } from "./api/actions/plugin";
+import { walletVerifyPlugin } from "./build/wallet-verify";
 
 const workspaceRoot = fileURLToPath(new URL("../../", import.meta.url));
 
@@ -19,6 +20,7 @@ export default defineConfig(({ mode }) => {
   const devnetRpcUrl = process.env.VITE_DEVNET_RPC_URL ?? loadEnv(mode, workspaceRoot, "VITE_DEVNET_RPC_URL").VITE_DEVNET_RPC_URL;
   return {
     plugins: [
+      walletVerifyPlugin(),
       ...(environment === "localnet" && !walletMode ? [ownerApiPlugin(workspaceRoot)] : []),
       ...(environment !== "mock" ? [agentApiPlugin(workspaceRoot, environment, walletMode), ...(walletMode ? [faucetApiPlugin(workspaceRoot, environment)] : [])] : []),
       ...(environment !== "mock" ? [actionsPlugin(workspaceRoot, environment, { deploymentPath: settings.AEGIS_ACTIONS_DEPLOYMENT, origin: settings.AEGIS_ACTIONS_ORIGIN })] : []),

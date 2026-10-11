@@ -47,7 +47,7 @@ export interface Activity {
 
 export type TxResult =
   | { ok: true; signature: string }
-  | { ok: false; signature?: string; error: string; origin: "client" | "program" | "rpc" };
+  | { ok: false; signature?: string; error: string; detail?: string; origin: "client" | "program" | "rpc" };
 
 /** Caller-selected accounts for attack demonstrations. The agent is supplied separately. */
 export interface SwapAccounts {

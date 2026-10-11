@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@coral-xyz/anchor": "npm:@anchor-lang/core@1.1.2",
+    "@noble/curves": "1.9.7",
     "@solana/spl-token": "0.4.15",
     "@solana/web3.js": "1.99.0",
     "bn.js": "5.2.2",

@@ -2,10 +2,12 @@ import aegisIdl from "../../../artifacts/idl/aegis.json";
 import dexIdl from "../../../artifacts/idl/demo_dex.json";
 import type { TxResult } from "./types";
 
-export class ClientError extends Error {}
+export class ClientError extends Error {
+  constructor(message: string, readonly detail?: string) { super(message); }
+}
 
-export const RPC_RATE_LIMITED = "RPC rate limited, try again in a moment";
-export const WALLET_REJECTED = "Transaction rejected in Phantom";
+export const RPC_RATE_LIMITED = "RpcRateLimited";
+export const WALLET_REJECTED = "WalletRejected";
 export class RpcError extends Error {}
 
 /** Wallet adapters may wrap the provider error in `cause` or `error`. */
@@ -16,7 +18,7 @@ export function isRateLimited(error: unknown): boolean {
 
 export function isWalletRejected(error: unknown): boolean {
   return matchesError(error, (value) => value.code === 4001 ||
-    /user rejected|user denied|transaction rejected|request rejected/i.test(String(value.message ?? "")));
+    /user rejected|user denied|transaction rejected|request rejected|user cancel(?:led|ed)|WalletRejected/i.test(String(value.message ?? "")));
 }
 
 function matchesError(error: unknown, test: (value: Record<string, unknown>) => boolean, depth = 0): boolean {
@@ -67,7 +69,7 @@ export function transactionErrorName(error: unknown, logs?: readonly string[] | 
 export function failure(error: unknown, signature?: string): Extract<TxResult, { ok: false }> {
   if (isRateLimited(error)) return { ok: false, error: RPC_RATE_LIMITED, origin: "rpc", ...(signature && { signature }) };
   if (error instanceof RpcError) return { ok: false, error: "RpcError", origin: "rpc", ...(signature && { signature }) };
-  if (error instanceof ClientError) return { ok: false, error: error.message, origin: "client", ...(signature && { signature }) };
+  if (error instanceof ClientError) return { ok: false, error: error.message, origin: "client", ...(error.detail && { detail: error.detail }), ...(signature && { signature }) };
   const logs = error && typeof error === "object" && "logs" in error ? error.logs : undefined;
   const name = Array.isArray(logs) && logs.every((log) => typeof log === "string") ? programErrorName(logs) : undefined;
   // Do not return arbitrary exception text: RPC/transport errors can contain configuration.

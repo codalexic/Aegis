@@ -266,7 +266,7 @@ function Dashboard({ connection, toolbar }: { connection: DashboardConnection; t
 
   function track<T extends TxResult>(result: T, detail: ActionDetail): T {
     if (result.signature) details.current.set(result.signature, detail);
-    if (!result.ok) throw new Error(result.error);
+    if (!result.ok) throw Object.assign(new Error(result.error), { detail: result.detail });
     return result;
   }
 

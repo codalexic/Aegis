@@ -94,7 +94,7 @@ The faucet creates the wallet's input-token ATA and mints exactly 1,000 testUSDC
 one server-signed transaction. In devnet, the local server loads only
 `.keys/devnet-faucet.json`, verifies the manifest’s `faucet` address and current
 testUSDC mint authority, and never uses the deployer for claims. Limits are one
-claim per wallet per ten minutes and ten claims total per rolling hour. Allowances are reserved before RPC awaits and
+claim per wallet per ten minutes and thirty claims total per rolling hour. Allowances are reserved before RPC awaits and
 retained on uncertain failures. Limits live in the server process and reset when it
 restarts. These development endpoints are restricted to the loopback dashboard.
 For public hosting and distributed abuse controls, see

@@ -2,7 +2,7 @@ import { Readable } from "node:stream";
 import type { IncomingMessage } from "node:http";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getMint } from "@solana/spl-token";
+import { getMint, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { sendAndConfirmTransaction } from "@solana/web3.js";
 import { environmentSigner, checkFaucetHistory, devnetClient, mintTestUsdc, deployment } from "../server/devnet-service";
 import { IpLimiter } from "../server/public-limits";
@@ -82,22 +82,74 @@ describe("faucet transaction", () => {
 
 describe("cold-start faucet history protection", () => {
   const authority = Keypair.generate().publicKey, destination = Keypair.generate().publicKey;
+  const other = Keypair.generate().publicKey;
   const now = 10_000_000;
-  const signature = (blockTime: number | null, err: unknown = null) => ({ blockTime, err });
-  function fixture(global: object[], wallet: object[]) {
-    const client = devnetClient();
-    vi.spyOn(client.connection, "getSignaturesForAddress").mockImplementation(async (address) => (address.equals(authority) ? global : wallet) as never);
-    return client;
+  function mint(account = other, type = "mintToChecked") {
+    return { programId: TOKEN_PROGRAM_ID, parsed: { type, info: {
+      mint: deployment.inputMint, account: account.toBase58(), mintAuthority: authority.toBase58(),
+    } } };
   }
-  it("rejects ten confirmed authority transactions in the last hour, but ignores older and failed ones", async () => {
-    await expect(checkFaucetHistory(fixture(Array(10).fill(signature(9999)), []), authority, destination, now)).rejects.toThrow("hourly limit");
-    await expect(checkFaucetHistory(fixture([signature(6400), signature(9999, { failure: true })], []), authority, destination, now)).resolves.toBeUndefined();
+  function record(blockTime: number | null, instructions = [mint()], signer = true, err: object | null = null) {
+    return { blockTime, meta: { err }, transaction: { message: {
+      accountKeys: [{ pubkey: authority, signer }], instructions,
+    } } };
+  }
+  function fixture(records: ReturnType<typeof record>[]) {
+    const client = devnetClient();
+    const signatures = vi.spyOn(client.connection, "getSignaturesForAddress").mockResolvedValue(records.map((tx, i) => ({
+      signature: String(i), blockTime: tx.blockTime, err: tx.meta.err,
+    })) as never);
+    const parsed = vi.spyOn(client.connection, "getParsedTransactions").mockImplementation(async (ids) => ids.map((id) => records[Number(id)]) as never);
+    return { client, signatures, parsed };
+  }
+  it("allows 29 claims and blocks 30 with minutes from the rolling hour", async () => {
+    const records = Array.from({ length: 30 }, () => record(7120));
+    await expect(checkFaucetHistory(fixture(records.slice(1)).client, authority, destination, now)).resolves.toBeUndefined();
+    await expect(checkFaucetHistory(fixture(records).client, authority, destination, now)).rejects.toMatchObject({
+      status: 429, message: "Faucet hourly limit reached. Try again in 12 minutes.", retryAfter: 720,
+    });
+    await expect(checkFaucetHistory(fixture(records).client, authority, destination, now + 720_000)).resolves.toBeUndefined();
   });
-  it("enforces the wallet cooldown across fresh instances and fails closed on missing history", async () => {
-    await expect(checkFaucetHistory(fixture([], [signature(9401)]), authority, destination, now)).rejects.toThrow("10 minutes");
-    await expect(checkFaucetHistory(fixture([], [signature(9400)]), authority, destination, now)).resolves.toBeUndefined();
-    await expect(checkFaucetHistory(fixture([signature(null)], []), authority, destination, now)).rejects.toThrow("history is unavailable");
-    await expect(checkFaucetHistory(fixture([], [signature(null)]), authority, destination, now)).rejects.toThrow("10 minutes");
+  it("waits for enough claims to expire when concurrent instances exceeded the cap", async () => {
+    const records = [record(6401), ...Array.from({ length: 30 }, () => record(7120))];
+    await expect(checkFaucetHistory(fixture(records).client, authority, destination, now)).rejects.toThrow("in 12 minutes.");
+  });
+  it.each(["mintTo", "mintToChecked"])("enforces only faucet %s cooldowns across fresh instances", async (type) => {
+    const f = fixture([record(9820, [mint(destination, type)])]);
+    await expect(checkFaucetHistory(f.client, authority, destination, now)).rejects.toMatchObject({
+      status: 429, message: "This wallet can claim again in 7 minutes.", retryAfter: 420,
+    });
+    await expect(checkFaucetHistory(f.client, authority, destination, now + 419_999)).rejects.toThrow("in 1 minute.");
+    await expect(checkFaucetHistory(f.client, authority, destination, now + 420_000)).resolves.toBeUndefined();
+  });
+  it("ignores owner transfers, including funding after a faucet mint whose cooldown has elapsed", async () => {
+    const transfer = { programId: TOKEN_PROGRAM_ID, parsed: { type: "transferChecked", info: {
+      mint: deployment.inputMint, account: destination.toBase58(), mintAuthority: authority.toBase58(),
+    } } };
+    const f = fixture([record(9999, [transfer], false), record(9400, [mint(destination)])]);
+    await expect(checkFaucetHistory(f.client, authority, destination, now)).resolves.toBeUndefined();
+    expect(f.signatures).toHaveBeenCalledOnce();
+    expect(f.signatures).toHaveBeenCalledWith(authority, { limit: 1000 }, "confirmed");
+  });
+  it("still finds a recent faucet mint behind a newer owner transfer", async () => {
+    const f = fixture([record(9999, [], false), record(9820, [mint(destination)])]);
+    await expect(checkFaucetHistory(f.client, authority, destination, now)).rejects.toThrow("in 7 minutes.");
+  });
+  it("ignores failed, old, unsigned, other-mint and other-program transactions", async () => {
+    const wrongMint = mint(destination); wrongMint.parsed.info.mint = other.toBase58();
+    const wrongAuthority = mint(destination); wrongAuthority.parsed.info.mintAuthority = other.toBase58();
+    const wrongProgram = mint(destination); wrongProgram.programId = other;
+    const records = [record(6400), record(9999, [mint(destination)], true, { failure: true }),
+      record(9999, [mint(destination)], false), record(9999, [wrongMint, wrongAuthority, wrongProgram])];
+    await expect(checkFaucetHistory(fixture(Array.from({ length: 10 }, () => records).flat()).client, authority, destination, now)).resolves.toBeUndefined();
+  });
+  it("fails closed on missing, truncated or unavailable history", async () => {
+    for (const records of [[record(null)], Array.from({ length: 1000 }, () => record(9999))]) {
+      await expect(checkFaucetHistory(fixture(records).client, authority, destination, now)).rejects.toMatchObject({ status: 503 });
+    }
+    const f = fixture([record(9999)]);
+    f.parsed.mockResolvedValue([null]);
+    await expect(checkFaucetHistory(f.client, authority, destination, now)).rejects.toThrow("history is unavailable");
   });
 });
 
@@ -116,13 +168,30 @@ describe("Vercel parsed-body and Vite streamed-body compatibility", () => {
 });
 
 describe("rolling IP limits", () => {
-  it("expires allowances without resetting other IPs or endpoint groups", () => {
+  it("keeps six agent calls per minute separate from the faucet and other IPs", () => {
     let now = 0; const limiter = new IpLimiter(() => now);
     for (let i = 0; i < 6; i++) limiter.take("one", "agent");
-    expect(() => limiter.take("one", "agent")).toThrow("IP limit");
+    expect(() => limiter.take("one", "agent")).toThrow("Agent IP limit reached. Try again in 1 minute.");
     limiter.take("one", "faucet"); limiter.take("two", "agent");
     now = 60_000; expect(() => limiter.take("one", "agent")).not.toThrow();
-    expect(() => limiter.take("one", "faucet")).toThrow("IP limit");
+  });
+  it("allows ten faucet calls per IP and reports the actual time until an allowance expires", () => {
+    let now = 0; const limiter = new IpLimiter(() => now);
+    for (let i = 0; i < 10; i++) limiter.take("one", "faucet");
+    expect(() => limiter.take("one", "faucet")).toThrow("Faucet busy on this network. Try again in 10 minutes.");
+    expect(() => limiter.take("two", "faucet")).not.toThrow();
+    now = 360_001;
+    expect(() => limiter.take("one", "faucet")).toThrow("Try again in 4 minutes.");
+    now = 599_999;
+    expect(() => limiter.take("one", "faucet")).toThrow("Try again in 1 minute.");
     now = 600_000; expect(() => limiter.take("one", "faucet")).not.toThrow();
+  });
+  it("reports the next entry expiry when the IP table is full", () => {
+    let now = 0; const limiter = new IpLimiter(() => now);
+    for (let i = 0; i < 10_000; i++) limiter.take(String(i), "faucet");
+    now = 360_000;
+    expect(() => limiter.take("new", "faucet")).toThrow("Demo is busy. Try again in 4 minutes.");
+    now = 600_000;
+    expect(() => limiter.take("new", "faucet")).not.toThrow();
   });
 });

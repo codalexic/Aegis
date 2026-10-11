@@ -84,11 +84,40 @@ describe("public devnet functions", () => {
   it("limits the faucet by IP, wallet and hourly allowance before minting", async () => {
     const claim = (wallet: string, ip: string) => fetch(`${url}/api/faucet`, { method: "POST", headers: headers("faucet", ip), body: JSON.stringify({ wallet }) });
     expect((await claim(owner.publicKey.toBase58(), "203.0.113.1")).status).toBe(200);
-    expect((await claim(agent.publicKey.toBase58(), "203.0.113.1")).status).toBe(429);
-    expect((await claim(owner.publicKey.toBase58(), "203.0.113.2")).status).toBe(429);
-    for (let i = 3; i <= 11; i++) expect((await claim(Keypair.generate().publicKey.toBase58(), `203.0.113.${i}`)).status).toBe(200);
-    expect((await claim(agent.publicKey.toBase58(), "203.0.113.12")).status).toBe(429);
-    expect(mintTestUsdc).toHaveBeenCalledTimes(10);
+    for (let i = 1; i < 10; i++) expect((await claim(Keypair.generate().publicKey.toBase58(), "203.0.113.1")).status).toBe(200);
+    const ipLimit = await claim(agent.publicKey.toBase58(), "203.0.113.1");
+    expect(ipLimit.status).toBe(429);
+    expect(await ipLimit.json()).toEqual({ error: "Faucet busy on this network. Try again in 10 minutes." });
+    expect(ipLimit.headers.get("retry-after")).toBe("600");
+    const walletLimit = await claim(owner.publicKey.toBase58(), "203.0.113.2");
+    expect(walletLimit.status).toBe(429);
+    expect(await walletLimit.json()).toEqual({ error: "This wallet can claim again in 10 minutes." });
+    for (let i = 3; i < 23; i++) expect((await claim(Keypair.generate().publicKey.toBase58(), `203.0.113.${i}`)).status).toBe(200);
+    const hourlyLimit = await claim(agent.publicKey.toBase58(), "203.0.113.23");
+    expect(hourlyLimit.status).toBe(429);
+    expect(await hourlyLimit.json()).toEqual({ error: "Faucet hourly limit reached. Try again in 60 minutes." });
+    expect(hourlyLimit.headers.get("retry-after")).toBe("3600");
+    expect(mintTestUsdc).toHaveBeenCalledTimes(30);
+  });
+  it("preserves chain-history retry times without starting another local cooldown", async () => {
+    vi.mocked(mintTestUsdc).mockRejectedValueOnce(new ApiError(429, "This wallet can claim again in 7 minutes.", 420));
+    const claim = () => fetch(`${url}/api/faucet`, { method: "POST", headers: headers("faucet"), body: JSON.stringify({ wallet: owner.publicKey.toBase58() }) });
+    const limited = await claim();
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("retry-after")).toBe("420");
+    expect(await limited.json()).toEqual({ error: "This wallet can claim again in 7 minutes." });
+    // History admits the next attempt: a rejected claim must not leave a local reservation.
+    expect((await claim()).status).toBe(200);
+    expect(mintTestUsdc).toHaveBeenCalledTimes(2);
+  });
+  it("retains the reservation after an uncertain send", async () => {
+    vi.mocked(mintTestUsdc).mockRejectedValueOnce(new Error("Uncertain RPC send"));
+    const claim = () => fetch(`${url}/api/faucet`, { method: "POST", headers: headers("faucet"), body: JSON.stringify({ wallet: owner.publicKey.toBase58() }) });
+    expect((await claim()).status).toBe(503);
+    const limited = await claim();
+    expect(limited.status).toBe(429);
+    expect(await limited.json()).toEqual({ error: "This wallet can claim again in 10 minutes." });
+    expect(mintTestUsdc).toHaveBeenCalledOnce();
   });
   it("hides unexpected exceptions and unlocks the vault after a failed request", async () => {
     vi.mocked(environmentSigner).mockImplementationOnce(() => { throw new Error("private-key-data"); });

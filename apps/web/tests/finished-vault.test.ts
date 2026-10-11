@@ -20,7 +20,7 @@ beforeEach(() => {
 afterEach(() => { vi.clearAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 async function render(status: "revoked" | "expired" | "active", walletBalance: bigint,
-  funds: "input" | "output" | "empty" = "input", environment: "localnet" | "mock" = "localnet") {
+  funds: "input" | "output" | "empty" = "input", environment: "localnet" | "mock" | "devnet" = "localnet") {
   const connection = await connectDashboard("mock");
   const created = await connection.create();
   const vault = await connection.client.getVault(created.vault!);
@@ -75,4 +75,11 @@ it.each([0n, 1_000_000_000n])("preserves active-vault actions at wallet balance 
     expect(button(markup, label)).not.toContain("disabled");
   }
   expect(markup).toContain("Pick a scenario above.");
+});
+
+it.each([
+  ["mock", "Practice"], ["localnet", "Localnet"], ["devnet", "Devnet"],
+] as const)("restores the footer disclaimer with the %s environment", async (environment, label) => {
+  const markup = await render("active", 0n, "input", environment);
+  expect(markup).toContain(`<footer><span>Aegis</span><span>${label} · Test money, no real value</span></footer>`);
 });

@@ -61,8 +61,11 @@ export function faucetApiMiddleware(root: string, environment: "localnet" | "dev
       );
       const signature = await sendAndConfirmTransaction(client.connection, transaction, [authority], { commitment: "confirmed" });
       json(response, 200, { signature, amountRaw: "1000000000" });
-    })().catch((error: unknown) => json(response, error instanceof ApiError ? error.status : 503,
-      { error: error instanceof ApiError ? error.message : "Faucet request could not be confirmed. Check your token balance before retrying later." }));
+    })().catch((error: unknown) => {
+      if (error instanceof ApiError && error.retryAfter !== undefined) response.setHeader("retry-after", String(error.retryAfter));
+      json(response, error instanceof ApiError ? error.status : 503,
+        { error: error instanceof ApiError ? error.message : "Faucet request could not be confirmed. Check your token balance before retrying later." });
+    });
   };
 }
 

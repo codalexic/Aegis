@@ -79,6 +79,10 @@ export function createPublicHandler(env: NodeJS.ProcessEnv = process.env) {
         faucet.take(recipient.toBase58());
         faucetBusy = true;
         try { return json(response, 200, await mintTestUsdc(env, recipient)); }
+        catch (error) {
+          if (error instanceof ApiError && error.status === 429) faucet.release(recipient.toBase58());
+          throw error;
+        }
         finally { faucetBusy = false; }
       }
       let vault: PublicKey;
@@ -116,7 +120,7 @@ export function createPublicHandler(env: NodeJS.ProcessEnv = process.env) {
         throw error;
       } finally { activeVaults.delete(address); }
     } catch (error) {
-      if (error instanceof ApiError && error.status === 429) response.setHeader("retry-after", path === "/api/faucet" ? "600" : "60");
+      if (error instanceof ApiError && error.retryAfter !== undefined) response.setHeader("retry-after", String(error.retryAfter));
       json(response, error instanceof ApiError ? error.status : 503, {
         error: error instanceof ApiError ? error.message : "Devnet request could not be confirmed. Check the vault or token balance before retrying.",
       });

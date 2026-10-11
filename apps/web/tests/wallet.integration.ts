@@ -54,7 +54,7 @@ it("uses a mock wallet signer and the actual local mint through the complete own
   expect(await connection.getAccountInfo(inputAta)).toBeNull();
   await expect(dashboard.faucet!()).resolves.toContain("Received 1,000 testUSDC");
   expect((await getAccount(connection, inputAta)).amount).toBe(1_000_000_000n);
-  await expect(dashboard.faucet!()).rejects.toThrow("once per 10 minutes");
+  await expect(dashboard.faucet!()).rejects.toThrow("This wallet can claim again in");
   expect((await getAccount(connection, inputAta)).amount).toBe(1_000_000_000n);
   expect(signTransaction).not.toHaveBeenCalled(); // Only the server mint authority signs the faucet.
 

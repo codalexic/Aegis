@@ -28,20 +28,35 @@ describe("test-token faucet allowance", () => {
     let now = 0;
     const limiter = new FaucetLimiter(() => now);
     limiter.take("one");
-    expect(() => limiter.take("one")).toThrow("once per 10 minutes");
+    expect(() => limiter.take("one")).toThrow("This wallet can claim again in 10 minutes.");
     limiter.take("two");
+    now = 180_001;
+    expect(() => limiter.take("one")).toThrow("This wallet can claim again in 7 minutes.");
     now = 599_999;
-    expect(() => limiter.take("one")).toThrow("1 minutes");
+    expect(() => limiter.take("one")).toThrow("in 1 minute.");
     now++;
     expect(() => limiter.take("one")).not.toThrow();
   });
-  it("caps all wallets at ten claims per rolling hour, even after individual cooldowns", () => {
+  it("releases only the rejected reservation when claims share a timestamp", () => {
+    const limiter = new FaucetLimiter(() => 0);
+    for (let i = 0; i < 30; i++) limiter.take(String(i));
+    limiter.release("0");
+    limiter.release("0");
+    expect(() => limiter.take("1")).toThrow("This wallet can claim again in 10 minutes.");
+    expect(() => limiter.take("replacement")).not.toThrow();
+    expect(() => limiter.take("extra")).toThrow("hourly limit");
+  });
+  it("caps all wallets at thirty claims per rolling hour, even after individual cooldowns", () => {
     let now = 0;
     const limiter = new FaucetLimiter(() => now);
-    for (let i = 0; i < 10; i++) limiter.take(String(i));
-    expect(() => limiter.take("new wallet")).toThrow("hourly limit");
+    for (let i = 0; i < 30; i++) limiter.take(String(i));
+    expect(() => limiter.take("new wallet")).toThrow("Faucet hourly limit reached. Try again in 60 minutes.");
     now = 600_000;
-    expect(() => limiter.take("0")).toThrow("hourly limit");
+    expect(() => limiter.take("0")).toThrow("Faucet hourly limit reached. Try again in 50 minutes.");
+    now = 2_880_001;
+    expect(() => limiter.take("new wallet")).toThrow("Try again in 12 minutes.");
+    now = 3_599_999;
+    expect(() => limiter.take("new wallet")).toThrow("Try again in 1 minute.");
     now = 3_600_000;
     expect(() => limiter.take("0")).not.toThrow();
   });

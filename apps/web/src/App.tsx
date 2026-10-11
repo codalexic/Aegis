@@ -600,6 +600,6 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
         </tr>)}</tbody>
       </table></div>}
     </section>
-    <footer><span>Aegis</span><span></span></footer>
+    <footer><span>Aegis</span><span>{environmentShort(environment)} · Test money, no real value</span></footer>
   </Shell>;
 }

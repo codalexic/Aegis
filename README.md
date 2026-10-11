@@ -194,9 +194,11 @@ After changing settings, redeploy to apply them.
 Agent requests require that the vault authorizes the configured agent. Gemini
 quota/HTTP failures produce a clear error and the console offers **Retry scripted**.
 Request bodies are limited to 4 KiB. Warm instances enforce six agent calls/IP/
-minute, one faucet call/IP/10 minutes, one claim/wallet/10 minutes, and ten faucet
+minute, ten faucet calls/IP/10 minutes, one claim/wallet/10 minutes, and thirty faucet
 claims/hour. Confirmed chain history also restricts the faucet after cold starts;
-recent token-account activity counts toward the wallet cooldown. Concurrent
+only successful testUSDC mints signed by the faucet authority count, and only mints
+to the wallet’s token account start its cooldown. Owner transfers do not. Limit
+messages give the remaining wait, rounded up to minutes. Concurrent
 instances can race on pending claims, so these are demo controls, not atomic global
 quotas. Enable the documented Vercel Firewall rule (six API POSTs/IP/minute across
 endpoints) before sharing; its counters are per region. No database is required.

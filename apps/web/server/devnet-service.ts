@@ -1,8 +1,8 @@
 import { Keypair, PublicKey, Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
-import { createAssociatedTokenAccountIdempotentInstruction, createMintToCheckedInstruction, getAssociatedTokenAddressSync, getMint } from "@solana/spl-token";
+import { createAssociatedTokenAccountIdempotentInstruction, createMintToCheckedInstruction, getAssociatedTokenAddressSync, getMint, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { AnchorAegisClient } from "../../../packages/sdk/src/anchor";
 import manifest from "../../../deployments/devnet.json";
-import { ApiError } from "./http";
+import { ApiError, rateLimitError } from "./http";
 
 // No filesystem, .env loading, caller-selected deployment or localnet signing.
 export const deployment = manifest;
@@ -24,17 +24,40 @@ export function devnetClient() {
 
 /** Confirmed history survives cold starts. Pending claims on separate instances can race. */
 export async function checkFaucetHistory(client: AnchorAegisClient, authority: PublicKey, destination: PublicKey, now = Date.now()) {
-  const cutoff = Math.floor(now / 1000) - 3600;
-  const [global, wallet] = await Promise.all([
-    client.connection.getSignaturesForAddress(authority, { limit: 1000 }, "confirmed"),
-    client.connection.getSignaturesForAddress(destination, { limit: 1 }, "confirmed"),
-  ]);
+  const cutoff = now / 1000 - 3600;
+  const history = await client.connection.getSignaturesForAddress(authority, { limit: 1000 }, "confirmed");
   // Fail closed if the returned history cannot establish the hourly allowance.
-  if (global.some((item) => item.blockTime === null || item.blockTime === undefined) ||
-      (global.length === 1000 && global.at(-1)!.blockTime! >= cutoff)) throw new ApiError(503, "Faucet history is unavailable. Try again later.");
-  if (global.filter((item) => !item.err && item.blockTime! > cutoff).length >= 10) throw new ApiError(429, "Faucet hourly limit reached (10 claims per hour). Try again later.");
-  // Conservative: recent activity in the recipient ATA also starts the cooldown.
-  if (wallet.some((item) => item.blockTime == null || item.blockTime > cutoff + 3000)) throw new ApiError(429, "Faucet limited: wait 10 minutes after the last activity in your testUSDC account.");
+  const unavailable = () => new ApiError(503, "Faucet history is unavailable. Try again later.");
+  if (history.some((item) => item.blockTime == null) ||
+      (history.length === 1000 && history.at(-1)!.blockTime! > cutoff)) throw unavailable();
+  const recent = history.filter((item) => !item.err && item.blockTime! > cutoff);
+  const transactions = recent.length ? await client.connection.getParsedTransactions(recent.map((item) => item.signature), {
+    commitment: "confirmed", maxSupportedTransactionVersion: 0,
+  }) : [];
+  if (transactions.length !== recent.length) throw unavailable();
+  const claims: number[] = [];
+  let walletWait = 0;
+  for (const [index, transaction] of transactions.entries()) {
+    if (!transaction?.meta) throw unavailable();
+    if (transaction.meta.err) continue;
+    const message = transaction.transaction.message;
+    if (!message.accountKeys.some((key) => key.signer && key.pubkey.equals(authority))) continue;
+    const instructions = [...message.instructions, ...(transaction.meta.innerInstructions ?? []).flatMap((group) => group.instructions)];
+    const mints = instructions.filter((instruction) => instruction.programId.equals(TOKEN_PROGRAM_ID) && "parsed" in instruction &&
+      ["mintTo", "mintToChecked"].includes(instruction.parsed?.type) &&
+      instruction.parsed.info?.mint === deployment.inputMint && instruction.parsed.info?.mintAuthority === authority.toBase58());
+    if (!mints.length) continue;
+    const at = recent[index].blockTime! * 1000;
+    claims.push(at);
+    if (mints.some((instruction) => "parsed" in instruction && instruction.parsed.info.account === destination.toBase58())) {
+      walletWait = Math.max(walletWait, at + 600_000 - now);
+    }
+  }
+  // More than the cap can exist after concurrent cold-start claims. Wait until fewer than 30 remain.
+  claims.sort((a, b) => b - a);
+  const hourlyWait = claims.length < 30 ? 0 : claims[29] + 3_600_000 - now;
+  if (hourlyWait > 0 && hourlyWait >= walletWait) throw rateLimitError("Faucet hourly limit reached. Try again in", hourlyWait);
+  if (walletWait > 0) throw rateLimitError("This wallet can claim again in", walletWait);
 }
 
 export async function mintTestUsdc(env: NodeJS.ProcessEnv, recipient: PublicKey) {

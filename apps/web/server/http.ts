@@ -1,7 +1,12 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 
 export class ApiError extends Error {
-  constructor(readonly status: number, message: string) { super(message); }
+  constructor(readonly status: number, message: string, readonly retryAfter?: number) { super(message); }
+}
+
+export function rateLimitError(message: string, remainingMs: number): ApiError {
+  const minutes = Math.max(1, Math.ceil(remainingMs / 60_000));
+  return new ApiError(429, `${message} ${minutes} ${minutes === 1 ? "minute" : "minutes"}.`, Math.max(1, Math.ceil(remainingMs / 1000)));
 }
 
 export function json(response: ServerResponse, status: number, value: unknown) {

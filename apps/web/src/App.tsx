@@ -228,10 +228,16 @@ function Step({ number, state, title, text, children }: { number: number; state:
   </div>;
 }
 
-export function FundingStep({ state, text, balance, hasFaucet, hasVault, locked, busy, onFaucet, onFund }: {
+export function FundingStep({ state, text, balance, hasFaucet, hasVault, finished, locked, busy, onFaucet, onFund, onNewDemo }: {
   state: "done" | "next" | "todo"; text: string; balance: bigint | null; hasFaucet: boolean;
-  hasVault: boolean; locked: boolean; busy: string | null; onFaucet(): void; onFund(): void;
+  hasVault: boolean; finished: boolean; locked: boolean; busy: string | null; onFaucet(): void; onFund(): void; onNewDemo(): void;
 }) {
+  if (finished) return <Step number={2} state={state} title="Add 1,000 testUSDC"
+    text="This vault is finished. Withdraw what is left, or start a New demo vault.">
+    <button className="primary" disabled={locked}
+      data-busy={busy === "New demo vault" ? "true" : undefined} aria-busy={busy === "New demo vault" || undefined}
+      onClick={onNewDemo}>New demo vault</button>
+  </Step>;
   const getTokens = needsFaucet(balance, hasFaucet);
   const isBusy = busy === (getTokens ? "Get testUSDC" : "Fund vault");
   return <Step number={2} state={state} title="Add 1,000 testUSDC" text={<>
@@ -426,6 +432,7 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
 
   function trade(event: FormEvent) {
     event.preventDefault();
+    if (finished) return;
     void run("Agent trade", async () => {
       let raw: bigint;
       try { raw = uiAmountToRaw(tradeAmount, 6); }
@@ -541,12 +548,11 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
         <Step number={1} state={step1} title="Create a vault" text={vault ? "Your vault is open with a 50 testUSDC per-trade cap and a 100 testUSDC total budget." : "Opens a vault with a 50 testUSDC per-trade cap and a 100 testUSDC total budget. Or use New demo vault for both steps at once."}>
           <button className={step1 === "next" ? "primary" : ""} disabled={!ready || !!vault || locked} {...busyProps("Create vault")} onClick={() => void create()}>Create vault</button>
         </Step>
-        <FundingStep state={step2} balance={walletBalance} hasFaucet={!!connection.faucet} hasVault={!!vault} locked={locked} busy={busy}
-          text={finished ? `This vault is ${vault!.revoked ? "revoked" : "expired"}, so new money would just sit there. Withdraw what is left, then start a New demo vault from the sidebar.`
-            : needsFaucet(walletBalance, !!connection.faucet) ? (vault ? "Get test money in your wallet, then fund the vault."
+        <FundingStep state={step2} balance={walletBalance} hasFaucet={!!connection.faucet} hasVault={!!vault} finished={finished} locked={locked} busy={busy}
+          text={needsFaucet(walletBalance, !!connection.faucet) ? (vault ? "Get test money in your wallet, then fund the vault."
               : "Create a vault first; it needs no testUSDC. Then get test money in your wallet and fund the vault.")
             : "Move test money from your wallet into the vault. The agent can trade with it, but never beyond the guardrails."}
-          onFaucet={() => void run("Get testUSDC", connection.faucet!)} onFund={() => void fund()} />
+          onFaucet={() => void run("Get testUSDC", connection.faucet!)} onFund={() => void fund()} onNewDemo={() => void newDemo()} />
         <Step number={3} state={step3} title="Try the agent" text="Run a normal trade, then try to trick it. Anything outside the rules is blocked on-chain.">
           <a className="step-ok" href="#agent">Go to agent <Icon name="arrow" size={14} /></a>
         </Step>
@@ -563,12 +569,12 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
 
     {narrow && <div className="rail rail--inline">{rail}</div>}
 
-    {environment !== "mock" ? <AgentConsole environment={environment} walletMode={connection.walletMode} key={address.current?.toBase58()} vault={vault} disabled={!!busy} onBusy={setAgentBusy} onComplete={refresh} />
+    {environment !== "mock" ? <AgentConsole environment={environment} walletMode={connection.walletMode} key={address.current?.toBase58()} vault={vault} finished={finished} disabled={!!busy} onBusy={setAgentBusy} onComplete={refresh} />
       : <section id="agent" className="card trade-card" aria-labelledby="trade-title">
         <div><h2 id="trade-title">Try an agent trade</h2><p className="muted">20 testUSDC is within the 50 cap and goes through. Try 60 to watch the cap block it.</p></div>
         <form onSubmit={trade}>
           <label htmlFor="trade-amount">Amount <span>testUSDC</span></label>
-          <div className="trade-controls"><input id="trade-amount" inputMode="decimal" value={tradeAmount} onChange={(event) => setTradeAmount(event.target.value)} disabled={!vault || !!busy} autoComplete="off" /><button className="primary" disabled={!vault || !!busy} {...busyProps("Agent trade")} type="submit">Swap</button></div>
+          <div className="trade-controls"><input id="trade-amount" inputMode="decimal" value={tradeAmount} onChange={(event) => setTradeAmount(event.target.value)} disabled={!vault || finished || !!busy} autoComplete="off" /><button className="primary" disabled={!vault || finished || !!busy} {...busyProps("Agent trade")} type="submit">Swap</button></div>
         </form>
       </section>}
 

@@ -47,9 +47,9 @@ function News({ step }: { step: Extract<Step, { type: "news" }> }) {
   return <p className="agent-news">{at < 0 ? step.text : <>{step.text.slice(0, at)}<mark>{step.injection}</mark>{step.text.slice(at + step.injection!.length)}</>}</p>;
 }
 
-export function AgentConsole({ vault, disabled, onBusy, onComplete, environment = "localnet", walletMode = false }: {
+export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, environment = "localnet", walletMode = false }: {
   environment?: "localnet" | "devnet"; walletMode?: boolean;
-  vault: VaultState | null; disabled: boolean; onBusy(busy: boolean): void; onComplete(): Promise<void>;
+  vault: VaultState | null; finished: boolean; disabled: boolean; onBusy(busy: boolean): void; onComplete(): Promise<void>;
 }) {
   const [live, setLive] = useState(false);
   const userChose = useRef(false);
@@ -72,7 +72,7 @@ export function AgentConsole({ vault, disabled, onBusy, onComplete, environment 
   }, []);
 
   async function run(scenario: Scenario, useLive = live) {
-    if (running.current || disabled || !vault) return;
+    if (running.current || disabled || !vault || finished) return;
     running.current = true;
     setLastScenario(scenario); setBusy(true); onBusy(true); setError(null); setSteps([]);
     try {
@@ -97,8 +97,8 @@ export function AgentConsole({ vault, disabled, onBusy, onComplete, environment 
   const result = steps.find((step) => step.type === "result")?.result;
   const request = steps.find((step) => step.type === "request");
   const resisted = steps.some((step) => step.type === "notice" && step.code === "injection_resisted");
-  const locked = disabled || busy || !vault;
-  const usable = !!vault && !vault.revoked && vault.expiryUnix > BigInt(Math.floor(Date.now() / 1000));
+  const usable = !!vault && !finished;
+  const locked = disabled || busy || !usable;
   const detailSteps = steps.filter((step) => step.type !== "result");
   return <section id="agent" className="card agent-console" aria-labelledby="agent-title" aria-busy={busy}>
     <div className="card-heading">
@@ -120,7 +120,7 @@ export function AgentConsole({ vault, disabled, onBusy, onComplete, environment 
       </li>)}
     </ul>
     <div className="agent-result-area">
-      {!busy && !error && steps.length === 0 && vault && <p className="agent-placeholder">Pick a scenario above. The result appears here.</p>}
+      {!busy && !error && steps.length === 0 && usable && <p className="agent-placeholder">Pick a scenario above. The result appears here.</p>}
       {busy && <p className="agent-running" role="status">Running… the agent decides, then the vault checks the trade against the rules. This can take a moment.</p>}
       {error && <div className="agent-outcome blocked" role="alert">
         <span className="outcome-icon" aria-hidden="true"><Icon name="alert" /></span>

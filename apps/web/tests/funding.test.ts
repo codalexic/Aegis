@@ -38,7 +38,7 @@ describe("Step 2 funding action", () => {
   function render(balance: bigint | null, options: { hasFaucet?: boolean; hasVault?: boolean; locked?: boolean } = {}) {
     return renderToStaticMarkup(createElement(FundingStep, {
       state: "next", text: "Test money only.", balance, hasFaucet: true, hasVault: true, locked: false,
-      busy: null, onFaucet: vi.fn(), onFund: vi.fn(), ...options,
+      finished: false, busy: null, onFaucet: vi.fn(), onFund: vi.fn(), onNewDemo: vi.fn(), ...options,
     }));
   }
 

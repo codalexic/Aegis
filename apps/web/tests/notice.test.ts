@@ -12,6 +12,7 @@ const clientCodes = [
   "RpcError", "RpcRateLimited", "RateLimited", "WalletRejected", "UserRejected", "SigningFailed",
   "WalletModifiedTransaction", "InvalidWalletSignature", "WalletSigningError",
   "InsufficientFunds", "InsufficientFundsForFee", "InsufficientFundsForRent",
+  "NotRentExempt", "ResultWithNegativeLamports", "AccountAlreadyInUse", "MintMismatch", "OwnerMismatch", "InvalidOwner", "AccountFrozen",
   "VaultNotFound", "VaultAlreadyExists", "DeploymentProgramMismatch", "DeploymentAccountMismatch",
   "DeploymentClusterMismatch", "InvalidDevnetRpcUrl", "InvalidTransaction",
   "TransactionExpired", "ConfirmationTimedOut", "TransactionFailed",

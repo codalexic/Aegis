@@ -7,6 +7,12 @@ export function needsFaucet(balance: bigint | null, hasFaucet: boolean): boolean
   return hasFaucet && balance !== null && balance < DEMO_FUND_RAW;
 }
 
+/** Do not finish an owner action until its wallet balance has been reconciled. */
+export async function withWalletBalanceRefresh<T>(action: () => Promise<T>, refresh: () => Promise<void>): Promise<T> {
+  try { return await action(); }
+  finally { await refresh(); }
+}
+
 /** One optional read per state poll. Missing ATAs are empty; RPC failures are unknown. */
 export async function readWalletBalance(rpcUrl: string, tokenAccount: PublicKey): Promise<bigint | null> {
   try {

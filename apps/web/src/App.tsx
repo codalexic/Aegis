@@ -15,7 +15,7 @@ import { Logo } from "./Logo";
 import { SidebarIllustration } from "./Illustration";
 import { TradeBars, type TradeBar } from "./TradeBars";
 import { Notice } from "./Notice";
-import { needsFaucet, newFundedDemo } from "./funding";
+import { needsFaucet, newFundedDemo, withWalletBalanceRefresh } from "./funding";
 
 const nowUnix = () => BigInt(Math.floor(Date.now() / 1000));
 const shorten = (value: string) => `${value.slice(0, 4)}…${value.slice(-4)}`;
@@ -264,6 +264,7 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
   const running = useRef(false);
   const [vault, setVault] = useState<VaultState | null>(null);
   const [walletBalance, setWalletBalance] = useState<bigint | null>(null);
+  const balanceRequest = useRef(0);
   const [activity, setActivity] = useState<Activity[]>([]);
   const [now, setNow] = useState(nowUnix);
   const [busy, setBusy] = useState<string | null>(null);
@@ -278,8 +279,10 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
   const narrow = useMediaQuery("(max-width: 1240px)");
 
   const refreshWalletBalance = useCallback(async () => {
+    const request = ++balanceRequest.current;
     const balance = await connection.getWalletBalance?.().catch(() => null) ?? null;
-    setWalletBalance(balance);
+    // A slow poll started before confirmation must not overwrite the fresh balance.
+    if (request === balanceRequest.current) setWalletBalance(balance);
   }, [connection]);
 
   const refreshState = useCallback(async () => {
@@ -364,7 +367,9 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
     setBusy(label);
     setNotice(null);
     try {
-      setNotice({ ok: true, text: await action() });
+      // Keep actions locked through a fresh read, even if polling is hidden or
+      // waiting for activity history. Also reconcile partial successes/failures.
+      setNotice({ ok: true, text: await withWalletBalanceRefresh(action, refreshWalletBalance) });
     } catch (error) {
       setNotice({ ok: false, text: error });
     } finally {

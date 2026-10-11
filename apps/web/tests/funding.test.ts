@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Dashboard, FundingStep } from "../src/App";
 import { connectDashboard } from "../src/client";
 import { connectWalletDashboard } from "../src/wallet-client";
-import { DEMO_FUND_RAW, newFundedDemo, readWalletBalance } from "../src/funding";
+import { DEMO_FUND_RAW, newFundedDemo, readWalletBalance, withWalletBalanceRefresh } from "../src/funding";
 import { Notice } from "../src/Notice";
 import { startDashboardPolling } from "../src/polling";
 import { getAssociatedTokenAddressSync } from "../src/browser-token";
@@ -15,6 +15,24 @@ import { WalletAegisClient } from "../../../packages/sdk/src/wallet";
 import { deriveVaultPda } from "../../../packages/sdk/src/addresses";
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
+
+it.each(["fund", "faucet", "withdraw", "partial failure"])("keeps %s pending until the immediate balance refresh completes", async (kind) => {
+  const confirmed = Promise.withResolvers<string>();
+  const balance = Promise.withResolvers<void>();
+  const refresh = vi.fn(() => balance.promise);
+  const finished = vi.fn();
+  const failure = new Error("Partial success");
+  const pending = withWalletBalanceRefresh(() => confirmed.promise, refresh).then(finished, finished);
+  expect(refresh).not.toHaveBeenCalled();
+  if (kind === "partial failure") confirmed.reject(failure);
+  else confirmed.resolve("confirmed");
+  await Promise.resolve();
+  expect(refresh).toHaveBeenCalledTimes(1);
+  expect(finished).not.toHaveBeenCalled();
+  balance.resolve();
+  await pending;
+  expect(finished).toHaveBeenCalledExactlyOnceWith(kind === "partial failure" ? failure : "confirmed");
+});
 
 describe("Step 2 funding action", () => {
   function render(balance: bigint | null, options: { hasFaucet?: boolean; hasVault?: boolean; locked?: boolean } = {}) {

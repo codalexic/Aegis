@@ -9,6 +9,7 @@ export class ClientError extends Error {
 export const RPC_RATE_LIMITED = "RpcRateLimited";
 export const WALLET_REJECTED = "WalletRejected";
 export class RpcError extends Error {}
+export class ProgramError extends Error {}
 
 /** Wallet adapters may wrap the provider error in `cause` or `error`. */
 export function isRateLimited(error: unknown): boolean {
@@ -30,6 +31,15 @@ function matchesError(error: unknown, test: (value: Record<string, unknown>) => 
 const errors = new Map([aegisIdl, dexIdl].map((idl) => [
   idl.address, new Map<number, string>(idl.errors.map(({ code, name }) => [code, name])),
 ]));
+// Custom codes are local to each program, including errors propagated through CPI.
+errors.set("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", new Map([
+  [0, "NotRentExempt"], [1, "InsufficientFunds"], [3, "MintMismatch"],
+  [4, "OwnerMismatch"], [17, "AccountFrozen"],
+]));
+errors.set("11111111111111111111111111111111", new Map([
+  [0, "AccountAlreadyInUse"], [1, "ResultWithNegativeLamports"],
+]));
+errors.set("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL", new Map([[0, "InvalidOwner"]]));
 
 /** Numeric codes overlap across programs. Use runtime invocation/failure lines for attribution. */
 export function programErrorName(logs: readonly string[] | null | undefined): string | undefined {
@@ -67,6 +77,7 @@ export function transactionErrorName(error: unknown, logs?: readonly string[] | 
 }
 
 export function failure(error: unknown, signature?: string): Extract<TxResult, { ok: false }> {
+  if (error instanceof ProgramError) return { ok: false, error: error.message, origin: "program", ...(signature && { signature }) };
   if (isRateLimited(error)) return { ok: false, error: RPC_RATE_LIMITED, origin: "rpc", ...(signature && { signature }) };
   if (error instanceof RpcError) return { ok: false, error: "RpcError", origin: "rpc", ...(signature && { signature }) };
   if (error instanceof ClientError) return { ok: false, error: error.message, origin: "client", ...(error.detail && { detail: error.detail }), ...(signature && { signature }) };

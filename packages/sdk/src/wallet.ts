@@ -6,7 +6,7 @@ import { convertIdlToCamelCase } from "@coral-xyz/anchor/dist/esm/idl.js";
 import { encode as encodeSignature } from "@coral-xyz/anchor/dist/esm/utils/bytes/bs58.js";
 import type { Idl } from "@coral-xyz/anchor";
 import BN from "bn.js";
-import { getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { AccountLayout, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import idl from "../../../artifacts/idl/aegis.json";
 import { AEGIS_PROGRAM_ID, deriveSwapAccounts, deriveVaultAuthorityPda, deriveVaultPda } from "./addresses";
 import { ChainReader } from "./chain-reader";
@@ -58,6 +58,8 @@ export class WalletAegisClient extends ChainReader {
     return this.send(owner, async () => {
       u64(amount);
       const state = await this.getVault(vault);
+      // Read confirmed state for every attempt, never the dashboard's polled balance.
+      if (await this.getWalletBalance(owner.publicKey, state.inputMint) < amount) throw new ClientError("InsufficientFunds");
       const accounts = deriveSwapAccounts(vault, state.inputMint, state.outputMint);
       // SPL TransferChecked: opcode, little-endian u64, decimals. Amount never passes through number.
       const data = Buffer.alloc(10); data[0] = 12; data.writeBigUInt64LE(amount, 1); data[9] = 6;
@@ -66,6 +68,23 @@ export class WalletAegisClient extends ChainReader {
         key(accounts.inputVault, true), key(owner.publicKey, false, true), key(vault),
       ] }];
     });
+  }
+
+  async getWalletBalance(owner: PublicKey, mint = new PublicKey(this.deployment.inputMint)): Promise<bigint> {
+    const source = getAssociatedTokenAddressSync(mint, owner);
+    const { value: info } = await this.rpc<{ value: { owner: string; executable: boolean; data: [string, string] } | null }>(
+      "getAccountInfo", [source.toBase58(), { encoding: "base64", commitment: "confirmed" }],
+    );
+    if (!info) return 0n;
+    if (info.owner !== TOKEN_PROGRAM_ID.toBase58() || info.executable || info.data[1] !== "base64") throw new ClientError("AccountMismatch");
+    const data = Buffer.from(info.data[0], "base64");
+    if (data.length !== AccountLayout.span) throw new ClientError("AccountMismatch");
+    const account = AccountLayout.decode(data);
+    if (!account.mint.equals(mint)) throw new ClientError("MintMismatch");
+    if (!account.owner.equals(owner)) throw new ClientError("OwnerMismatch");
+    if (account.state === 2) throw new ClientError("AccountFrozen");
+    if (account.state !== 1) throw new ClientError("AccountMismatch");
+    return account.amount;
   }
 
   revoke(owner: WalletSigner, vault: PublicKey): Promise<TxResult> {

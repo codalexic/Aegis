@@ -6,6 +6,14 @@ import deployment from "../../../deployments/devnet.json";
 
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
+it("does not expose arbitrary preflight error text without a runtime program code", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ error: {
+    message: "private transport configuration", data: { err: "private transport configuration", logs: [] },
+  } })));
+  const error = await new ChainReader(deployment).rpc("sendTransaction", []).catch((error: unknown) => error);
+  expect(failure(error)).toEqual({ ok: false, origin: "rpc", error: "RpcError" });
+});
+
 it("shares 429 Retry-After cooldown with queued reads and retries identical bytes", async () => {
   vi.useFakeTimers(); vi.spyOn(Math, "random").mockReturnValue(0.5);
   const fetcher = vi.fn<typeof fetch>()

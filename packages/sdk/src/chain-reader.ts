@@ -9,7 +9,7 @@ import type { Idl, IdlAccounts } from "@coral-xyz/anchor";
 import type { Aegis } from "../../../artifacts/idl/aegis";
 import idl from "../../../artifacts/idl/aegis.json";
 import { AEGIS_PROGRAM_ID, DEMO_DEX_PROGRAM_ID, deriveSwapAccounts, deriveVaultPda } from "./addresses";
-import { ClientError, RpcError, RPC_RATE_LIMITED, isRateLimited, transactionErrorName } from "./errors";
+import { ClientError, ProgramError, RpcError, RPC_RATE_LIMITED, isRateLimited, programErrorName, transactionErrorName } from "./errors";
 import type { LocalnetDeployment, Activity, VaultState } from "./index";
 
 type Account = { owner: string; executable: boolean; data: [string, "base64"] };
@@ -66,9 +66,16 @@ export class ChainReader {
       if (response.status === 429) throw new RpcError(RPC_RATE_LIMITED);
       const body = await response.json();
       if (isRateLimited(body.error)) throw new RpcError(RPC_RATE_LIMITED);
+      // State can change between simulation and sendTransaction's preflight.
+      // Preserve only the parsed program code, never arbitrary RPC error text.
+      if (body.error?.data?.err && Array.isArray(body.error.data.logs) && body.error.data.logs.every((log: unknown) => typeof log === "string")) {
+        const code = programErrorName(body.error.data.logs);
+        if (code) throw new ProgramError(code);
+      }
       if (!response.ok || body.error || !("result" in body)) throw new Error();
       return body.result;
     } catch (error) {
+      if (error instanceof ProgramError) throw error;
       if (this.deployment.environment === "localnet") throw new ClientError("RpcError");
       throw new RpcError(isRateLimited(error) ? RPC_RATE_LIMITED : "RpcError");
     }

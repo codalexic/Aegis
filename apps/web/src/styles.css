@@ -578,10 +578,10 @@ h1 { font-size: 18px; font-weight: 750; letter-spacing: -.02em; line-height: 1.3
 .shell--dark button:disabled {
   background: rgba(255, 255, 255, .12); color: rgba(247, 245, 255, .4); border-color: transparent;
 }
-.shell--dark .tile--lavender { background: rgba(139, 124, 255, .2); }
-.shell--dark .tile--mist { background: rgba(255, 255, 255, .08); box-shadow: 0 0 0 1px rgba(196, 181, 255, .16); }
-.shell--dark .tile--mint { background: rgba(255, 255, 255, .05); }
-.shell--dark .tile--cream { background: rgba(196, 181, 255, .14); }
+.shell--dark .tile--lavender,
+.shell--dark .tile--mist,
+.shell--dark .tile--mint,
+.shell--dark .tile--cream { background: rgba(196, 181, 255, .14); box-shadow: none; }
 .shell--dark .tile-icon {
   background: rgba(255, 255, 255, .12); color: var(--start-white);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
@@ -597,19 +597,10 @@ h1 { font-size: 18px; font-weight: 750; letter-spacing: -.02em; line-height: 1.3
 .shell--dark .scenario-icon.hack {
   background: rgba(240, 138, 144, .18); color: #ffb0b4;
 }
-.shell--dark .step,
-.shell--dark .scenario,
 .shell--dark .notice,
 .shell--dark .count-chip,
 .shell--dark .status,
-.shell--dark .rail-card,
 .shell--dark .owner-controls,
-.shell--dark .agent-placeholder,
-.shell--dark .agent-running,
-.shell--dark .agent-details,
-.shell--dark .trade-card,
-.shell--dark .empty-activity,
-.shell--dark td,
 .shell--dark .segmented [aria-pressed="true"]:not(:disabled),
 .shell--dark .segmented [aria-pressed="true"]:disabled {
   background: rgba(18, 14, 32, .72);
@@ -617,12 +608,23 @@ h1 { font-size: 18px; font-weight: 750; letter-spacing: -.02em; line-height: 1.3
   box-shadow: var(--shadow-card);
   color: inherit;
 }
-.shell--dark .go-live {
-  background: rgba(18, 14, 32, .72);
-  border-color: rgba(196, 181, 255, .16);
+.shell--dark .go-live,
+.shell--dark .rail-card,
+.shell--dark .rail-card.tinted,
+.shell--dark .scenario,
+.shell--dark .agent-placeholder,
+.shell--dark .agent-running,
+.shell--dark .agent-details,
+.shell--dark .trade-card,
+.shell--dark .empty-activity,
+.shell--dark .page-loading,
+.shell--dark .activity-card td {
+  background: rgba(196, 181, 255, .14);
+  border: 1px solid rgba(196, 181, 255, .14);
+  box-shadow: none;
+  color: inherit;
 }
 .shell--dark .go-live-track > span { background: var(--start-violet-hot); }
-.shell--dark .rail-card.tinted { background: rgba(139, 124, 255, .14); }
 .shell--dark .rail-badge { background: var(--start-violet-hot); color: var(--start-black); }
 .shell--dark .go-live .steps { display: grid; gap: 10px; }
 .shell--dark .go-live .step {
@@ -748,6 +750,17 @@ h1 { font-size: 18px; font-weight: 750; letter-spacing: -.02em; line-height: 1.3
   }
   .try-it-steps li:not(:last-child) .try-it-marker::after { transform: translateX(-50%) scaleY(1); }
   .brand:hover, .start-connect:hover:not(:disabled) { transform: none; }
+}
+
+.page-loading {
+  margin: 24px 0;
+  padding: 28px 20px;
+  border-radius: var(--r-lg);
+  background: rgba(196, 181, 255, .14);
+  color: var(--ink-2);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
 }
 
 /* Stat tiles: icon · label · number stacked from the top; footnote pinned to the bottom */
@@ -927,11 +940,10 @@ a.signature:hover, a.signature:focus-visible { color: #2454a0; text-decoration-c
   animation-delay: calc(var(--i, 0) * 40ms);
 }
 .shell--dark .activity-card td {
-  background: rgba(18, 14, 32, .72);
   border: 0;
   box-shadow: inset 0 0 0 1px rgba(196, 181, 255, .14);
 }
-.shell--dark .activity-card tr:hover td { background: rgba(28, 22, 48, .9); }
+.shell--dark .activity-card tr:hover td { background: rgba(196, 181, 255, .2); }
 .shell--dark a.signature { color: #b7afe6; text-decoration-color: rgba(196, 181, 255, .28); }
 .shell--dark a.signature:hover, .shell--dark a.signature:focus-visible { color: #d4cbff; text-decoration-color: #c4b5ff; }
 .shell--dark .result.ok { background: rgba(196, 181, 255, .16); color: #f0ecff; }

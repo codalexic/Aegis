@@ -508,13 +508,13 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
   const spentPercent = vault ? Number(vault.spentRaw * 100n / vault.budgetRaw) : 0;
   const budgetLevel = vault && remaining * 100n < vault.budgetRaw * 15n ? "low"
     : vault && remaining * 100n < vault.budgetRaw * 40n ? "warning" : "healthy";
-  const status = !vault ? "Not created" : vault.revoked ? "Revoked" : now >= vault.expiryUnix ? "Expired" : "Active";
+  const status = !ready ? "Loading" : !vault ? "Not created" : vault.revoked ? "Revoked" : now >= vault.expiryUnix ? "Expired" : "Active";
   const hasBalance = vault && (vault.inputBalanceRaw > 0n || vault.outputBalanceRaw > 0n);
   const hasInput = !!vault && vault.inputBalanceRaw > 0n;
   const secondsLeft = vault ? (vault.expiryUnix > now ? vault.expiryUnix - now : 0n) : 0n;
   const lifePercent = vault ? Math.min(100, Number(secondsLeft * 100n / VAULT_LIFETIME)) : 0;
-  const locked = !!busy || agentBusy;
-  const swaps = activity.filter((item) => details.current.get(item.signature)?.label === "Agent swap");
+  const locked = !!busy || agentBusy || !ready;
+  const swaps = activityReady ? activity.filter((item) => details.current.get(item.signature)?.label === "Agent swap") : [];
   const allowedSwaps = swaps.filter((item) => item.ok).length;
   const blocked = swaps.length - allowedSwaps;
   // Oldest → newest for the chart; activity arrives newest first.
@@ -525,11 +525,12 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
   const capUi = vault ? Number(rawAmountToUi(vault.maxTradeRaw, 6)) : 50;
   // A revoked or expired vault is finished: nothing is "next" except starting over.
   const finished = !!vault && (vault.revoked || status === "Expired");
-  const step1 = vault ? "done" : "next";
-  const step2 = hasInput ? "done" : vault && !finished ? "next" : "todo";
-  const step3 = swaps.length > 0 ? "done" : hasInput && !finished ? "next" : "todo";
+  const step1 = !ready ? "todo" : vault ? "done" : "next";
+  const step2 = !ready ? "todo" : hasInput ? "done" : vault && !finished ? "next" : "todo";
+  const step3 = !ready ? "todo" : swaps.length > 0 ? "done" : hasInput && !finished ? "next" : "todo";
   const stepsDone = (step1 === "done" ? 1 : 0) + (step2 === "done" ? 1 : 0) + (step3 === "done" ? 1 : 0);
-  const guardLead = !vault ? <>No vault yet. Create one and the guardrails switch on.</>
+  const guardLead = !ready ? <>Loading vault state…</>
+    : !vault ? <>No vault yet. Create one and the guardrails switch on.</>
     : vault.revoked ? <>Agent is <strong>revoked</strong>. It can no longer trade; your funds stay withdrawable.</>
     : status === "Expired" ? <>Trading permission has <strong>expired</strong>. Withdraw any time.</>
     : <>Agent may spend up to <strong>{amount(vault.maxTradeRaw)} testUSDC</strong> per trade.</>;
@@ -540,6 +541,7 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
       </>;
 
   const heading = PAGE_TITLE[page];
+  const loading = <p className="page-loading" role="status">Loading…</p>;
 
   return <Shell active={page} cta={cta}>
     <div className="page-view" key={page}>
@@ -561,20 +563,20 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
     </div>
     {connection.getWalletSolBalance && <DevnetSolHint readBalance={connection.getWalletSolBalance} />}
 
-    {page === "vault" && <>
+    {page === "vault" && (!ready ? loading : <>
       <section className="tiles" aria-label="Vault at a glance">
-        <Tile tone="lavender" icon="wallet" label="In the vault" value={vault ? amount(vault.inputBalanceRaw) : "0"} unit="testUSDC" testId="input-balance"
+        <Tile tone="cream" icon="wallet" label="In the vault" value={vault ? amount(vault.inputBalanceRaw) : "0"} unit="testUSDC" testId="input-balance"
           sub={<><span className="token-dot" aria-hidden="true" />{hasInput ? "Ready for the agent to trade" : "Fund the vault to start"}</>} />
-        <Tile tone="mist" icon="coins" label="Received from trades" value={vault ? amount(vault.outputBalanceRaw, 9) : "0"} unit="testSOL" testId="output-balance"
+        <Tile tone="cream" icon="coins" label="Received from trades" value={vault ? amount(vault.outputBalanceRaw, 9) : "0"} unit="testSOL" testId="output-balance"
           sub={<><span className="token-dot sol" aria-hidden="true" />{vault ? "100 testUSDC buys 1 testSOL" : "Nothing received yet"}</>} />
-        <Tile tone="mint" icon="chart" label="Budget left" value={vault ? amount(remaining) : "0"} unit="testUSDC" testId="remaining-budget">
+        <Tile tone="cream" icon="chart" label="Budget left" value={vault ? amount(remaining) : "0"} unit="testUSDC" testId="remaining-budget">
           <div className={`budget-section ${budgetLevel}`}>
             <progress aria-label="Remaining budget" aria-valuetext={vault ? `${amount(remaining)} of ${amount(vault.budgetRaw)} testUSDC remaining` : "No vault"} value={remainingBasisPoints.toString()} max="10000" />
             <span className="budget-number">{vault ? <><strong>{amount(vault.spentRaw)}</strong> spent of {amount(vault.budgetRaw)} total</> : "Create a vault to activate"}</span>
           </div>
         </Tile>
-        <Tile tone="cream" icon="shield" label="Attacks blocked" value={String(blocked)} subTone={blocked > 0 ? "good" : undefined}
-          sub={<><Icon name={blocked > 0 ? "check" : "info"} size={14} />{swaps.length === 0 ? "No agent requests yet" : `${allowedSwaps} ${allowedSwaps === 1 ? "trade" : "trades"} allowed`}</>} />
+        <Tile tone="cream" icon="shield" label="Attacks blocked" value={activityReady ? String(blocked) : "—"} subTone={blocked > 0 ? "good" : undefined}
+          sub={<><Icon name={blocked > 0 ? "check" : "info"} size={14} />{!activityReady ? "Loading activity" : swaps.length === 0 ? "No agent requests yet" : `${allowedSwaps} ${allowedSwaps === 1 ? "trade" : "trades"} allowed`}</>} />
       </section>
 
       <section className="go-live" aria-labelledby="vault-setup-title">
@@ -609,7 +611,7 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
       </section>
 
       <div className="panel-grid">
-        <section className="rail-card tinted" aria-labelledby="guard-title">
+        <section className="rail-card" aria-labelledby="guard-title">
           <div className="rail-heading"><h2 id="guard-title">Guardrails</h2><span className="rail-badge"><Icon name="shield" size={16} /></span></div>
           <p className="rail-lead">{guardLead}</p>
           <p className="rail-sub">Enforced by the blockchain itself. The agent cannot change or get around them.</p>
@@ -642,28 +644,14 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
           </div>}
         </section>
       </div>
-    </>}
+    </>)}
 
     {page === "stats" && <section className="rail-card chart-card" aria-labelledby="chart-title">
       <div className="rail-heading">
         <h2 id="chart-title">Agent requests vs cap</h2>
         <span className="chart-cap-pill">cap {capUi} testUSDC</span>
       </div>
-      {!activityReady ? <div className="skel" role="status" aria-busy="true" aria-label="Loading stats">
-        <div className="chart-stats">
-          <div className="chart-stat skel-block"><span className="skel-line skel-line--lg" /><span className="skel-line skel-line--sm" /></div>
-          <div className="chart-stat skel-block"><span className="skel-line skel-line--lg" /><span className="skel-line skel-line--sm" /></div>
-          <div className="chart-stat skel-block"><span className="skel-line skel-line--lg" /><span className="skel-line skel-line--sm" /></div>
-        </div>
-        <div className="chart-plot skel-plot" aria-hidden="true">
-          <span className="skel-bar" style={{ height: "28%" }} />
-          <span className="skel-bar" style={{ height: "44%" }} />
-          <span className="skel-bar" style={{ height: "36%" }} />
-          <span className="skel-bar" style={{ height: "72%" }} />
-          <span className="skel-bar" style={{ height: "52%" }} />
-          <span className="skel-bar" style={{ height: "88%" }} />
-        </div>
-      </div> : <>
+      {!ready || !activityReady ? loading : <>
         <div className="chart-stats">
           <div className="chart-stat"><strong>{swaps.length}</strong><span>requests</span></div>
           <div className={`chart-stat${allowedSwaps > 0 ? " is-ok" : ""}`}><strong>{allowedSwaps}</strong><span>allowed</span></div>
@@ -686,7 +674,7 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
       </>}
     </section>}
 
-    {page === "agent" && (environment !== "mock"
+    {page === "agent" && (!ready ? loading : environment !== "mock"
       ? <AgentConsole environment={environment} walletMode={connection.walletMode} key={address.current?.toBase58()} vault={vault} finished={finished} disabled={!!busy} onBusy={setAgentBusy} onComplete={refresh} />
       : <section className="card trade-card" aria-labelledby="trade-title">
         <div><h2 id="trade-title">Try an agent trade</h2><p className="muted">20 testUSDC is within the 50 cap and goes through. Try 60 to watch the cap block it.</p></div>
@@ -698,16 +686,7 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
 
     {page === "activity" && <section className="card activity-card" aria-labelledby="activity-title">
       <div className="card-heading"><h2 id="activity-title">Vault activity</h2><span className="muted">{!activityReady || activity.length === 0 ? "" : `${activity.length} ${activity.length === 1 ? "event" : "events"}`}</span></div>
-      {!activityReady ? <div className="skel skel--activity" role="status" aria-busy="true" aria-label="Loading activity">
-        {Array.from({ length: 5 }, (_, i) => (
-          <div key={i} className="skel-row" style={{ ["--i" as string]: i }} aria-hidden="true">
-            <span className="skel-line skel-line--sm" />
-            <span className="skel-line" />
-            <span className="skel-line skel-line--md" />
-            <span className="skel-pill" />
-          </div>
-        ))}
-      </div> : activity.length === 0 ? <div className="empty-activity activity-in"><span aria-hidden="true"><Icon name="activity" /></span><strong>No activity yet</strong><p>Create your vault to begin. Every trade and every blocked attempt will show up here, newest first.</p></div> : <div className="table-scroll activity-in">
+      {!ready || !activityReady ? loading : activity.length === 0 ? <div className="empty-activity activity-in"><span aria-hidden="true"><Icon name="activity" /></span><strong>No activity yet</strong><p>Create your vault to begin. Every trade and every blocked attempt will show up here, newest first.</p></div> : <div className="table-scroll activity-in">
         <table>
           <thead><tr><th>Time</th><th>Action</th><th>Amount</th><th>Result</th></tr></thead>
           <tbody>{activity.map((item, index) => <tr key={item.signature} style={{ ["--i" as string]: index }}>

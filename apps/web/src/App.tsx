@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type MouseEvent, type ReactNode } from "react";
 import { PublicKey } from "@solana/web3.js";
 import type { AegisEnvironment, Activity, TxResult, VaultState } from "@aegis/sdk";
 import { rawAmountToUi, uiAmountToRaw } from "../../../packages/sdk/src/amounts";
@@ -16,6 +16,7 @@ import { SidebarIllustration } from "./Illustration";
 import { TradeBars, type TradeBar } from "./TradeBars";
 import { Notice } from "./Notice";
 import { needsFaucet, newFundedDemo, withWalletBalanceRefresh } from "./funding";
+import { trackActiveSection } from "./active-section";
 
 const nowUnix = () => BigInt(Math.floor(Date.now() / 1000));
 const shorten = (value: string) => `${value.slice(0, 4)}…${value.slice(-4)}`;
@@ -55,8 +56,9 @@ const NAV: { id: string; label: string; icon: IconName }[] = [
   { id: "activity", label: "Activity", icon: "activity" },
 ];
 
-function Shell({ active, cta, rail, hideNav, children }: {
-  active: string; cta?: ReactNode; rail?: ReactNode; hideNav?: boolean; children: ReactNode;
+function Shell({ active, onNavigate, cta, rail, hideNav, children }: {
+  active: string; onNavigate?: (event: MouseEvent<HTMLAnchorElement>, id: string) => void;
+  cta?: ReactNode; rail?: ReactNode; hideNav?: boolean; children: ReactNode;
 }) {
   if (hideNav) {
     return <div className="shell shell--start"><main className="content">{children}</main></div>;
@@ -65,7 +67,7 @@ function Shell({ active, cta, rail, hideNav, children }: {
     <aside className="sidebar">
       <a className="brand" href="/" aria-label="Aegis home"><Logo size={30} withWordmark /></a>
       <nav className="nav" aria-label="Sections">
-        {NAV.map((item) => <a key={item.id} href={`#${item.id}`} aria-current={active === item.id ? "true" : undefined}><Icon name={item.icon} size={18} />{item.label}</a>)}
+        {NAV.map((item) => <a key={item.id} href={`#${item.id}`} onClick={(event) => onNavigate?.(event, item.id)} aria-current={active === item.id ? "true" : undefined}><Icon name={item.icon} size={18} />{item.label}</a>)}
       </nav>
       <div className="sidebar-foot">
         <SidebarIllustration className="sidebar-illustration" />
@@ -78,19 +80,22 @@ function Shell({ active, cta, rail, hideNav, children }: {
 }
 
 /** Highlights the sidebar link for whichever section is nearest the top of the viewport. */
-function useActiveSection(ready: boolean): string {
-  const [active, setActive] = useState(NAV[0].id);
+function useActiveSection(ready: boolean) {
+  const [active, setActive] = useState(() => {
+    const hash = typeof window === "undefined" ? "" : window.location?.hash;
+    return NAV.find((item) => `#${item.id}` === hash)?.id ?? NAV[0].id;
+  });
+  const tracker = useRef<ReturnType<typeof trackActiveSection> | null>(null);
   useEffect(() => {
-    if (typeof IntersectionObserver === "undefined") return;
-    const elements = NAV.map((item) => document.getElementById(item.id)).filter((element): element is HTMLElement => element !== null);
-    const observer = new IntersectionObserver((entries) => {
-      const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-      if (visible[0]) setActive(visible[0].target.id);
-    }, { rootMargin: "-15% 0px -65% 0px" });
-    elements.forEach((element) => observer.observe(element));
-    return () => observer.disconnect();
+    tracker.current = trackActiveSection(NAV.map((item) => item.id), setActive);
+    return () => { tracker.current?.stop(); tracker.current = null; };
   }, [ready]);
-  return active;
+  const onNavigate = (event: MouseEvent<HTMLAnchorElement>, id: string) => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    if (tracker.current?.select(id) && window.location.hash !== `#${id}`) window.history.pushState(null, "", `#${id}`);
+  };
+  return { active, onNavigate };
 }
 
 /** True while the viewport matches `query`; tracks changes so the rail can move inline below 1240px. */
@@ -281,7 +286,7 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
   const refreshing = useRef(false);
   const currentState = useRef<VaultState | null>(null);
   const polling = useRef<ReturnType<typeof startDashboardPolling> | null>(null);
-  const active = useActiveSection(ready);
+  const { active, onNavigate } = useActiveSection(ready);
   const narrow = useMediaQuery("(max-width: 1240px)");
 
   const refreshWalletBalance = useCallback(async () => {
@@ -513,7 +518,7 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
     </section>
   </>;
 
-  return <Shell active={active} cta={cta} rail={narrow ? undefined : rail}>
+  return <Shell active={active} onNavigate={onNavigate} cta={cta} rail={narrow ? undefined : rail}>
     {narrow && <div className="rail-top">{toolbar}</div>}
     <div className="content-top">
       <div><p className="eyebrow">{environmentName(environment)} · Test money, no real value</p>

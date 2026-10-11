@@ -105,7 +105,7 @@ export function AgentConsole({ vault, disabled, onBusy, onComplete, environment 
       <h2 id="agent-title">Agent console</h2>
       <div className="segmented" role="group" aria-label="Agent mode">
         <button aria-pressed={live} disabled={locked} title="A real AI model reads the news and proposes the trade" onClick={() => { userChose.current = true; setLive(true); }}>Live AI</button>
-        <button aria-pressed={!live} disabled={locked} title="Replays a fixed reply — works without an AI key" onClick={() => { userChose.current = true; setLive(false); }}>Scripted</button>
+        <button aria-pressed={!live} disabled={locked} title="Replays a fixed reply. Works without an AI key" onClick={() => { userChose.current = true; setLive(false); }}>Scripted</button>
       </div>
     </div>
     <p className="muted agent-model">{!vault ? "Finish steps 1 and 2 above, then pick a scenario here."

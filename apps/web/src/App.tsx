@@ -38,6 +38,7 @@ function timeLabel(unix?: bigint): string {
 }
 
 const environmentName = (e: AegisEnvironment) => e === "mock" ? "Practice mode" : e === "localnet" ? "Private test chain" : "Solana devnet";
+const environmentShort = (e: AegisEnvironment) => e === "mock" ? "Practice" : e === "localnet" ? "Localnet" : "Devnet";
 const environmentTitle = (environment: AegisEnvironment) => environment === "devnet"
   ? "Solana devnet: a public test network. Tokens have no value. Set Phantom to devnet."
   : environment === "localnet" ? "A private Solana test chain running on this machine. Tokens have no value."
@@ -53,8 +54,13 @@ const NAV: { id: string; label: string; icon: IconName }[] = [
   { id: "activity", label: "Activity", icon: "activity" },
 ];
 
-function Shell({ active, cta, rail, children }: { active: string; cta?: ReactNode; rail?: ReactNode; children: ReactNode }) {
-  return <div className="shell">
+function Shell({ active, cta, rail, hideNav, children }: {
+  active: string; cta?: ReactNode; rail?: ReactNode; hideNav?: boolean; children: ReactNode;
+}) {
+  if (hideNav) {
+    return <div className="shell shell--start"><main className="content">{children}</main></div>;
+  }
+  return <div className={`shell shell--dark${rail ? "" : " shell--no-rail"}`}>
     <aside className="sidebar">
       <a className="brand" href="/" aria-label="Aegis home"><Logo size={30} withWordmark /></a>
       <nav className="nav" aria-label="Sections">
@@ -125,17 +131,76 @@ export function App() {
     return () => { active = false; };
   }, [environment, walletMode, walletAddress, wallet.signTransaction]);
 
-  const walletButton = walletMode && <button className="small" disabled={wallet.connecting || wallet.disconnecting} onClick={() => void (wallet.connected ? wallet.disconnect() : wallet.connect()).catch(() => {})}>
-    <Icon name="wallet" size={16} />{wallet.connected ? "Disconnect wallet" : "Connect wallet"}
+  const walletControl = (className: string) => walletMode && <button type="button" className={className} disabled={wallet.connecting || wallet.disconnecting} onClick={() => void (wallet.connected ? wallet.disconnect() : wallet.connect()).catch(() => {})}>
+    <Icon name="wallet" size={16} />{wallet.connected ? "Disconnect" : "Connect wallet"}
   </button>;
-  const environmentPill = <div className="environment" title={environmentTitle(environment)}><span className="environment-dot" />{environmentName(environment)}</div>;
-  const narrow = useMediaQuery("(max-width: 1240px)");
+  const environmentPill = <div className="environment" title={environmentTitle(environment)}><span className="environment-dot" />{environmentShort(environment)}</div>;
+  const startBar = <header className="start-bar">
+    <a className="brand start-brand" href="/" aria-label="Aegis home"><Logo size={36} withWordmark /></a>
+    <div className="rail-top">{environmentPill}{walletControl("start-connect")}</div>
+  </header>;
 
-  if (!connection) return <Shell active="overview" rail={narrow ? undefined : <div className="rail-top">{environmentPill}{walletButton}</div>}>
-    {narrow && <div className="rail rail--inline"><div className="rail-top">{environmentPill}{walletButton}</div></div>}
-    <div className="connecting">{error ? <Notice tone="error" message={error} /> : <p role="status">{walletMode && !wallet.connected ? `Connect Phantom (set to Solana devnet). Your wallet needs a little devnet SOL for fees.` : "Connecting to the vault…"}</p>}</div>
-  </Shell>;
-  return <Dashboard key={`${environment}:${connection.owner.toBase58()}`} connection={connection} toolbar={<>{environmentPill}{walletButton}</>} />;
+  if (!connection) {
+    const waitingForWallet = walletMode && !wallet.connected;
+    return <Shell active="overview" hideNav>
+      <div className={waitingForWallet ? "start" : "start connecting-screen"}>
+        {startBar}
+        {waitingForWallet ? <>
+          <div className="start-hero">
+            <h1>AI agents can be tricked. Aegis still enforces the limits.</h1>
+            {error
+              ? <Notice tone="error" message={error} />
+              : <p className="connecting-hint" role="status">You only need a wallet and a bit of SOL on Solana Devnet to use your agent safely with us.</p>}
+          </div>
+          {environment === "devnet" && <TryIt />}
+        </> : error
+          ? <div className="connecting"><Notice tone="error" message={error} /></div>
+          : <div className="connecting" role="status" aria-live="polite" aria-busy="true">
+            <div className="connecting-mark" aria-hidden="true"><span className="connecting-ring" /><Logo size={40} /></div>
+            <p>Connecting to the vault…</p>
+          </div>}
+      </div>
+    </Shell>;
+  }
+  return <Dashboard key={`${environment}:${connection.owner.toBase58()}`} connection={connection} toolbar={<>{environmentPill}{walletControl("small rail-action")}</>} />;
+}
+
+const TRY_STEPS: { title: string; body: ReactNode }[] = [
+  {
+    title: "Install Phantom",
+    body: <>Download from <a href="https://phantom.com/download" target="_blank" rel="noreferrer">phantom.com</a></>,
+  },
+  {
+    title: "Point Phantom at Devnet",
+    body: "In Phantom: Settings → Developer Settings → turn on Testnet Mode → choose Solana Devnet. Your mainnet funds stay untouched.",
+  },
+  {
+    title: "Connect here",
+    body: "Hit Connect wallet in the top right, then approve the request in Phantom. That wallet is your identity for this demo.",
+  },
+  {
+    title: "Fund a vault and try to break it",
+    body: "Open a New demo vault to get 1,000 testUSDC under the agent's limits - then run the attack scenarios and see what Aegis blocks.",
+  },
+];
+
+function TryIt() {
+  return <aside className="try-it" aria-labelledby="try-it-title">
+    <header className="try-it-head">
+      <h2 id="try-it-title">How to try it?</h2>
+      <p className="try-it-lead">A quick walkthrough on Solana Devnet for you to get started.</p>
+    </header>
+    <ol className="try-it-steps">
+      {TRY_STEPS.map((step, index) => <li key={step.title} data-step={index + 1}>
+        <span className="try-it-marker" aria-hidden="true">{index + 1}</span>
+        <div>
+          <strong className="try-it-title">{step.title}</strong>
+          <p className="try-it-detail">{step.body}</p>
+        </div>
+      </li>)}
+    </ol>
+    <p className="try-it-foot">Out of fee SOL? Use the <a href="https://faucet.solana.com" target="_blank" rel="noreferrer">Solana Faucet</a>.</p>
+  </aside>;
 }
 
 /* --------------------------------------------------------------------------
@@ -387,7 +452,7 @@ function Dashboard({ connection, toolbar }: { connection: DashboardConnection; t
     <section className="rail-card tinted" aria-labelledby="guard-title">
       <div className="rail-heading"><h2 id="guard-title">Guardrails</h2><span className="rail-badge"><Icon name="shield" size={16} /></span></div>
       <p className="rail-lead">{guardLead}</p>
-      <p className="rail-sub">Enforced by the blockchain itself — the agent cannot change or get around them.</p>
+      <p className="rail-sub">Enforced by the blockchain itself. The agent cannot change or get around them.</p>
       <div className="guard-rows">
         <div className="guard-row"><span className="label">Per-trade cap</span><span className="value">{vault ? amount(vault.maxTradeRaw) : "50"}<small>testUSDC</small></span></div>
         <div className="guard-row"><span className="label">Total budget</span><span className="value">{vault ? amount(vault.budgetRaw) : "100"}<small>testUSDC</small></span></div>
@@ -420,11 +485,6 @@ function Dashboard({ connection, toolbar }: { connection: DashboardConnection; t
         <h1>AI agents can be tricked. Aegis still enforces the limits.</h1></div>
       {swaps.length > 0 && <span className="count-chip"><strong className={blocked === 0 ? "zero" : ""}>{blocked}</strong>{blocked === 1 ? "attack blocked" : "attacks blocked"}</span>}
     </div>
-    {environment === "devnet" && <aside className="try-it" aria-labelledby="try-it-title">
-      <h2 id="try-it-title">How to try it</h2>
-      <p><a href="https://phantom.com/download" target="_blank" rel="noreferrer">Install Phantom</a> → Settings → Developer Settings → Testnet Mode → Solana Devnet → Connect wallet → Get 1,000 testUSDC → New demo vault.</p>
-      <p className="muted">Get free devnet SOL for wallet fees at <a href="https://faucet.solana.com" target="_blank" rel="noreferrer">Solana Faucet</a>. Approve vault creation and funding in Phantom, then try the agent buttons. Test tokens have no monetary value.</p>
-    </aside>}
     <div className="dashboard-notice">
       {busy ? <Notice tone="busy" message={busy === "Create vault" ? "Creating your vault…" : busy === "Fund vault" ? "Adding 1,000 testUSDC…" : busy === "New demo vault" ? "Creating and funding a demo vault…" : busy === "Withdraw all" ? "Moving everything back to your wallet…" : busy === "Revoke agent" ? "Stopping the agent…" : `${busy}…`} />
         : notice && (notice.ok
@@ -433,11 +493,11 @@ function Dashboard({ connection, toolbar }: { connection: DashboardConnection; t
     </div>
 
     <section id="overview" className="tiles" aria-label="Vault at a glance">
-      <Tile tone="lavender" icon="wallet" label="In the vault" value={vault ? amount(vault.inputBalanceRaw) : "—"} unit="testUSDC" testId="input-balance"
+      <Tile tone="lavender" icon="wallet" label="In the vault" value={vault ? amount(vault.inputBalanceRaw) : "0"} unit="testUSDC" testId="input-balance"
         sub={<><span className="token-dot" aria-hidden="true" />{hasInput ? "Ready for the agent to trade" : "Fund the vault to start"}</>} />
-      <Tile tone="mist" icon="coins" label="Received from trades" value={vault ? amount(vault.outputBalanceRaw, 9) : "—"} unit="testSOL" testId="output-balance"
+      <Tile tone="mist" icon="coins" label="Received from trades" value={vault ? amount(vault.outputBalanceRaw, 9) : "0"} unit="testSOL" testId="output-balance"
         sub={<><span className="token-dot sol" aria-hidden="true" />{vault ? "100 testUSDC buys 1 testSOL" : "Nothing received yet"}</>} />
-      <Tile tone="mint" icon="chart" label="Budget left" value={vault ? amount(remaining) : "—"} unit="testUSDC" testId="remaining-budget">
+      <Tile tone="mint" icon="chart" label="Budget left" value={vault ? amount(remaining) : "0"} unit="testUSDC" testId="remaining-budget">
         <div className={`budget-section ${budgetLevel}`}>
           <progress aria-label="Remaining budget" aria-valuetext={vault ? `${amount(remaining)} of ${amount(vault.budgetRaw)} testUSDC remaining` : "No vault"} value={remainingBasisPoints.toString()} max="10000" />
           <span className="budget-number">{vault ? <><strong>{amount(vault.spentRaw)}</strong> spent of {amount(vault.budgetRaw)} total</> : "Create a vault to activate"}</span>

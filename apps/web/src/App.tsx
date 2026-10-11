@@ -156,7 +156,7 @@ export function App() {
             <h1>AI agents can be tricked. Aegis still enforces the limits.</h1>
             {error
               ? <Notice tone="error" message={error} />
-              : <p className="connecting-hint" role="status">You only need a wallet and a bit of SOL on Solana Devnet to use your agent safely with us.</p>}
+              : <p className="connecting-hint" role="status">Devnet SOL covers transaction fees.</p>}
           </div>
           {environment === "devnet" && <TryIt />}
         </> : error
@@ -177,24 +177,24 @@ const TRY_STEPS: { title: string; body: ReactNode }[] = [
     body: <>Download from <a href="https://phantom.com/download" target="_blank" rel="noreferrer">phantom.com</a></>,
   },
   {
-    title: "Point Phantom at Devnet",
-    body: "In Phantom: Settings → Developer Settings → turn on Testnet Mode → choose Solana Devnet. Your mainnet funds stay untouched.",
+    title: "Switch to devnet",
+    body: "In Phantom: Settings → Developer Settings → Testnet Mode → Solana Devnet.",
   },
   {
     title: "Connect here",
-    body: "Hit Connect wallet in the top right, then approve the request in Phantom. That wallet is your identity for this demo.",
+    body: "Use the top-right button; approve in Phantom.",
   },
   {
-    title: "Fund a vault and try to break it",
-    body: "Open a New demo vault to get 1,000 testUSDC under the agent's limits - then run the attack scenarios and see what Aegis blocks.",
+    title: "Try the demo",
+    body: "Create and fund a vault, then test the agent.",
   },
 ];
 
 function TryIt() {
   return <aside className="try-it" aria-labelledby="try-it-title">
     <header className="try-it-head">
-      <h2 id="try-it-title">How to try it?</h2>
-      <p className="try-it-lead">A quick walkthrough on Solana Devnet for you to get started.</p>
+      <h2 id="try-it-title">Get started</h2>
+      <p className="try-it-lead">You’ll approve transactions in Phantom.</p>
     </header>
     <ol className="try-it-steps">
       {TRY_STEPS.map((step, index) => <li key={step.title} data-step={index + 1}>
@@ -205,7 +205,7 @@ function TryIt() {
         </div>
       </li>)}
     </ol>
-    <p className="try-it-foot">Out of fee SOL? Use the <a href="https://faucet.solana.com" target="_blank" rel="noreferrer">Solana Faucet</a>.</p>
+    <p className="try-it-foot">Need devnet SOL? Use the <a href="https://faucet.solana.com" target="_blank" rel="noreferrer">Solana Faucet</a>.</p>
   </aside>;
 }
 
@@ -237,15 +237,15 @@ export function FundingStep({ state, text, balance, hasFaucet, hasVault, finishe
   state: "done" | "next" | "todo"; text: string; balance: bigint | null; hasFaucet: boolean;
   hasVault: boolean; finished: boolean; locked: boolean; busy: string | null; onFaucet(): void; onFund(): void; onNewDemo(): void;
 }) {
-  if (finished) return <Step number={2} state={state} title="Add 1,000 testUSDC"
-    text="This vault is finished. Withdraw what is left, or start a New demo vault.">
+  if (finished) return <Step number={2} state={state} title="Add testUSDC"
+    text="Start again with a funded vault.">
     <button className="primary" disabled={locked}
       data-busy={busy === "New demo vault" ? "true" : undefined} aria-busy={busy === "New demo vault" || undefined}
       onClick={onNewDemo}>New demo vault</button>
   </Step>;
   const getTokens = needsFaucet(balance, hasFaucet);
   const isBusy = busy === (getTokens ? "Get testUSDC" : "Fund vault");
-  return <Step number={2} state={state} title="Add 1,000 testUSDC" text={<>
+  return <Step number={2} state={state} title="Add testUSDC" text={<>
     {text}<br />Wallet: {balance === null ? "—" : amount(balance)} testUSDC
   </>}>
     <button className={state === "next" ? "primary" : ""} disabled={!hasVault || locked}
@@ -474,16 +474,16 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
   const step1 = vault ? "done" : "next";
   const step2 = hasInput ? "done" : vault && !finished ? "next" : "todo";
   const step3 = swaps.length > 0 ? "done" : hasInput && !finished ? "next" : "todo";
-  const guardLead = !vault ? <>No vault yet. Create one and the guardrails switch on.</>
-    : vault.revoked ? <>Agent is <strong>revoked</strong>. It can no longer trade; your funds stay withdrawable.</>
-    : status === "Expired" ? <>Trading permission has <strong>expired</strong>. Withdraw any time.</>
-    : <>Agent may spend up to <strong>{amount(vault.maxTradeRaw)} testUSDC</strong> per trade.</>;
+  const guardLead = !vault ? <>Applies once the vault is created.</>
+    : vault.revoked ? <>Agent is <strong>revoked</strong>.</>
+    : status === "Expired" ? <>Trading permission has <strong>expired</strong>.</>
+    : <>Fixed at vault creation.</>;
 
   /* ---- sidebar CTA + rail ---- */
   const busyProps = (label: string) => busy === label ? { "data-busy": "true" as const, "aria-busy": true as const } : {};
   const cta = <>
     <button className="primary" disabled={!ready || locked} {...busyProps("New demo vault")} onClick={() => void newDemo()}><Icon name="sparkle" size={16} />New demo vault</button>
-    <span className="sidebar-hint">One click: creates a fresh vault and adds 1,000 testUSDC.</span>
+    <span className="sidebar-hint">Create and fund in one step.</span>
   </>;
 
   const rail = <>
@@ -491,7 +491,7 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
     <section className="rail-card tinted" aria-labelledby="guard-title">
       <div className="rail-heading"><h2 id="guard-title">Guardrails</h2><span className="rail-badge"><Icon name="shield" size={16} /></span></div>
       <p className="rail-lead">{guardLead}</p>
-      <p className="rail-sub">Enforced by the blockchain itself. The agent cannot change or get around them.</p>
+      <p className="rail-sub">Enforced on-chain. The agent cannot change them.</p>
       <div className="guard-rows">
         <div className="guard-row"><span className="label">Per-trade cap</span><span className="value">{vault ? amount(vault.maxTradeRaw) : "50"}<small>testUSDC</small></span></div>
         <div className="guard-row"><span className="label">Total budget</span><span className="value">{vault ? amount(vault.budgetRaw) : "100"}<small>testUSDC</small></span></div>
@@ -503,7 +503,7 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
       </div>
     </section>
     <section className="rail-card" aria-labelledby="chart-title">
-      <div className="rail-heading"><h2 id="chart-title">Agent requests vs cap</h2></div>
+      <div className="rail-heading"><h2 id="chart-title">Agent requests</h2></div>
       <div className="chart-hero"><strong>{blocked}</strong><small>blocked · {swaps.length} {swaps.length === 1 ? "request" : "requests"} so far</small></div>
       <TradeBars trades={bars} cap={capUi} unit="testUSDC" />
       <div className="chart-legend" aria-hidden="true"><span><i />Allowed</span><span><i className="bad" />Blocked by Aegis</span></div>
@@ -540,7 +540,7 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
       <Tile tone="mint" icon="chart" label="Budget left" value={vault ? amount(remaining) : "0"} unit="testUSDC" testId="remaining-budget">
         <div className={`budget-section ${budgetLevel}`}>
           <progress aria-label="Remaining budget" aria-valuetext={vault ? `${amount(remaining)} of ${amount(vault.budgetRaw)} testUSDC remaining` : "No vault"} value={remainingBasisPoints.toString()} max="10000" />
-          <span className="budget-number">{vault ? <><strong>{amount(vault.spentRaw)}</strong> spent of {amount(vault.budgetRaw)} total</> : "Create a vault to activate"}</span>
+          <span className="budget-number"></span>
         </div>
       </Tile>
       <Tile tone="cream" icon="shield" label="Attacks blocked" value={String(blocked)} subTone={blocked > 0 ? "good" : undefined}
@@ -550,20 +550,20 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
     <section id="vault" className="card vault-card" aria-labelledby="vault-title">
       <div className="card-heading"><h2 id="vault-title">Trading vault</h2><span className={`status ${status.toLowerCase().replace(" ", "-")}`} data-testid="vault-status"><span className="small-dot" aria-hidden="true" />{status}</span></div>
       <div className="steps">
-        <Step number={1} state={step1} title="Create a vault" text={vault ? "Your vault is open with a 50 testUSDC per-trade cap and a 100 testUSDC total budget." : "Opens a vault with a 50 testUSDC per-trade cap and a 100 testUSDC total budget. Or use New demo vault for both steps at once."}>
+        <Step number={1} state={step1} title="Vault setup" text="">
           <button className={step1 === "next" ? "primary" : ""} disabled={!ready || !!vault || locked} {...busyProps("Create vault")} onClick={() => void create()}>Create vault</button>
         </Step>
         <FundingStep state={step2} balance={walletBalance} hasFaucet={!!connection.faucet} hasVault={!!vault} finished={finished} locked={locked} busy={busy}
-          text={needsFaucet(walletBalance, !!connection.faucet) ? (vault ? "Get test money in your wallet, then fund the vault."
-              : "Create a vault first; it needs no testUSDC. Then get test money in your wallet and fund the vault.")
-            : "Move test money from your wallet into the vault. The agent can trade with it, but never beyond the guardrails."}
+          text={needsFaucet(walletBalance, !!connection.faucet) ? (vault ? "Get testUSDC before funding."
+              : "Set up your vault first.")
+            : "Transfer from your wallet."}
           onFaucet={() => void run("Get testUSDC", connection.faucet!)} onFund={() => void fund()} onNewDemo={() => void newDemo()} />
-        <Step number={3} state={step3} title="Try the agent" text="Run a normal trade, then try to trick it. Anything outside the rules is blocked on-chain.">
+        <Step number={3} state={step3} title="Try the agent" text="Trade normally, then test an attack.">
           <a className="step-ok" href="#agent">Go to agent <Icon name="arrow" size={14} /></a>
         </Step>
       </div>
       <div className="owner-controls">
-        <p>{!vault ? <><strong>Owner controls.</strong> Once your vault exists you can stop the agent or take everything out at any moment.</> : <><strong>Owner controls.</strong> You can stop the agent or take everything out at any moment.</>}</p>
+        <p>{!vault ? <><strong>Owner controls.</strong> Once set up, funds stay withdrawable after revocation or expiry.</> : <><strong>Owner controls.</strong> Funds stay withdrawable after revocation or expiry.</>}</p>
         <div className="buttons">
           <button className="danger" disabled={!vault || vault.revoked || locked} {...busyProps("Revoke agent")} onClick={() => void revoke()}>Revoke agent</button>
           <button disabled={!hasBalance || locked} {...busyProps("Withdraw all")} onClick={() => void withdraw()}>Withdraw all</button>
@@ -576,7 +576,7 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
 
     {environment !== "mock" ? <AgentConsole environment={environment} walletMode={connection.walletMode} key={address.current?.toBase58()} vault={vault} finished={finished} disabled={!!busy} onBusy={setAgentBusy} onComplete={refresh} />
       : <section id="agent" className="card trade-card" aria-labelledby="trade-title">
-        <div><h2 id="trade-title">Try an agent trade</h2><p className="muted">20 testUSDC is within the 50 cap and goes through. Try 60 to watch the cap block it.</p></div>
+        <div><h2 id="trade-title">Try an agent trade</h2><p className="muted">Try an amount above the per-trade cap.</p></div>
         <form onSubmit={trade}>
           <label htmlFor="trade-amount">Amount <span>testUSDC</span></label>
           <div className="trade-controls"><input id="trade-amount" inputMode="decimal" value={tradeAmount} onChange={(event) => setTradeAmount(event.target.value)} disabled={!vault || finished || !!busy} autoComplete="off" /><button className="primary" disabled={!vault || finished || !!busy} {...busyProps("Agent trade")} type="submit">Swap</button></div>
@@ -585,7 +585,7 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
 
     <section id="activity" className="card activity-card" aria-labelledby="activity-title">
       <div className="card-heading"><h2 id="activity-title">Vault activity</h2><span className="muted">{activity.length === 0 ? "" : `${activity.length} ${activity.length === 1 ? "event" : "events"}`}</span></div>
-      {activity.length === 0 ? <div className="empty-activity"><span aria-hidden="true"><Icon name="activity" /></span><strong>No activity yet</strong><p>Create your vault to begin. Every trade and every blocked attempt will show up here, newest first.</p></div> : <div className="table-scroll"><table>
+      {activity.length === 0 ? <div className="empty-activity"><span aria-hidden="true"><Icon name="activity" /></span><strong>No activity yet</strong><p>Transactions appear here, newest first.</p></div> : <div className="table-scroll"><table>
         <thead><tr><th>Time</th><th>Action</th><th>Amount</th><th>Result</th></tr></thead>
         <tbody>{activity.map((item) => <tr key={item.signature}>
           <td><time>{timeLabel(item.blockTime)}</time></td>
@@ -600,6 +600,6 @@ export function Dashboard({ connection, toolbar }: { connection: DashboardConnec
         </tr>)}</tbody>
       </table></div>}
     </section>
-    <footer><span>Aegis · Bounded autonomy</span><span>{environmentName(environment)} · Test money, no real value</span></footer>
+    <footer><span>Aegis</span><span></span></footer>
   </Shell>;
 }

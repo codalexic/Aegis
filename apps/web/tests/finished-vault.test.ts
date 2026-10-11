@@ -10,7 +10,7 @@ vi.mock("react", async (importOriginal) => {
 });
 
 const now = 1_800_000_000n;
-const finishedMessage = "This vault is finished. Withdraw what is left, or start a New demo vault.";
+const finishedMessage = "Start again with a funded vault.";
 
 beforeEach(() => {
   vi.useFakeTimers();

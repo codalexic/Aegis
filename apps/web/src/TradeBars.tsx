@@ -36,7 +36,7 @@ export function TradeBars({ trades, cap, unit, className }: {
   const capY = BASE - (cap / domain) * PLOT;       // always 50% up the plot, so the label fits above
   const label = shown.length === 0
     ? "No trade requests yet"
-    : `${shown.length.toLocaleString()} trade requests; ${blocked.toLocaleString()} blocked above the ${cap.toLocaleString()} ${unit} cap`
+    : `${shown.length.toLocaleString()} trade requests; ${blocked.toLocaleString()} blocked above the ${cap.toLocaleString()} ${unit} per-trade cap`
       + (truncated > 0 ? `; scale capped at ${domain.toLocaleString()} ${unit}; taller requests are marked` : "");
 
   return (
@@ -77,7 +77,7 @@ export function TradeBars({ trades, cap, unit, className }: {
       {/* The cap: a dashed threshold line across the plot (distinct from the solid baseline) plus a muted label above its left end */}
       <line x1={0} x2={W} y1={capY} y2={capY} stroke="var(--chart-muted, #5b5e6b)" strokeWidth={1} strokeDasharray="3 3" />
       <text x={2} y={capY - 3} fontSize={11} fontWeight={600} textAnchor="start" fill="var(--chart-muted, #5b5e6b)">
-        cap {cap.toLocaleString()}
+        per-trade cap {cap.toLocaleString()}
       </text>
     </svg>
   );

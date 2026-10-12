@@ -79,7 +79,8 @@ it("keeps a wallet action busy through real prepare, approve, confirm and refres
   expect(action.style.width).toBe("160px");
   expect(container.textContent).toContain("Preparing…");
   expect(f.sign).not.toHaveBeenCalled();
-  for (const label of ["Create vault", "Fund 1,000", "New demo vault", "Withdraw all"]) {
+  expect(container.querySelector(".steps .step")!.querySelector("button")).toBeNull();
+  for (const label of ["Fund 1,000", "New demo vault", "Withdraw all"]) {
     expect(button(label).disabled, label).toBe(true);
   }
   await flush(() => { window.location.hash = "#/agent"; window.dispatchEvent(new HashChangeEvent("hashchange")); });

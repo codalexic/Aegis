@@ -724,7 +724,8 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
           </div>
         </div>
         <div className="steps">
-          <Step number={1} state={step1} title={vault ? "Vault created" : "Vault setup"} text="">
+          <Step number={1} state={step1} title={vault ? "Vault created" : "Vault setup"}
+            text={vault ? "Your vault is open with a 50 testUSDC per-trade cap and a 100 testUSDC total budget." : ""}>
             <div className="step-action">
               {!vault && <ProgressButton className={step1 === "next" ? "primary" : ""} disabled={!ready || locked} busy={busy === "Create vault"} progress="Creating…" onClick={() => void create()}>Create vault</ProgressButton>}
             </div>

@@ -69,7 +69,7 @@ it("offers Create vault without a vault and replaces it with a checked status af
   setup = container.querySelector(".steps .step")!;
   expect(setup.querySelector("button")).toBeNull();
   expect(setup.querySelector(".step-num svg")).not.toBeNull();
-  expect(setup.textContent).toBe("Done: Vault created");
+  expect(setup.textContent).toBe("Done: Vault createdYour vault is open with a 50 testUSDC per-trade cap and a 100 testUSDC total budget.");
 });
 
 it("shows a checked status without Create vault for a returning wallet", async () => {
@@ -79,7 +79,7 @@ it("shows a checked status without Create vault for a returning wallet", async (
   const setup = container.querySelector(".steps .step")!;
   expect(setup.querySelector("button")).toBeNull();
   expect(setup.querySelector(".step-num svg")).not.toBeNull();
-  expect(setup.textContent).toBe("Done: Vault created");
+  expect(setup.textContent).toBe("Done: Vault createdYour vault is open with a 50 testUSDC per-trade cap and a 100 testUSDC total budget.");
 });
 
 it.each([0n, 1_000_000_000n])("keeps completed funding actionable with wallet balance %s", async (balance) => {

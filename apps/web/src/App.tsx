@@ -401,7 +401,6 @@ export function AccountChip({ address, walletName, walletIcon }: { address: stri
   return <div className="account-chip">
     <button type="button" className="account-chip-button" aria-label={`Owner ${address}`}>
       {walletIcon ? <img src={walletIcon} alt="" width={20} height={20} /> : <Icon name="wallet" size={16} />}
-      <span>{shorten(address)}</span>
     </button>
     <div className="account-pop" role="tooltip">
       <div className="account-pop-card">

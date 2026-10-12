@@ -1185,11 +1185,11 @@ a.signature:hover, a.signature:focus-visible { color: #2454a0; text-decoration-c
 .shell--dark .status.active { background: rgba(196, 181, 255, .16); color: #e8e2ff; }
 .account-chip { position: relative; flex: 0 0 auto; }
 .account-chip-button {
-  display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px 0 8px; border-radius: 999px;
+  display: inline-grid; place-items: center; width: 36px; height: 36px; padding: 0; border-radius: 999px;
   border: 1px solid var(--line-2); background: rgba(255, 255, 255, .04); color: var(--ink);
   font: 600 13px/1 var(--mono, ui-monospace, monospace); cursor: default;
 }
-.account-chip-button img { border-radius: 6px; display: block; }
+.account-chip-button img { width: 22px; height: 22px; border-radius: 6px; display: block; }
 .account-chip:hover .account-chip-button, .account-chip:focus-within .account-chip-button { background: #252530; }
 .account-pop {
   position: absolute; right: 0; top: 100%; z-index: 20; padding-top: 8px;

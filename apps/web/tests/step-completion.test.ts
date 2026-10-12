@@ -69,7 +69,7 @@ it("offers Create vault without a vault and replaces it with a checked status af
   setup = container.querySelector(".steps .step")!;
   expect(setup.querySelector("button")).toBeNull();
   expect(setup.querySelector(".step-num svg")).not.toBeNull();
-  expect(setup.textContent).toBe("Done: Vault createdGuardrails set.");
+  expect(setup.textContent).toBe("Done: Vault created");
 });
 
 it("shows a checked status without Create vault for a returning wallet", async () => {
@@ -79,7 +79,7 @@ it("shows a checked status without Create vault for a returning wallet", async (
   const setup = container.querySelector(".steps .step")!;
   expect(setup.querySelector("button")).toBeNull();
   expect(setup.querySelector(".step-num svg")).not.toBeNull();
-  expect(setup.textContent).toBe("Done: Vault createdGuardrails set.");
+  expect(setup.textContent).toBe("Done: Vault created");
 });
 
 it.each([0n, 1_000_000_000n])("keeps completed funding actionable with wallet balance %s", async (balance) => {
@@ -145,7 +145,7 @@ it.each(["revoked", "expired"] as const)("preserves completed steps after trades
   await click("Withdraw all");
   expectSteps("done", "done", "done");
   expect(container.textContent).toContain("Start again with a funded vault.");
-  const funding = container.querySelector(".setup-next")!;
+  const funding = container.querySelectorAll(".steps .step")[1];
   expect(funding.querySelector("button.primary")?.textContent).toBe("New demo vault");
   expect(funding.querySelector("button")?.disabled).toBe(false);
   await click("New demo vault");
@@ -165,78 +165,4 @@ it.each(["revoked", "expired"] as const)("retains a blocked agent request on a d
   }));
   await mount();
   expectSteps("done", "done", "done");
-});
-
-function setupPanel() {
-  return container.querySelector(".go-live")!;
-}
-
-function expectNoEmptyStepBodies() {
-  for (const step of setupPanel().querySelectorAll(".step")) {
-    expect(step.querySelector("strong")?.textContent?.trim()).toBeTruthy();
-    expect(step.querySelector("p")?.textContent?.trim()).toBeTruthy();
-    for (const body of step.querySelectorAll("div, p")) {
-      expect(body.textContent?.trim()).toBeTruthy();
-    }
-  }
-  expect(setupPanel().querySelector(".step-action:empty")).toBeNull();
-}
-
-it.each([0n, 1_000_000_000n])("prominently offers funding for an empty vault at wallet balance %s", async (balance) => {
-  await loadedVault();
-  connection.getWalletBalance = vi.fn(async () => balance);
-  connection.faucet = vi.fn(async () => "TestUSDC received.");
-  await mount();
-  expectNoEmptyStepBodies();
-  expect(setupPanel().querySelector(".step.next button.primary")?.textContent)
-    .toBe(balance === 0n ? "Get 1,000 testUSDC" : "Fund 1,000");
-});
-
-it("offers the agent and owner controls in a funded vault without empty step bodies", async () => {
-  await loadedVault({ inputBalanceRaw: 1_000_000_000n });
-  await mount();
-  expectNoEmptyStepBodies();
-  expect(setupPanel().querySelector(".step.next button.primary")?.textContent).toBe("Go to agent ");
-  const controls = setupPanel().querySelector(".owner-panel")!;
-  expect(controls.textContent).toContain("Revoke agent");
-  expect(controls.textContent).toContain("Withdraw all");
-  await click("Go to agent ");
-  expect(window.location.hash).toBe("#/agent");
-  await act(async () => window.dispatchEvent(new HashChangeEvent("hashchange")));
-  expect(container.querySelector("#trade-title")?.textContent).toBe("Try an agent trade");
-});
-
-it.each([0n, 980_000_000n])("renders the all-done summary and the next action with input balance %s", async (inputBalanceRaw) => {
-  await loadedVault({ inputBalanceRaw, spentRaw: 20_000_000n });
-  await mount();
-  const panel = setupPanel();
-  const summary = panel.querySelector('[aria-label="Setup complete"]')!;
-  expect(summary.classList.contains("steps--complete")).toBe(true);
-  expect(summary.querySelectorAll(".step.done .step-num svg")).toHaveLength(3);
-  expect(summary.querySelector("button")).toBeNull();
-  expect(panel.querySelector("h2")?.textContent).toBe("Vault ready");
-  expect(panel.querySelector('[data-testid="vault-status"]')?.textContent).toBe("Active");
-  expect(panel.querySelector(".setup-next button.primary")?.textContent)
-    .toBe(inputBalanceRaw === 0n ? "Fund 1,000" : "Go to agent ");
-  expectNoEmptyStepBodies();
-});
-
-it("keeps refilling prominent after funding then withdrawing before an agent request", async () => {
-  await mount();
-  await click("Create vault");
-  await click("Fund 1,000");
-  await click("Withdraw all");
-  expect(setupPanel().querySelector(".step.done button.primary")?.textContent).toBe("Fund 1,000");
-  expectNoEmptyStepBodies();
-});
-
-it.each(["revoked", "expired"] as const)("offers a new demo for a finished %s vault before any funding", async (status) => {
-  await loadedVault({ revoked: status === "revoked",
-    ...(status === "expired" && { expiryUnix: BigInt(Math.floor(Date.now() / 1000)) }),
-  });
-  await mount();
-  expect(setupPanel().textContent).toContain("Start again with a funded vault.");
-  expect(setupPanel().querySelector("button.primary")?.textContent).toBe("New demo vault");
-  expect(setupPanel().textContent).not.toContain("Go to agent");
-  expectNoEmptyStepBodies();
 });

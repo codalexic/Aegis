@@ -285,6 +285,21 @@ button.primary[data-busy] { background: var(--accent); border-color: var(--accen
 .chart-card .empty-activity { margin-top: 8px; }
 .chart-card .empty-activity .primary { margin-top: 8px; }
 
+.trade-bars-wrap { position: relative; }
+.trade-bars .trade-bar { cursor: default; outline: none; }
+.trade-bars .trade-bar-shape { transition: opacity 160ms ease; }
+.trade-bars:has(.trade-bar.is-active) .trade-bar:not(.is-active) .trade-bar-shape { opacity: .45; }
+.trade-tip {
+  position: absolute; z-index: 2; transform: translate(-50%, calc(-100% - 10px));
+  display: grid; gap: 3px; width: max-content; max-width: 240px; padding: 10px 12px;
+  border-radius: 12px; border: 1px solid var(--line-2); background: #1C1C24;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, .4); pointer-events: none;
+  font-size: 12px; line-height: 1.4; color: var(--ink-2); text-align: left;
+}
+.trade-tip strong { font-size: 13px; color: var(--ink); }
+.trade-tip--blocked strong { color: #F87171; }
+.trade-tip--ok strong { color: #22C55E; }
+.trade-tip small { color: var(--ink-3); font-size: 11px; }
 @keyframes trade-bar-grow {
   from { transform: scaleY(0.06); opacity: .4; }
   to { transform: scaleY(1); opacity: 1; }

@@ -273,7 +273,6 @@ function OwnerApp({ environment, walletMode, wallet, changed, walletNotReady, is
   }}>
     <Icon name="wallet" size={16} />{wallet.connected ? "Disconnect" : "Connect wallet"}
   </ProgressButton>}
-    {environment === "devnet" && !wallet.connected && <small className="wallet-network-hint">Phantom must be on Solana Devnet.</small>}
   </div>;
   const siteNotice = environment === "devnet" && walletMode ? <CanonicalSiteNotice /> : null;
   const startBar = <header className="start-bar">

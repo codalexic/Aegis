@@ -370,14 +370,14 @@ it("changes Install Phantom to Connect wallet when Phantom injects after load", 
   expect(context.connected).toBe(true);
 });
 
-it("keeps the Devnet hint beside Connect wallet, including during connection", async () => {
+it("shows Connect wallet without a Devnet hint, including during connection", async () => {
   await mount();
   const control = container.querySelector(".wallet-control")!;
   expect(control.querySelector("button")?.textContent).toBe("Connect wallet");
-  expect(control.querySelector("small")?.textContent).toBe("Phantom must be on Solana Devnet.");
+  expect(control.querySelector("small")).toBeNull();
   phantom.connect.mockReturnValueOnce(deferred<void>().promise);
   await click("Connect wallet");
-  expect(control.querySelector("small")?.textContent).toBe("Phantom must be on Solana Devnet.");
+  expect(control.querySelector("small")).toBeNull();
 });
 
 it("links an alias to the configured canonical site before and after connection", async () => {

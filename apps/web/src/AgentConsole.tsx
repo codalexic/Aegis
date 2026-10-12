@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type JSX } from "react";
 import type { VaultState } from "@aegis/sdk";
 import { rawAmountToUi } from "../../../packages/sdk/src/amounts";
 import type { Step } from "../../../scripts/agent/run";
@@ -46,6 +46,38 @@ const SCENARIOS: { id: Scenario; icon: IconName; tone: string; title: string; te
 function News({ step }: { step: Extract<Step, { type: "news" }> }) {
   const at = step.injection ? step.text.indexOf(step.injection) : -1;
   return <p className="agent-news">{at < 0 ? step.text : <>{step.text.slice(0, at)}<mark>{step.injection}</mark>{step.text.slice(at + step.injection!.length)}</>}</p>;
+}
+
+/** Light JSON highlighting: keys, strings, numbers and literals get their own colour. */
+export function highlightJson(json: string): (string | JSX.Element)[] {
+  const out: (string | JSX.Element)[] = [];
+  const token = /("(?:\\.|[^"\\])*")(\s*:)?|\b(-?\d+(?:\.\d+)?)\b|\b(true|false|null)\b/g;
+  let last = 0, match: RegExpExecArray | null;
+  while ((match = token.exec(json))) {
+    if (match.index > last) out.push(json.slice(last, match.index));
+    const [whole, str, colon, num, lit] = match;
+    const kind = str ? (colon ? "key" : "string") : num ? "number" : lit ? "literal" : "";
+    out.push(<span key={match.index} className={`tok-${kind}`}>{str ?? whole}</span>);
+    if (colon) out.push(colon);
+    last = match.index + whole.length;
+  }
+  if (last < json.length) out.push(json.slice(last));
+  return out;
+}
+
+function CodeBlock({ reply }: { reply: unknown }) {
+  const isText = typeof reply === "string";
+  const text = isText ? reply as string : JSON.stringify(reply, null, 2);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => { if (!copied) return; const timer = window.setTimeout(() => setCopied(false), 1500); return () => window.clearTimeout(timer); }, [copied]);
+  const copy = () => { void navigator.clipboard?.writeText(text).then(() => setCopied(true)).catch(() => {}); };
+  return <div className="code-block">
+    <div className="code-block-head">
+      <span>{isText ? "text" : "json"}</span>
+      <button type="button" className="code-copy" onClick={copy}><Icon name={copied ? "check" : "copy"} size={13} />{copied ? "Copied!" : "Copy"}</button>
+    </div>
+    <pre><code>{isText ? text : highlightJson(text)}</code></pre>
+  </div>;
 }
 
 export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, environment = "localnet", walletMode = false }: {
@@ -149,7 +181,7 @@ export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, en
         <div>
           <strong>{result.ok ? "Trade went through" : result.origin === "program" ? `Blocked by Aegis · ${blockedTitle(result.error)}` : "Request failed"}</strong>
           <p>{result.ok ? `Swapped ${decimal(request?.amountUsdc ?? "0")} testUSDC for testSOL, which stays in the vault. Now try one of the two attacks.`
-            : <>{result.origin === "program" && vault ? `${rejectionReason(result.error, vault, request?.amountUsdc)} The vault is untouched.` : "The request could not be confirmed. Try again in a moment."} <code className="error-code">{result.error}</code></>}</p>
+            : <>{result.origin === "program" && vault ? `${rejectionReason(result.error, vault, request?.amountUsdc)} The vault is untouched.` : "The request could not be confirmed. Try again in a moment."}</>}</p>
         </div>
       </div>}
       {resisted && <div className="agent-resisted" role="status"><strong>The AI did not fall for it</strong>
@@ -163,7 +195,7 @@ export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, en
         {detailSteps.map((step, index) => {
           switch (step.type) {
             case "news": return <div key={index}><h3>News the agent read</h3><News step={step} /></div>;
-            case "model_reply": return <div key={index}><h3>{step.source === "live" ? "Model reply" : step.source === "scripted" ? "Scripted reply" : "Fixed hacker request · No AI"}</h3><pre>{typeof step.reply === "string" ? step.reply : JSON.stringify(step.reply, null, 2)}</pre></div>;
+            case "model_reply": return <div key={index}><h3>{step.source === "live" ? "Model reply" : step.source === "scripted" ? "Scripted reply" : "Fixed hacker request · No AI"}</h3><CodeBlock reply={step.reply} /></div>;
             case "request": return <div key={index}><h3>Request sent to the vault</h3><p>{decimal(step.amountUsdc)} testUSDC</p>{step.outputVault && <p className="agent-destination">Redirect output to <code>{step.outputVault}</code></p>}</div>;
             case "balances": return <div key={index}><h3>After</h3><p className="muted">{decimal(step.inputUsdc)} testUSDC · {step.outputSol} testSOL · {step.remainingUsdc} testUSDC budget left</p></div>;
             case "notice": return step.code === "error" ? <div key={index}><Notice tone="error" message={step.message} /><p>Use Scripted to retry without AI.</p></div> : null;

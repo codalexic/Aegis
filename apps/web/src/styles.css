@@ -1123,6 +1123,30 @@ progress::-moz-progress-bar { border-radius: 3px; background: var(--budget-color
 .agent-news { white-space: pre-wrap; overflow-wrap: anywhere; }
 .agent-news mark { background: var(--warn-bg); color: var(--warn-ink); padding: 0 3px; border-radius: 4px; }
 .agent-steps pre { margin: 0; padding: 12px 14px; border-radius: 10px; background: var(--mist); white-space: pre-wrap; overflow-wrap: anywhere; }
+.agent-steps { gap: 18px; padding: 6px 18px 18px; }
+.agent-steps h3 { font-size: 11px; letter-spacing: .08em; margin-bottom: 8px; }
+.agent-steps p { font-size: 14px; line-height: 1.6; color: var(--ink); }
+.agent-steps .muted { color: var(--ink-2); }
+.agent-news { padding: 12px 14px; border-left: 3px solid var(--line-2); border-radius: 0 10px 10px 0; background: rgba(255, 255, 255, .03); }
+.code-block { border-radius: 12px; overflow: hidden; border: 1px solid var(--line-2); background: #0F0F14; }
+.code-block-head {
+  display: flex; align-items: center; justify-content: space-between; padding: 6px 8px 6px 14px;
+  background: #1F1F28; font-size: 12px; color: var(--ink-2);
+}
+.shell .code-block .code-copy, .shell .code-block .code-copy:hover:not(:disabled) {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 0; height: 26px; padding: 0 8px; border: 0; border-radius: 6px;
+  background: transparent; color: var(--ink-2); font-size: 12px; font-weight: 500; box-shadow: none;
+}
+.shell .code-block .code-copy:hover:not(:disabled) { background: rgba(255, 255, 255, .06); color: var(--ink); }
+.agent-steps .code-block pre {
+  margin: 0; padding: 14px 16px; border-radius: 0; background: transparent; white-space: pre-wrap; overflow-wrap: anywhere;
+  font: 13px/1.65 "Cascadia Code", "SF Mono", ui-monospace, Menlo, Consolas, monospace; color: #E5E7EB;
+}
+.agent-steps .code-block code { font: inherit; }
+.tok-key { color: #AB9FF2; }
+.tok-string { color: #86EFAC; }
+.tok-number { color: #FBBF24; }
+.tok-literal { color: #F87171; }
 .agent-destination { overflow-wrap: anywhere; }
 
 /* Mock-mode trade card */

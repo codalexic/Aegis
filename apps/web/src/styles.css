@@ -1217,7 +1217,11 @@ a.signature:hover, a.signature:focus-visible { color: #2454a0; text-decoration-c
 .shell .account-chip .account-chip-button, .shell .account-chip .account-chip-button:hover {
   width: auto; height: auto; padding: 0; border: 0; border-radius: 8px; background: transparent; box-shadow: none;
 }
-.shell .account-chip .account-chip-button img { width: 42px; height: 42px; border-radius: 12px; }
+/* The logo takes exactly the height of the wallet button beside it. */
+.content-toolbar:has(> .account-chip) { align-items: stretch; }
+.content-toolbar > .account-chip { display: flex; }
+.shell .content-toolbar .account-chip .account-chip-button { height: 100%; aspect-ratio: 1 / 1; overflow: hidden; border-radius: 12px; }
+.shell .account-chip .account-chip-button img { width: 100%; height: 100%; border-radius: 12px; object-fit: cover; }
 .shell .account-chip .account-chip-button:focus-visible { outline: 2px solid var(--accent, #AB9FF2); outline-offset: 2px; }
 .account-chip .account-chip-button { cursor: pointer; }
 /* Agent page: scenario cards sit in the vertical middle of the page (header height mirrored below). */

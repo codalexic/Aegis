@@ -100,7 +100,7 @@ button.primary[data-busy] { background: var(--accent); border-color: var(--accen
 .shell { display: grid; grid-template-columns: 200px minmax(0, 1fr) 320px; min-height: calc(100vh / var(--zoom, 1)); max-width: 1440px; margin: 0 auto; background: var(--shell); }
 .shell--no-rail { grid-template-columns: 200px minmax(0, 1fr); }
 .sidebar { position: sticky; top: 0; height: calc(100vh / var(--zoom, 1)); display: flex; flex-direction: column; gap: 24px; padding: 24px 14px 20px; border-right: 1px solid var(--line); overflow-y: auto; }
-.content { min-width: 0; padding: 24px 28px 24px; background: var(--content); display: flex; flex-direction: column; gap: 28px; }
+.content { min-width: 0; padding: 24px 28px 8px; background: var(--content); display: flex; flex-direction: column; gap: 28px; }
 .page-view {
   display: flex; flex-direction: column; gap: 28px; flex: 1; min-width: 0;
 }
@@ -125,9 +125,9 @@ button.primary[data-busy] { background: var(--accent); border-color: var(--accen
 .rail { position: static; display: flex; flex-direction: column; gap: 14px; padding: 24px 16px; border-left: 1px solid var(--line); min-width: 0; }
 /* floating window from laptop widths up — overflow: clip (NOT hidden) so the sticky sidebar/rail keep working */
 @media (min-width: 1241px) {
-  body { padding: 24px; }
-  .shell { min-height: calc((100vh - 48px) / var(--zoom, 1)); border-radius: var(--r-xl); box-shadow: 0 20px 50px rgba(21, 22, 26, .10), 0 1px 0 rgba(21, 22, 26, .04); overflow: clip; }
-  .sidebar { top: calc(24px / var(--zoom, 1)); height: auto; max-height: calc((100vh - 48px) / var(--zoom, 1)); }
+  body { padding: 24px 24px 0; }
+  .shell { min-height: calc((100vh - 24px) / var(--zoom, 1)); border-radius: var(--r-xl) var(--r-xl) 0 0; box-shadow: 0 20px 50px rgba(21, 22, 26, .10), 0 1px 0 rgba(21, 22, 26, .04); overflow: clip; }
+  .sidebar { top: calc(24px / var(--zoom, 1)); height: auto; max-height: calc((100vh - 24px) / var(--zoom, 1)); }
 }
 @media (min-width: 1241px) and (min-height: 1000px) {
   .rail { position: sticky; top: calc(24px / var(--zoom, 1)); align-self: start; }

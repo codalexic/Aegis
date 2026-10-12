@@ -45,8 +45,10 @@ function timeLabel(unix?: bigint): string {
 }
 
 const environmentShort = (e: AegisEnvironment) => e === "mock" ? "Practice" : e === "localnet" ? "Localnet" : "Devnet";
-const environmentTitle = (environment: AegisEnvironment) => `${environment === "mock"
-  ? "Practice (mock)" : `Solana ${environment}`} · Test money, no real value`;
+const environmentTitle = (environment: AegisEnvironment) => environment === "devnet"
+  ? "Solana devnet: a public test network. Tokens have no value. Set Phantom to devnet."
+  : environment === "localnet" ? "A private Solana test chain running on this machine. Tokens have no value."
+  : "Simulated: nothing is sent anywhere. Refreshing the page starts over.";
 
 /* --------------------------------------------------------------------------
    Shell: sidebar · content · rail. Pure layout; all state lives in Dashboard.
@@ -276,17 +278,13 @@ function OwnerApp({ environment, walletMode, wallet, changed, walletNotReady, is
   }}>
     <Icon name="wallet" size={16} />{wallet.connected ? "Disconnect" : "Connect wallet"}
   </ProgressButton>}
+    {environment === "devnet" && !wallet.connected && <small className="wallet-network-hint">Phantom must be on Solana Devnet.</small>}
   </div>;
-  const walletHint = walletMode && environment === "devnet" && !wallet.connected
-    ? <small className="wallet-network-hint">Phantom must be on Solana Devnet.</small> : null;
   const siteNotice = environment === "devnet" && walletMode ? <CanonicalSiteNotice /> : null;
-  const environmentPill = <div className="environment" role="note" title={environmentTitle(environment)} aria-label={environmentTitle(environment)}><span className="environment-dot" />{environmentShort(environment)}</div>;
+  const environmentPill = <div className="environment" title={environmentTitle(environment)}><span className="environment-dot" />{environmentShort(environment)}</div>;
   const startBar = <header className="start-bar">
     <a className="brand start-brand" href="/" aria-label="Aegis home"><Logo size={36} withWordmark /></a>
-    <div className="header-controls">
-      <div className="rail-top">{environmentPill}{walletControl("start-connect")}</div>
-      {walletHint}
-    </div>
+    <div className="rail-top">{environmentPill}{walletControl("start-connect")}</div>
   </header>;
 
   if (!connection) {
@@ -311,7 +309,7 @@ function OwnerApp({ environment, walletMode, wallet, changed, walletNotReady, is
       </div>
     </Shell>;
   }
-  return <Dashboard key={`${environment}:${connection.owner.toBase58()}`} connection={connection} isCurrent={isCurrent} onBusyChange={setActionsBusy} siteNotice={siteNotice} toolbar={<>{environmentPill}{walletControl("start-connect rail-action")}</>} toolbarHint={walletHint} />;
+  return <Dashboard key={`${environment}:${connection.owner.toBase58()}`} connection={connection} isCurrent={isCurrent} onBusyChange={setActionsBusy} siteNotice={siteNotice} toolbar={<>{environmentPill}{walletControl("start-connect rail-action")}</>} />;
 }
 
 const TRY_STEPS: { title: string; body: ReactNode }[] = [
@@ -411,10 +409,9 @@ function KeyRow({ label, value, note }: { label: string; value: string; note?: s
    Dashboard
    -------------------------------------------------------------------------- */
 const alwaysCurrent = () => true;
-export function Dashboard({ connection, toolbar, toolbarHint, isCurrent = alwaysCurrent, onBusyChange, siteNotice }: {
+export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBusyChange, siteNotice }: {
   connection: DashboardConnection; toolbar: ReactNode; isCurrent?(): boolean; onBusyChange?(busy: boolean): void;
   siteNotice?: ReactNode;
-  toolbarHint?: ReactNode;
 }) {
   const mounted = useRef(true);
   useEffect(() => {
@@ -678,12 +675,9 @@ export function Dashboard({ connection, toolbar, toolbarHint, isCurrent = always
       <div>
         <h1>{PAGE_TITLE[page]}</h1>
       </div>
-      <div className="header-controls">
-        <div className="content-toolbar">
-          {toolbar}
-          <span className="avatar" title={owner.toBase58()} aria-label={`Owner ${owner.toBase58()}`}>{owner.toBase58().slice(0, 2).toUpperCase()}</span>
-        </div>
-        {toolbarHint}
+      <div className="content-toolbar">
+        {toolbar}
+        <span className="avatar" title={owner.toBase58()} aria-label={`Owner ${owner.toBase58()}`}>{owner.toBase58().slice(0, 2).toUpperCase()}</span>
       </div>
     </div>
     {siteNotice}
@@ -840,6 +834,8 @@ export function Dashboard({ connection, toolbar, toolbarHint, isCurrent = always
         </table>
       </div>}
     </section>}
+
+    <footer><span>Aegis</span><span>{environmentShort(environment)} · Test money, no real value</span></footer>
     </div>
   </Shell>;
 }

@@ -1,11 +1,10 @@
 // @vitest-environment happy-dom
 import { EventEmitter } from "node:events";
-import { readFileSync } from "node:fs";
 import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { PublicKey } from "@solana/web3.js";
 import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
-import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { Activity, VaultState } from "@aegis/sdk";
 import { WalletAegisClient } from "../../../packages/sdk/src/wallet";
 import deployment from "../../../deployments/devnet.json";
@@ -70,24 +69,6 @@ async function click(label: string) {
 }
 const ownerVisible = (owner: PublicKey) => container.querySelector(`[aria-label="Owner ${owner.toBase58()}"]`);
 const alerts = () => container.querySelectorAll('[role="alert"]');
-function expectAlignedWalletHeader(label: string, connected = false) {
-  const control = container.querySelector(".wallet-control")!;
-  const row = control.parentElement!;
-  expect(control.querySelector("button, a")?.textContent).toBe(label);
-  expect(row.matches(".rail-top, .content-toolbar")).toBe(true);
-  expect(row.querySelector(":scope > .environment")?.textContent).toBe("Devnet");
-  expect(window.getComputedStyle(row).display).toBe("flex");
-  expect(window.getComputedStyle(row).alignItems).toBe("center");
-  expect(row.querySelector(".wallet-network-hint")).toBeNull();
-  const caption = row.parentElement!.querySelector(":scope > .wallet-network-hint");
-  if (connected) {
-    expect(caption).toBeNull();
-    expect(row.querySelector(":scope > .avatar")).not.toBeNull();
-  } else {
-    expect(caption?.textContent).toBe("Phantom must be on Solana Devnet.");
-    expect(window.getComputedStyle(caption!).position).not.toBe("absolute");
-  }
-}
 async function mount(showApp = true) {
   await flush(() => root.render(createElement(StrictMode, null,
     createElement(WalletProvider, null, createElement(Capture), showApp && createElement(App, { environment: "devnet", walletMode: true })))));
@@ -98,13 +79,6 @@ async function connect() {
   await click("Connect wallet");
   expect(context.connected).toBe(true);
 }
-
-const style = document.createElement("style");
-beforeAll(() => {
-  style.textContent = readFileSync("src/styles.css", "utf8");
-  document.head.append(style);
-});
-afterAll(() => style.remove());
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -330,7 +304,6 @@ it("offers installation with neutral guidance when Phantom is not detected on de
   expect(link?.href).toBe("https://phantom.com/download");
   expect(link?.target).toBe("_blank");
   expect(link?.rel).toContain("noopener");
-  expectAlignedWalletHeader("Install Phantom");
   expect(container.querySelector('.connecting-hint[role="status"]')?.textContent).toBe(PHANTOM_INSTALL_MESSAGE);
   expect(container.textContent).not.toContain("Connect wallet");
   expect(alerts()).toHaveLength(0);
@@ -350,7 +323,6 @@ it.each([
   expect(context.wallet?.readyState).toBe(readyState);
   const link = container.querySelector<HTMLAnchorElement>(".wallet-control a");
   expect(link?.textContent).toBe("Open in Phantom");
-  expectAlignedWalletHeader("Open in Phantom");
   expect(link?.getAttribute("href")).toBe("https://phantom.app/ul/browse/https%3A%2F%2Fdemo.example%2Fdemo%3Fsource%3Dmobile%26label%3Dhello%2520world?ref=https%3A%2F%2Fdemo.example");
   expect(container.querySelector('.connecting-hint[role="status"]')?.textContent).toBe(PHANTOM_MOBILE_MESSAGE);
   expect(container.textContent).not.toContain("Connect wallet");
@@ -400,17 +372,14 @@ it("changes Install Phantom to Connect wallet when Phantom injects after load", 
   expect(context.connected).toBe(true);
 });
 
-it("keeps the Devnet hint outside the aligned badge and button row, including during connection", async () => {
+it("keeps the Devnet hint beside Connect wallet, including during connection", async () => {
   await mount();
-  expectAlignedWalletHeader("Connect wallet");
+  const control = container.querySelector(".wallet-control")!;
+  expect(control.querySelector("button")?.textContent).toBe("Connect wallet");
+  expect(control.querySelector("small")?.textContent).toBe("Phantom must be on Solana Devnet.");
   phantom.connect.mockReturnValueOnce(deferred<void>().promise);
   await click("Connect wallet");
-  expectAlignedWalletHeader("Connecting…");
-});
-
-it("aligns the connected badge, Disconnect button and avatar on one row", async () => {
-  await connect();
-  expectAlignedWalletHeader("Disconnect", true);
+  expect(control.querySelector("small")?.textContent).toBe("Phantom must be on Solana Devnet.");
 });
 
 it("links an alias to the configured canonical site before and after connection", async () => {

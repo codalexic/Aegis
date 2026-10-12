@@ -17,7 +17,7 @@ const GLYPH =
   "M10.03 48.76L19.73 18.91A12.9 12.9 0 0 1 44.27 18.91L53.97 48.76A3.7 3.7 0 0 1 46.93 51.04" +
   "L37.23 21.2A5.5 5.5 0 0 0 26.77 21.2L17.07 51.04A3.7 3.7 0 0 1 10.03 48.76Z";
 const BOLT = "M22.74 33.6H41.26L43.34 40H20.66Z";
-const ACCENT = "var(--brand-accent)";
+const ACCENT = "var(--brand-accent, #d2caff)";
 
 export function Logo({ size = 28, withWordmark = false, className }: { size?: number; withWordmark?: boolean; className?: string }): JSX.Element {
   const mark = (
@@ -32,7 +32,7 @@ export function Logo({ size = 28, withWordmark = false, className }: { size?: nu
       focusable="false"
       style={{ display: "block", flex: "none" }}
     >
-      <path d={TILE + GLYPH} fill="var(--brand-mark, currentColor)" fillRule="evenodd" />
+      <path d={TILE + GLYPH} fill="currentColor" fillRule="evenodd" />
       <path d={BOLT} fill={ACCENT} />
     </svg>
   );

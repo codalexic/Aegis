@@ -138,3 +138,10 @@ it.each(["NoDevnetSol", "AccountNotFound", "InsufficientFundsForFee", "insuffici
   expect(markup).toContain("Your wallet has no devnet SOL for fees. Get free devnet SOL, then try again.");
   expect(markup).toContain('<a href="https://faucet.solana.com" target="_blank" rel="noreferrer">Get free devnet SOL</a>');
 });
+
+it("never prints raw wallet details or error codes under a notice", () => {
+  const markup = renderToStaticMarkup(createElement(Notice, { tone: "error", message: { message: "SigningFailed", code: "WalletSignTransactionError", detail: "Unexpected error" } }));
+  expect(markup).not.toContain("Unexpected error");
+  expect(markup).not.toContain("WalletSignTransactionError");
+  expect(markup).not.toContain("notice-code");
+});

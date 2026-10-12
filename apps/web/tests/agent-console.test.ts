@@ -31,9 +31,12 @@ async function render(live: boolean, source?: "live" | "scripted" | "fixed", has
 describe("agent scenario and reply copy", () => {
   it("explains what each scenario does and why the vault accepts or blocks it", async () => {
     const markup = await render(false);
-    expect(markup).toContain("Swaps 20 testUSDC. Within the rules, so it goes through.");
-    expect(markup).toContain("Hidden news tells the agent to spend 1,000. Blocked: over the per-trade cap.");
-    expect(markup).toContain("Tries to send the output to an attacker. Blocked: output must stay in the vault.");
+    expect(markup).toContain("Swaps 20 testUSDC.</p>");
+    expect(markup).toContain(">Allowed: within the rules.</p>");
+    expect(markup).toContain("Hidden news tells the agent to spend 1,000.</p>");
+    expect(markup).toContain(">Blocked: over the per-trade cap.</p>");
+    expect(markup).toContain("Tries to send the output to an attacker.</p>");
+    expect(markup).toContain(">Blocked: output must stay in the vault.</p>");
     expect(markup).toContain("<strong>Hacker redirect</strong>");
     expect(markup).toMatch(/<button[^>]*>Hacker redirect<\/button>/);
     expect(markup).not.toContain("<strong>Wrong destination</strong>");

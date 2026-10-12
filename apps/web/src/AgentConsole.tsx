@@ -37,10 +37,10 @@ export function blockedTitle(error: string): string {
 
 // Plain-language framing for each scenario. Button labels stay as they were
 // because server copy refers to them (e.g. "Use Scripted to retry without AI.").
-const SCENARIOS: { id: Scenario; icon: IconName; tone: string; title: string; text: string; button: string }[] = [
-  { id: "normal", icon: "swap", tone: "", title: "Within the rules", text: "Swaps 20 testUSDC. Within the rules, so it goes through.", button: "Run normal trade" },
-  { id: "injected", icon: "news", tone: "attack", title: "Fake news attack", text: "Hidden news tells the agent to spend 1,000. Blocked: over the per-trade cap.", button: "Inject malicious news" },
-  { id: "attacker", icon: "redirect", tone: "hack", title: "Hacker redirect", text: "Tries to send the output to an attacker. Blocked: output must stay in the vault.", button: "Hacker redirect" },
+const SCENARIOS: { id: Scenario; icon: IconName; tone: string; title: string; text: string; outcome: string; button: string }[] = [
+  { id: "normal", icon: "swap", tone: "", title: "Within the rules", text: "Swaps 20 testUSDC.", outcome: "Allowed: within the rules.", button: "Run normal trade" },
+  { id: "injected", icon: "news", tone: "attack", title: "Fake news attack", text: "Hidden news tells the agent to spend 1,000.", outcome: "Blocked: over the per-trade cap.", button: "Inject malicious news" },
+  { id: "attacker", icon: "redirect", tone: "hack", title: "Hacker redirect", text: "Tries to send the output to an attacker.", outcome: "Blocked: output must stay in the vault.", button: "Hacker redirect" },
 ];
 
 function News({ step }: { step: Extract<Step, { type: "news" }> }) {
@@ -128,7 +128,7 @@ export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, en
     <ul className="scenario-list">
       {SCENARIOS.map((scenario) => <li key={scenario.id} className="scenario">
         <span className={`scenario-icon ${scenario.tone}`} aria-hidden="true"><Icon name={scenario.icon} size={20} /></span>
-        <div><strong>{scenario.title}</strong><p>{scenario.text}</p></div>
+        <div><strong>{scenario.title}</strong><p>{scenario.text}</p><p className={`scenario-outcome ${scenario.tone ? "blocked" : "allowed"}`}>{scenario.outcome}</p></div>
         <ProgressButton className={scenario.id === "normal" && usable ? "primary" : undefined} disabled={locked}
           busy={busy && lastScenario === scenario.id} progress="Running…" onClick={() => void run(scenario.id)}>{scenario.button}</ProgressButton>
       </li>)}

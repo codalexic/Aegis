@@ -1076,6 +1076,9 @@ progress::-moz-progress-bar { border-radius: 3px; background: var(--budget-color
 .scenario-icon.hack { background: var(--bad-bg); color: var(--bad-ink); }
 .scenario strong { display: block; font-size: 15px; letter-spacing: -.01em; }
 .scenario p { font-size: 13px; color: var(--ink-2); max-width: 28ch; }
+.scenario p.scenario-outcome { font-weight: 600; }
+.scenario-outcome.blocked { color: #F87171; }
+.scenario-outcome.allowed { color: #22C55E; }
 .agent-result-area { display: grid; gap: 12px; margin-top: 14px; }
 .agent-result-area:empty { display: none; }
 .agent-placeholder { padding: 14px 16px; border-radius: 12px; border: 1px dashed var(--line-2); color: var(--ink-3); font-size: 13px; text-align: center; background: #fff; }

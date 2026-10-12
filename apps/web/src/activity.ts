@@ -17,8 +17,8 @@ export function actionDetail(transaction: VersionedTransactionResponse, vault: V
     const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
     if (program?.equals(AEGIS_PROGRAM_ID)) {
       const instruction = idl.instructions.find((definition) => definition.discriminator.every((byte, i) => data[i] === byte));
-      if (instruction?.name === "create_vault") return { label: "Create vault", amount: "—" };
-      if (instruction?.name === "revoke_agent") return { label: "Revoke agent", amount: "—" };
+      if (instruction?.name === "create_vault") return { label: "Create vault", amount: "0" };
+      if (instruction?.name === "revoke_agent") return { label: "Revoke agent", amount: "0" };
       if (data.length < 16) continue;
       if (instruction?.name === "execute_swap") return { label: "Agent swap", amount: `${rawAmountToUi(view.getBigUint64(8, true), 6)} testUSDC` };
       if (instruction?.name === "withdraw") {

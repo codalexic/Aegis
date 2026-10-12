@@ -564,7 +564,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
   }
 
   const create = () => run("Create vault", async () => {
-    const result = track(await connection.create(reportProgress), { label: "Create vault", amount: "—" });
+    const result = track(await connection.create(reportProgress), { label: "Create vault", amount: "0" });
     if (!result.vault) throw new Error("No vault address was returned.");
     address.current = result.vault;
     setActivityReady(false);
@@ -587,14 +587,14 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       setReady(false);
       setActivityReady(false);
     }
-    if (result.createSignature) track({ ok: true, signature: result.createSignature }, { label: "Create vault", amount: "—" });
+    if (result.createSignature) track({ ok: true, signature: result.createSignature }, { label: "Create vault", amount: "0" });
     track(result, { label: "Fund vault", amount: "1,000 testUSDC" });
     if (!result.vault) throw new Error("No vault address was returned.");
     return `Your demo vault is ready with 1,000 testUSDC. Next: ${environment === "mock" ? "try a trade" : "try the agent"} below.`;
   });
 
   const revoke = () => run("Revoke agent", async () => {
-    track(await connection.revoke(address.current!, reportProgress), { label: "Revoke agent", amount: "—" });
+    track(await connection.revoke(address.current!, reportProgress), { label: "Revoke agent", amount: "0" });
     return "Agent revoked. You can still withdraw your funds.";
   });
 
@@ -825,7 +825,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
               {environment !== "mock" ? <a className="signature" title={`${item.signature}${environment === "localnet" ? " · Explorer uses your local chain. Allow local network access if prompted." : " · Solana devnet"}`} aria-label={`View transaction ${item.signature} on Solana Explorer`}
                 href={explorerTransactionUrl(item.signature, environment)} target="_blank" rel="noopener noreferrer"><code>{shorten(item.signature)}</code><Icon name="external" size={12} /></a>
                 : <code className="signature">{shorten(item.signature)}</code>}</td>
-            <td className="activity-amount">{groupThousands(details.current.get(item.signature)?.amount ?? "—")}</td>
+            <td className="activity-amount">{groupThousands(details.current.get(item.signature)?.amount ?? "0")}</td>
             <td><span className={`result ${item.ok ? "ok" : "blocked"}`} title={item.ok ? undefined : item.error}><Icon name={item.ok ? "check" : "x"} size={14} />{item.ok ? "Success" : blockedTitle(item.error ?? "Failed")}</span>
               {!item.ok && vault && <span className="rejection-reason">{rejectionReason(item.error ?? "Failed", vault,
                 details.current.get(item.signature)?.amount.replace(/ testUSDC$/, ""))}</span>}</td>

@@ -19,8 +19,8 @@ describe("chain activity labels and amounts", () => {
     if (action === "revoke") await f.client.revoke(f.owner, f.vault);
     if (action === "withdraw") await f.client.withdraw(f.owner, f.vault, f.outputMint, 200_000_000n);
     const expected: Record<string, { label: string; amount: string }> = {
-      create: { label: "Create vault", amount: "—" }, fund: { label: "Fund vault", amount: "1000 testUSDC" },
-      revoke: { label: "Revoke agent", amount: "—" }, withdraw: { label: "Withdraw", amount: "0.2 testSOL" },
+      create: { label: "Create vault", amount: "0" }, fund: { label: "Fund vault", amount: "1000 testUSDC" },
+      revoke: { label: "Revoke agent", amount: "0" }, withdraw: { label: "Withdraw", amount: "0.2 testSOL" },
     };
     expect(actionDetail(transactionRecord(f.sent[0], null), await f.client.getVault(f.vault))).toEqual(expected[action]);
   });

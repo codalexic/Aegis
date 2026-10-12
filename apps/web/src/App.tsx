@@ -667,7 +667,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
     : !vault ? <>Applies once the vault is created.</>
     : vault.revoked ? <>Agent is <strong>revoked</strong>.</>
     : status === "Expired" ? <>Trading permission has <strong>expired</strong>.</>
-    : <>Fixed at vault creation.</>;
+    : null;
 
   const cta = <>
     <ProgressButton className="primary" disabled={!ready || locked} busy={busy === "New demo vault"} progress="Setting up…" onClick={() => void newDemo()}><Icon name="sparkle" size={16} />New demo vault</ProgressButton>
@@ -751,7 +751,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       <div className="panel-grid">
         <section className="rail-card guardrails-card" aria-labelledby="guard-title">
           <div className="rail-heading"><h2 id="guard-title">Guardrails</h2><span className="rail-badge"><Icon name="shield" size={16} /></span></div>
-          <p className="rail-lead">{guardLead}</p>
+          {guardLead && <p className="rail-lead">{guardLead}</p>}
           <p className="rail-sub">Enforced on-chain. The agent cannot change them.</p>
           <div className="guard-rows">
             <div className="guard-row"><span className="label">Per-trade cap</span><span className="value">{vault ? amount(vault.maxTradeRaw) : "50"}<small>testUSDC</small></span></div>

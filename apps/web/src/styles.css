@@ -1171,6 +1171,13 @@ a.signature:hover, a.signature:focus-visible { color: #2454a0; text-decoration-c
   box-shadow: inset 0 0 0 1px rgba(196, 181, 255, .14);
 }
 .shell--dark .activity-card tr:hover td { background: rgba(196, 181, 255, .2); }
+.activity-card th {
+  padding: 10px 16px; background: rgba(196, 181, 255, .08);
+  font-size: 11px; font-weight: 650; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2);
+  box-shadow: inset 0 1px 0 rgba(196, 181, 255, .14), inset 0 -1px 0 rgba(196, 181, 255, .14);
+}
+.activity-card th:first-child { border-radius: 12px 0 0 12px; box-shadow: inset 1px 1px 0 rgba(196, 181, 255, .14), inset 0 -1px 0 rgba(196, 181, 255, .14); }
+.activity-card th:last-child { border-radius: 0 12px 12px 0; box-shadow: inset -1px 1px 0 rgba(196, 181, 255, .14), inset 0 -1px 0 rgba(196, 181, 255, .14); }
 .shell--dark a.signature { color: #b7afe6; text-decoration-color: rgba(196, 181, 255, .28); }
 .shell--dark a.signature:hover, .shell--dark a.signature:focus-visible { color: #d4cbff; text-decoration-color: #c4b5ff; }
 .shell--dark .result.ok { background: rgba(196, 181, 255, .16); color: #f0ecff; }

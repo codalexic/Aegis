@@ -67,9 +67,9 @@ async function click(label: string) {
 }
 const ownerVisible = (owner: PublicKey) => container.querySelector(`[aria-label="Owner ${owner.toBase58()}"]`);
 const alerts = () => container.querySelectorAll('[role="alert"]');
-async function mount() {
+async function mount(showApp = true) {
   await flush(() => root.render(createElement(StrictMode, null,
-    createElement(WalletProvider, null, createElement(Capture), createElement(App, { environment: "devnet", walletMode: true })))));
+    createElement(WalletProvider, null, createElement(Capture), showApp && createElement(App, { environment: "devnet", walletMode: true })))));
 }
 async function connect() {
   await mount();
@@ -80,6 +80,7 @@ async function connect() {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  window.history.replaceState(null, "", "/");
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   phantom = new MockPhantom();
   Object.defineProperty(window, "isPhantomInstalled", { configurable: true, value: true });
@@ -110,6 +111,84 @@ afterEach(async () => {
   Reflect.deleteProperty(window, "phantom");
   Reflect.deleteProperty(window, "isPhantomInstalled");
   vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.useRealTimers();
+});
+
+async function openPage(page: string) {
+  await flush(() => {
+    window.location.hash = `#/${page}`;
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  });
+}
+
+function expectPage(page: "vault" | "agent" | "stats" | "activity") {
+  expect(container.querySelectorAll('.nav a[aria-current="true"]')).toHaveLength(1);
+  expect(container.querySelector('.nav a[aria-current="true"]')?.getAttribute("href")).toBe(`#/${page}`);
+  const heading = {
+    vault: "AI agents can be tricked. Aegis still enforces the limits.",
+    agent: "Test the agent’s limits.",
+    stats: "Requests against the per-trade cap.",
+    activity: "Every trade and every blocked attempt.",
+  }[page];
+  expect(container.querySelector("h1")?.textContent).toBe(heading);
+}
+
+it.each(["null account", "external disconnect", "button"])("clears the route on %s and reconnects to Overview with fresh page state", async (kind) => {
+  await connect();
+  await openPage("agent");
+  expectPage("agent");
+  await click("Live AI");
+  const replace = vi.spyOn(window.history, "replaceState");
+  const length = window.history.length;
+  if (kind === "button") await click("Disconnect");
+  else await flush(() => kind === "null account" ? phantom.switchAccount(null) : phantom.disconnectExternally());
+  expect(window.location.hash).toBe("");
+  expect(replace).toHaveBeenCalledWith(window.history.state, "", "/");
+  expect(window.history.length).toBe(length);
+  expect(container.querySelector(".shell--start")).not.toBeNull();
+  expect(container.querySelector(".nav")).toBeNull();
+  phantom.publicKey = A;
+  await click("Connect wallet");
+  expect(window.location.hash).toBe("#/overview");
+  expectPage("vault");
+  await openPage("agent");
+  expect(container.querySelector('button[aria-pressed="true"]')?.textContent).toBe("Scripted");
+});
+
+it("opens Overview on an account switch and resets the previous account's page state", async () => {
+  await connect();
+  await openPage("agent");
+  await click("Live AI");
+  await flush(() => phantom.switchAccount(B));
+  expect(window.location.hash).toBe("#/overview");
+  expect(ownerVisible(B)).not.toBeNull();
+  expectPage("vault");
+  await openPage("agent");
+  expect(container.querySelector('button[aria-pressed="true"]')?.textContent).toBe("Scripted");
+});
+
+it("clears disconnected deep links on load and hash navigation, then connects to Overview", async () => {
+  window.history.replaceState({ test: true }, "", "/?demo=1#/agent");
+  await mount();
+  expect(window.location.hash).toBe("");
+  expect(window.location.search).toBe("?demo=1");
+  expect(window.history.state).toEqual({ test: true });
+  await openPage("activity");
+  expect(window.location.hash).toBe("");
+  expect(container.querySelector(".shell--start")).not.toBeNull();
+  await click("Connect wallet");
+  expect(window.location.hash).toBe("#/overview");
+  expectPage("vault");
+});
+
+it.each(["vault", "agent", "stats", "activity"] as const)("honors #/%s when opened with an already-connected wallet", async (page) => {
+  await connect();
+  await mount(false);
+  window.history.replaceState(null, "", `/#/${page}`);
+  await mount();
+  expect(window.location.hash).toBe(`#/${page}`);
+  expectPage(page);
+  await openPage(page === "vault" ? "agent" : "vault");
+  expectPage(page === "vault" ? "agent" : "vault");
 });
 
 it("switches A → B, clears A immediately, and drops A's late vault discovery", async () => {

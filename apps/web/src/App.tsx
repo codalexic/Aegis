@@ -74,6 +74,13 @@ function pageFromHash(): PageId {
   return NAV.some((item) => item.id === raw) ? raw as PageId : "vault";
 }
 
+function replaceSessionRoute(connected: boolean) {
+  const hash = connected ? "#/overview" : "";
+  if (window.location.hash !== hash) {
+    window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}${hash}`);
+  }
+}
+
 /** Hash routes (`#/vault`) so the sidebar opens one page at a time. */
 function usePage(): [PageId, (id: PageId) => void] {
   const [page, setPage] = useState<PageId>(pageFromHash);
@@ -163,15 +170,29 @@ export function App({
   const wallet = useWallet();
   const walletAddress = wallet.publicKey?.toBase58();
   const adapter = wallet.wallet?.adapter;
+  const previousWalletAddress = useRef(walletAddress);
   const generation = useRef(0);
   const [revision, setRevision] = useState(0);
   const [changed, setChanged] = useState(false);
   const [requestError, setRequestError] = useState<Error | null>(null);
+  useLayoutEffect(() => {
+    const switched = previousWalletAddress.current !== walletAddress;
+    previousWalletAddress.current = walletAddress;
+    if (!walletMode) return;
+    // OwnerApp remounts on wallet changes, clearing page state. Replace its
+    // route before the new dashboard loads, but preserve connected deep links.
+    if (!walletAddress || switched) replaceSessionRoute(!!walletAddress);
+    if (walletAddress) return;
+    const clearRoute = () => replaceSessionRoute(false);
+    window.addEventListener("hashchange", clearRoute);
+    return () => window.removeEventListener("hashchange", clearRoute);
+  }, [walletMode, walletAddress]);
   useEffect(() => {
     if (!adapter) return;
     setRevision(generation.current);
     const reset = (disconnected: boolean) => {
       // Invalidate work synchronously with the event, before React renders.
+      if (walletMode) replaceSessionRoute(!disconnected);
       setRevision(++generation.current);
       setChanged(disconnected);
       setRequestError(null);
@@ -185,7 +206,7 @@ export function App({
       adapter.off("connect", onConnect);
       adapter.off("disconnect", onDisconnect);
     };
-  }, [adapter]);
+  }, [adapter, walletMode]);
 
   const isCurrent = useCallback(() => !walletMode || (generation.current === revision
     && adapter?.publicKey?.toBase58() === walletAddress), [walletMode, revision, adapter, walletAddress]);
@@ -248,7 +269,7 @@ function OwnerApp({ environment, walletMode, wallet, changed, isCurrent, request
   </header>;
 
   if (!connection) {
-    const waitingForWallet = walletMode && !wallet.connected;
+    const waitingForWallet = walletMode && (!wallet.connected || !wallet.publicKey);
     return <Shell active="vault" hideNav>
       <div className={waitingForWallet ? "start" : "start connecting-screen"}>
         {startBar}

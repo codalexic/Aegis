@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, type ButtonHTMLAttributes } from "react";
+import { Logo } from "./Logo";
 
 /** Keep the idle button's width while its label and icon change. */
 export function ProgressButton({ busy = false, progress, children, style, ...props }:
@@ -29,15 +30,15 @@ export function VaultSkeleton() {
   </div>;
 }
 
+/** Centered Aegis mark + spinner while the dashboard connection resolves. */
 export function LoadingDashboard() {
-  return <>
-    <p role="status" aria-live="polite">Connecting to the vault…</p>
-    <div className="loading-dashboard shell--dark" aria-busy="true" aria-label="Loading vault">
-    <div className="tiles">
-      {(["lavender", "mist", "mint", "cream"] as const).map((tone) => <div className={`tile tile--${tone}`} key={tone}>
-        <Skeleton className="skeleton-short" /><Skeleton className="skeleton-value" /><Skeleton />
-      </div>)}
+  return <div className="connecting" role="status" aria-live="polite" aria-busy="true" data-testid="connecting-logo">
+    <div className="connecting-mark" aria-hidden="true">
+      <span className="connecting-glow" />
+      <span className="connecting-ring connecting-ring--outer" />
+      <span className="connecting-ring connecting-ring--inner" />
+      <Logo size={44} />
     </div>
-    <section className="card vault-card"><h2>Trading vault</h2><VaultSkeleton /></section>
-  </div></>;
+    <p>Connecting to the vault…</p>
+  </div>;
 }

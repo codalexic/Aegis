@@ -15,6 +15,7 @@ import { Logo } from "./Logo";
 import { SidebarIllustration } from "./Illustration";
 import { TradeBars, type TradeBar } from "./TradeBars";
 import { Notice } from "./Notice";
+import { Toast, ToastStack } from "./Toast";
 import { ProgressButton, Skeleton, VaultSkeleton, LoadingDashboard } from "./Progress";
 import { DevnetSolHint } from "./DevnetSolHint";
 import { needsFaucet, newFundedDemo, withWalletBalanceRefresh } from "./funding";
@@ -41,7 +42,6 @@ function timeLabel(unix?: bigint): string {
   return unix === undefined ? "—" : new Date(Number(unix * 1000n)).toLocaleTimeString([], { hour12: false });
 }
 
-const environmentName = (e: AegisEnvironment) => e === "mock" ? "Practice mode" : e === "localnet" ? "Private test chain" : "Solana devnet";
 const environmentShort = (e: AegisEnvironment) => e === "mock" ? "Practice" : e === "localnet" ? "Localnet" : "Devnet";
 const environmentTitle = (environment: AegisEnvironment) => environment === "devnet"
   ? "Solana devnet: a public test network. Tokens have no value. Set Phantom to devnet."
@@ -59,11 +59,11 @@ const NAV = [
 ] as const;
 type PageId = (typeof NAV)[number]["id"];
 
-const PAGE_TITLE: Record<PageId, { eyebrow?: string; title: string }> = {
-  vault: { eyebrow: "Your vault", title: "AI agents can be tricked. Aegis still enforces the limits." },
-  agent: { eyebrow: "Agent", title: "Test the agent’s limits." },
-  stats: { eyebrow: "Stats", title: "Requests against the per-trade cap." },
-  activity: { eyebrow: "Activity", title: "Every trade and every blocked attempt." },
+const PAGE_TITLE: Record<PageId, string> = {
+  vault: "AI agents can be tricked. Aegis still enforces the limits.",
+  agent: "Test the agent’s limits.",
+  stats: "Requests against the per-trade cap.",
+  activity: "Every trade and every blocked attempt.",
 };
 
 function pageFromHash(): PageId {
@@ -263,7 +263,7 @@ function OwnerApp({ environment, walletMode, wallet, changed, isCurrent, request
       </div>
     </Shell>;
   }
-  return <Dashboard key={`${environment}:${connection.owner.toBase58()}`} connection={connection} isCurrent={isCurrent} onBusyChange={setActionsBusy} toolbar={<>{environmentPill}{walletControl("small rail-action")}</>} />;
+  return <Dashboard key={`${environment}:${connection.owner.toBase58()}`} connection={connection} isCurrent={isCurrent} onBusyChange={setActionsBusy} toolbar={<>{environmentPill}{walletControl("start-connect rail-action")}</>} />;
 }
 
 const TRY_STEPS: { title: string; body: ReactNode }[] = [
@@ -288,8 +288,7 @@ const TRY_STEPS: { title: string; body: ReactNode }[] = [
 function TryIt() {
   return <aside className="try-it" aria-labelledby="try-it-title">
     <header className="try-it-head">
-      <h2 id="try-it-title">Get started</h2>
-      <p className="try-it-lead">You’ll approve transactions in Phantom.</p>
+      <h2 id="try-it-title">How to get started?</h2>
     </header>
     <ol className="try-it-steps">
       {TRY_STEPS.map((step, index) => <li key={step.title} data-step={index + 1}>
@@ -506,7 +505,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       // Keep actions locked through a fresh read, even if polling is hidden or
       // waiting for activity history. Also reconcile partial successes/failures.
       const text = await withWalletBalanceRefresh(action, async () => {
-        if (current()) { setStage("Refreshing vault…"); setReloading(true); }
+        if (current()) setStage("Refreshing vault…");
         await refreshWalletBalance();
       });
       if (current()) setNotice({ ok: true, text });
@@ -515,7 +514,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
     } finally {
       try { await refresh(); } catch { if (current()) setNotice((notice) => notice?.ok === false ? notice : { ok: false, text: "Could not refresh the vault. Retrying…" }); }
       running.current = false;
-      if (current()) { setBusy(null); setStage(""); setReloading(false); }
+      if (current()) { setBusy(null); setStage(""); }
     }
   }
 
@@ -618,31 +617,29 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
 
   const cta = <>
     <ProgressButton className="primary" disabled={!ready || locked} busy={busy === "New demo vault"} progress="Setting up…" onClick={() => void newDemo()}><Icon name="sparkle" size={16} />New demo vault</ProgressButton>
-    <span className="sidebar-hint">Create and fund in one step.</span>
+    <span className="sidebar-hint">Create & fund in one step</span>
   </>;
 
-  const heading = PAGE_TITLE[page];
   const pageLoading = <p className="page-loading" role="status">Loading…</p>;
 
   return <Shell active={page} cta={cta}>
     <div className="page-view" key={page}>
     <div className="content-top">
       <div>
-        <p className="eyebrow">{heading.eyebrow} · {environmentName(environment)}</p>
-        <h1>{heading.title}</h1>
+        <h1>{PAGE_TITLE[page]}</h1>
       </div>
       <div className="content-toolbar">
         {toolbar}
         <span className="avatar" title={owner.toBase58()} aria-label={`Owner ${owner.toBase58()}`}>{owner.toBase58().slice(0, 2).toUpperCase()}</span>
       </div>
     </div>
-    <div className="dashboard-notice">
-      {busy ? <Notice tone="busy" message={`${busy} · ${stage}`} />
+    <ToastStack>
+      {busy ? <Toast tone="busy" message={`${busy} · ${stage}`} />
         : notice && (notice.ok
-          ? <Notice tone="success" message={notice.text} />
-          : <Notice tone="error" message={notice.text} onDismiss={() => setNotice(null)} />)}
-      {!busy && !ready && <Notice tone="busy" message="Loading vault…" />}
-    </div>
+          ? <Toast tone="success" message={notice.text} />
+          : <Toast tone="error" message={notice.text} onDismiss={() => setNotice(null)} />)}
+      {!busy && !ready && <Toast tone="busy" message="Loading vault…" />}
+    </ToastStack>
     {connection.getWalletSolBalance && <DevnetSolHint readBalance={connection.getWalletSolBalance} />}
 
     {page === "vault" && <>
@@ -665,7 +662,10 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       <section className="go-live" aria-labelledby="vault-setup-title">
         <div className="go-live-head">
           <div>
-            <h2 id="vault-setup-title">{stepsDone === 3 ? "Vault ready" : "Trading vault"}</h2>
+            <div className="go-live-title">
+              <h2 id="vault-setup-title">{stepsDone === 3 ? "Vault ready" : "Trading vault"}</h2>
+              <span className={`status ${status.toLowerCase().replace(" ", "-")}`} data-testid="vault-status"><span className="small-dot" aria-hidden="true" />{status}</span>
+            </div>
             <p className="go-live-lead">{stepsDone === 3
               ? "Try the agent, or revoke and withdraw."
               : "Create and fund a vault, then test the agent."}</p>
@@ -674,9 +674,6 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
             <span>{stepsDone} of 3 done</span>
             <div className="go-live-track" aria-hidden="true"><span style={{ width: `${(stepsDone / 3) * 100}%` }} /></div>
           </div>
-        </div>
-        <div className="go-live-meta">
-          <span className={`status ${status.toLowerCase().replace(" ", "-")}`} data-testid="vault-status"><span className="small-dot" aria-hidden="true" />{status}</span>
         </div>
         <div className="steps">
           <Step number={1} state={step1} title={vault ? "Vault created" : "Vault setup"} text="">
@@ -696,7 +693,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       </section>
 
       <div className="panel-grid">
-        <section className="rail-card" aria-labelledby="guard-title">
+        <section className="rail-card guardrails-card" aria-labelledby="guard-title">
           <div className="rail-heading"><h2 id="guard-title">Guardrails</h2><span className="rail-badge"><Icon name="shield" size={16} /></span></div>
           <p className="rail-lead">{guardLead}</p>
           <p className="rail-sub">Enforced on-chain. The agent cannot change them.</p>
@@ -707,7 +704,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
               <div className={`meter ${budgetLevel}`} role="img" aria-label={vault ? `${spentPercent}% of the budget spent` : "No vault"}><span style={{ width: `${spentPercent}%` }} /></div></div>
             <div className="guard-row"><span className="label">Time left</span><span className="value" data-testid="expiry">{vault ? countdown(vault.expiryUnix, now) : "1 hour, from creation"}</span>
               <div className="meter neutral" role="img" aria-label={vault ? `${lifePercent}% of the hour remaining` : "No vault"}><span style={{ width: `${lifePercent}%` }} /></div></div>
-            <div className="guard-row"><span className="label">Output goes to</span><span className="value"><Icon name="lock" size={14} /> This vault only</span></div>
+            <div className="guard-row guard-row--wide"><span className="label">Output goes to</span><span className="value"><Icon name="lock" size={14} /> This vault only</span></div>
           </div>
         </section>
         <section className="rail-card addresses-card" aria-labelledby="keys-title">

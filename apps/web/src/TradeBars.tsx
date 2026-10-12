@@ -65,7 +65,7 @@ export function TradeBars({ trades, cap, unit, className }: {
         </linearGradient>
       </defs>
       <rect x={0} y={capY} width={W} height={BASE - capY} fill="var(--chart-band, var(--chart-ink))" />
-      <line x1={16} x2={W - 16} y1={BASE} y2={BASE} stroke="var(--chart-line)" strokeWidth={1} />
+      <line x1={0} x2={W} y1={BASE} y2={BASE} stroke="var(--chart-line)" strokeWidth={1} />
       <line x1={16} x2={W - 16} y1={capY} y2={capY} stroke="var(--chart-muted)" strokeWidth={1} strokeDasharray="3 5" opacity={0.9} />
       <text x={20} y={capY - 6} fontSize={10} fontWeight={650} fill="var(--chart-muted)">per-trade cap {cap.toLocaleString()}</text>
 

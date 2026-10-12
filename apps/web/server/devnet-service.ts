@@ -1,4 +1,5 @@
-import { Keypair, PublicKey, Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
+import { sendServerTransaction } from "../../../packages/sdk/src/server-transaction";
+import { Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import { createAssociatedTokenAccountIdempotentInstruction, createMintToCheckedInstruction, getAssociatedTokenAddressSync, getMint, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { AnchorAegisClient } from "../../../packages/sdk/src/anchor";
 import manifest from "../../../deployments/devnet.json";
@@ -73,6 +74,8 @@ export async function mintTestUsdc(env: NodeJS.ProcessEnv, recipient: PublicKey)
     createAssociatedTokenAccountIdempotentInstruction(authority.publicKey, destination, recipient, mint),
     createMintToCheckedInstruction(mint, destination, authority.publicKey, 1_000_000_000n, 6),
   );
-  const signature = await sendAndConfirmTransaction(client.connection, transaction, [authority], { commitment: "confirmed" });
+  const result = await sendServerTransaction(client.connection, authority, async () => transaction.instructions);
+  if (!result.ok) throw new ApiError(503, "Faucet request could not be confirmed. Check your token balance before retrying later.");
+  const signature = result.signature;
   return { signature, amountRaw: "1000000000" };
 }

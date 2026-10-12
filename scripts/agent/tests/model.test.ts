@@ -1,6 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMockContext } from "../context";
 import { askModel, ModelHttpError, modelConfig, modelInput, newsFor, parseTrade, SYSTEM_PROMPT } from "../model";
+
+beforeEach(() => vi.useFakeTimers());
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
 const reply = '{"amountUsdc":"20","reason":"Calm market."}';
 const key = "test-only-api-credential";
@@ -91,20 +94,22 @@ describe("REST providers", () => {
     expect(request?.signal).toBeInstanceOf(AbortSignal);
   });
 
-  it("reports HTTP status without echoing an error body or credential", async () => {
+  it("retries congestion without exposing HTTP status or credentials", async () => {
     const send = vi.fn<typeof fetch>().mockResolvedValue(new Response(key, { status: 429 }));
-    await expect(askModel({ provider: "gemini", model: "test", apiKey: key }, "input", send)).rejects.toThrow("HTTP 429");
+    const assertion = expect(askModel({ provider: "gemini", model: "test", apiKey: key }, "input", send)).rejects.toThrow("temporarily busy");
+    await vi.runAllTimersAsync(); await assertion;
+    expect(send).toHaveBeenCalledTimes(3);
   });
 
   it("retains a bounded 503 diagnostic while redacting plain and encoded credentials before truncation", async () => {
     const credential = 'test-only-credential/with"quote';
-    const send = vi.fn<typeof fetch>().mockResolvedValue(new Response(
+    const send = vi.fn<typeof fetch>().mockImplementation(async () => new Response(
       JSON.stringify({ error: "UNAVAILABLE", plain: credential, encoded: encodeURIComponent(credential) }) + "x".repeat(4020) + credential,
       { status: 503 },
     ));
     let failure: unknown;
-    try { await askModel({ provider: "gemini", model: "test", apiKey: credential }, "input", send); }
-    catch (error) { failure = error; }
+    const pending = askModel({ provider: "gemini", model: "test", apiKey: credential }, "input", send).catch((error) => { failure = error; });
+    await vi.runAllTimersAsync(); await pending;
     expect(failure).toBeInstanceOf(ModelHttpError);
     const error = failure as ModelHttpError;
     expect(error.responseBody).toContain("UNAVAILABLE");
@@ -117,15 +122,16 @@ describe("REST providers", () => {
 
   it("hides network exception details", async () => {
     const send = vi.fn<typeof fetch>().mockRejectedValue(new Error(key));
-    await expect(askModel({ provider: "openai", model: "test", apiKey: key }, "input", send))
-      .rejects.toThrow("openai API call failed or timed out; check the connection and provider settings.");
+    const assertion = expect(askModel({ provider: "openai", model: "test", apiKey: key }, "input", send)).rejects.toThrow("temporarily busy");
+    await vi.runAllTimersAsync(); await assertion;
   });
 
   it("redacts a credential echoed as JSON Unicode escapes in a 503 body", async () => {
     const escaped = Array.from(key, (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`).join("");
-    const send = vi.fn<typeof fetch>().mockResolvedValue(new Response(`{"error":{"message":"${escaped}"}}`, { status: 503 }));
-    await expect(askModel({ provider: "gemini", model: "test", apiKey: key }, "input", send))
+    const send = vi.fn<typeof fetch>().mockImplementation(async () => new Response(`{"error":{"message":"${escaped}"}}`, { status: 503 }));
+    const assertion = expect(askModel({ provider: "gemini", model: "test", apiKey: key }, "input", send))
       .rejects.toMatchObject({ status: 503, responseBody: '{"error":{"message":"[redacted]"}}' });
+    await vi.runAllTimersAsync(); await assertion;
   });
 
   it.each([

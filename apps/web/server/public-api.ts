@@ -107,9 +107,7 @@ export function createPublicHandler(env: NodeJS.ProcessEnv = process.env) {
         return json(response, 200, { steps });
       } catch (error) {
         if (error instanceof ModelHttpError) {
-          const quota = error.status === 429;
-          return json(response, quota ? 429 : 503, { error: quota ? "Gemini quota exceeded (HTTP 429). Use Scripted or try again later."
-            : `Gemini returned HTTP ${error.status}. Use Scripted or try again later.`, scriptedAvailable: true });
+          return json(response, 503, { error: "Live AI is unavailable. Use Scripted or try again later.", scriptedAvailable: true });
         }
         if (error instanceof ApiError) throw error;
         if (error instanceof AgentError) {

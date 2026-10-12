@@ -68,6 +68,8 @@ export async function fixture() {
     return utils.bytes.bs58.encode(transaction.signature!);
   });
   const confirmTransaction = vi.spyOn(connection, "confirmTransaction").mockResolvedValue({ context: { slot: 12 }, value: { err: null } });
+  vi.spyOn(connection, "getSignatureStatuses").mockResolvedValue({ context: { slot: 12 }, value: [{ err: null, slot: 12, confirmations: 1, confirmationStatus: "confirmed" }] });
+  vi.spyOn(connection, "getBlockHeight").mockResolvedValue(10);
   const getTransaction = vi.spyOn(connection, "getTransaction").mockResolvedValue(null);
   const getSignaturesForAddress = vi.spyOn(connection, "getSignaturesForAddress").mockResolvedValue([]);
   return {

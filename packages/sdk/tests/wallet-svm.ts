@@ -32,6 +32,7 @@ export function walletSvm(balance = FUNDING, hasAta = true) {
       data: [Buffer.from(info.data).toString("base64"), "base64"] } : null;
   };
   const logs: string[][] = [];
+  const confirmedSignatures = new Set<string>();
   const rpc = vi.fn(async (method: string, params: unknown[]): Promise<any> => {
     if (method === "getSlot") return 1;
     if (method === "getBlockTime") return Number(NOW);
@@ -50,9 +51,11 @@ export function walletSvm(balance = FUNDING, hasAta = true) {
       const bytes = Buffer.from(params[0] as string, "base64");
       assertSuccess(f.svm.sendTransaction(decoder.decode(bytes)));
       f.svm.expireBlockhash();
-      return encode(VersionedTransaction.deserialize(bytes).signatures[0]);
+      const signature = encode(VersionedTransaction.deserialize(bytes).signatures[0]);
+      confirmedSignatures.add(signature);
+      return signature;
     }
-    if (method === "getSignatureStatuses") return { value: [{ err: null, confirmationStatus: "confirmed" }] };
+    if (method === "getSignatureStatuses") return { value: (params[0] as string[]).map((signature) => confirmedSignatures.has(signature) ? { err: null, confirmationStatus: "confirmed" } : null) };
     throw new Error(`Unexpected RPC method: ${method}`);
   });
   const sign = vi.fn<WalletSigner["signTransaction"]>(async (transaction) => {

@@ -9,7 +9,7 @@ import type { Idl, IdlAccounts } from "@coral-xyz/anchor";
 import type { Aegis } from "../../../artifacts/idl/aegis";
 import idl from "../../../artifacts/idl/aegis.json";
 import { AEGIS_PROGRAM_ID, DEMO_DEX_PROGRAM_ID, deriveSwapAccounts, deriveVaultPda } from "./addresses";
-import { ClientError, ProgramError, RpcError, RPC_RATE_LIMITED, isRateLimited, programErrorName, transactionErrorName } from "./errors";
+import { ClientError, ProgramError, RpcError, RPC_RATE_LIMITED, isRateLimited, isBlockhashNotFound, isTransientRpcError, programErrorName, transactionErrorName } from "./errors";
 import type { LocalnetDeployment, Activity, VaultState } from "./index";
 
 type Account = { owner: string; executable: boolean; data: [string, "base64"] };
@@ -44,9 +44,11 @@ export class ChainReader {
     if (deployment.environment === "devnet" && (endpoint.protocol !== "https:" || endpoint.username || endpoint.password || endpoint.hash)) {
       throw new ClientError("InvalidDevnetRpcUrl");
     }
-    this.fetcher = deployment.environment === "devnet" ? rateAwareFetch()
+    this.fetcher = deployment.environment === "devnet" ? rateAwareFetch(undefined, () => this.onRpcRetry())
       : (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(15_000) });
   }
+
+  protected onRpcRetry(): void {}
 
   async rpc<T>(method: string, params: unknown[]): Promise<T> {
     if (this.rpcUrl !== this.deployment.rpcUrl) {
@@ -64,16 +66,19 @@ export class ChainReader {
       const response = await this.fetcher(this.rpcUrl, { method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }) });
       if (response.status === 429) throw new RpcError(RPC_RATE_LIMITED);
+      if (response.status >= 500) throw new RpcError("RpcTransient");
       const body = await response.json();
       if (isRateLimited(body.error)) throw new RpcError(RPC_RATE_LIMITED);
       // State can change between simulation and sendTransaction's preflight.
       // Preserve only the parsed program code, never arbitrary RPC error text.
       const code = this.rpcErrorName(body.error);
       if (code) throw new ProgramError(code);
+      if (isBlockhashNotFound(body.error)) throw new RpcError("BlockhashNotFound");
+      if (isTransientRpcError(body.error)) throw new RpcError("RpcTransient");
       if (!response.ok || body.error || !("result" in body)) throw new Error();
       return body.result;
     } catch (error) {
-      if (error instanceof ProgramError) throw error;
+      if (error instanceof ProgramError || error instanceof RpcError) throw error;
       if (this.deployment.environment === "localnet") throw new ClientError("RpcError");
       throw new RpcError(isRateLimited(error) ? RPC_RATE_LIMITED : "RpcError");
     }

@@ -11,9 +11,11 @@ import idl from "../../../artifacts/idl/aegis.json";
 import { AEGIS_PROGRAM_ID, deriveSwapAccounts, deriveVaultAuthorityPda, deriveVaultPda } from "./addresses";
 import { ChainReader } from "./chain-reader";
 import { isU64 } from "./amounts";
-import { ClientError, RpcError, RPC_RATE_LIMITED, WALLET_REJECTED, isRateLimited, isWalletRejected, failure, transactionErrorName } from "./errors";
+import { ClientError, RpcError, RPC_RATE_LIMITED, WALLET_REJECTED, isRateLimited, isWalletRejected, isTransientRpcError, failure, transactionErrorName } from "./errors";
 import type { CreateVaultParams, TxResult } from "./types";
 import { WalletTransaction, type WalletSigner } from "./wallet-transaction";
+import { retryRpc } from "./retry";
+import { sendSignedTransaction, type TransactionStatus } from "./transaction-retry";
 import { validateWalletMessage } from "./wallet-validation";
 import { debugWalletFailure, walletErrorDetail } from "./wallet-diagnostics";
 import { isNoDevnetSol, NO_DEVNET_SOL, walletTransactionErrorName } from "./wallet-errors";
@@ -30,6 +32,8 @@ function u64(value: bigint) {
 
 /** Owner operations, with instructions built locally and signing delegated to a wallet. */
 export class WalletAegisClient extends ChainReader {
+  onRetry?: () => void;
+  protected override onRpcRetry(): void { this.onRetry?.(); }
   protected override rpcErrorName(error: unknown): string | undefined {
     const name = super.rpcErrorName(error);
     return this.deployment.environment === "devnet" && (isNoDevnetSol(error) || isNoDevnetSol(name)) ? NO_DEVNET_SOL : name;
@@ -119,13 +123,19 @@ export class WalletAegisClient extends ChainReader {
     let signature: string | undefined;
     let step = "build";
     try {
-      const instructions = await build();
+      const instructions = await retryRpc(build, this.onRetry);
       step = "getLatestBlockhash";
-      const { value: lifetime } = await this.rpc<{ value: { blockhash: string; lastValidBlockHeight: number } }>("getLatestBlockhash", [{ commitment: "confirmed" }]);
+      const { value: lifetime } = await retryRpc(() => this.rpc<{ value: { blockhash: string; lastValidBlockHeight: number } }>("getLatestBlockhash", [{ commitment: "confirmed" }]), this.onRetry);
       const transaction = new WalletTransaction(MessageV0.compile({ payerKey: owner.publicKey, recentBlockhash: lifetime.blockhash, instructions }));
       const expectedMessage = Buffer.from(transaction.message.serialize());
       step = "simulateTransaction";
-      const { value: simulation } = await this.rpc<{ value: { err: unknown; logs?: string[] } }>("simulateTransaction", [Buffer.from(transaction.serialize()).toString("base64"), { encoding: "base64", commitment: "confirmed", sigVerify: false }]);
+      const simulation = await retryRpc(async () => {
+        const { value } = await this.rpc<{ value: { err: unknown; logs?: string[] } }>("simulateTransaction", [Buffer.from(transaction.serialize()).toString("base64"), {
+          encoding: "base64", commitment: "confirmed", sigVerify: false, replaceRecentBlockhash: true,
+        }]);
+        if (isTransientRpcError(value.err)) throw new RpcError(String(value.err));
+        return value;
+      }, this.onRetry);
       if (simulation.err) {
         const error = this.transactionErrorName(simulation.err, simulation.logs);
         debugWalletFailure(step, "SimulationFailed", error);
@@ -175,25 +185,23 @@ export class WalletAegisClient extends ChainReader {
       }
       signature = encodeSignature(ownerSignature);
       step = "sendTransaction";
-      const returned = await this.rpc<string>("sendTransaction", [submitted.toString("base64"), { encoding: "base64", skipPreflight: false, preflightCommitment: "confirmed", maxRetries: 3 }]);
-      if (returned !== signature) throw new ClientError("RpcError");
-      for (let attempt = 0; attempt < 120; attempt++) {
-        step = "getSignatureStatuses";
-        const { value: [status] } = await this.rpc<{ value: ({ err: unknown; confirmationStatus: string } | null)[] }>("getSignatureStatuses", [[signature], { searchTransactionHistory: true }]);
-        if (status && ["confirmed", "finalized"].includes(status.confirmationStatus)) {
-          if (status.err) {
-            const landed = await this.getTransaction(signature).catch(() => null);
-            const error = this.transactionErrorName(status.err, landed?.meta?.logMessages);
-            debugWalletFailure(step, "TransactionFailed", error);
-            return { ok: false, signature, origin: "program", error };
-          }
-          return { ok: true, signature };
-        }
-        step = "getBlockHeight";
-        if (await this.rpc<number>("getBlockHeight", [{ commitment: "confirmed" }]) > lifetime.lastValidBlockHeight) throw new ClientError("TransactionExpired");
-        await new Promise((resolve) => setTimeout(resolve, 500));
+      const confirmation = await sendSignedTransaction({
+        send: async () => {
+          const returned = await this.rpc<string>("sendTransaction", [submitted.toString("base64"), {
+            encoding: "base64", skipPreflight: false, preflightCommitment: "confirmed", maxRetries: 3,
+          }]);
+          if (returned !== signature) throw new RpcError("RpcError");
+        },
+        status: async () => (await this.rpc<{ value: TransactionStatus[] }>("getSignatureStatuses", [[signature], { searchTransactionHistory: true }])).value[0],
+        height: (commitment) => this.rpc<number>("getBlockHeight", [{ commitment }]),
+      }, lifetime.lastValidBlockHeight, { onRetry: this.onRetry });
+      if (confirmation.err) {
+        const landed = await this.getTransaction(signature).catch(() => null);
+        const error = this.transactionErrorName(confirmation.err, landed?.meta?.logMessages);
+        debugWalletFailure("getSignatureStatuses", "TransactionFailed", error);
+        return { ok: false, signature, origin: "program", error };
       }
-      throw new ClientError("ConfirmationTimedOut");
+      return { ok: true, signature };
     } catch (error) {
       const result = failure(this.deployment.environment === "devnet" && isNoDevnetSol(error)
         ? new ClientError(NO_DEVNET_SOL) : error, signature);

@@ -5,13 +5,15 @@ import {
   createTransferCheckedInstruction, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID, unpackAccount,
 } from "@solana/spl-token";
 import {
-  Connection, PublicKey, SystemProgram, Transaction,
+  Connection, PublicKey, SystemProgram,
   type Signer, type TransactionInstruction,
 } from "@solana/web3.js";
 import type { Aegis } from "../../../artifacts/idl/aegis";
 import aegisIdl from "../../../artifacts/idl/aegis.json";
 import localnet from "../../../deployments/localnet.json";
 import { AEGIS_PROGRAM_ID, DEMO_DEX_PROGRAM_ID, deriveSwapAccounts, deriveVaultAuthorityPda, deriveVaultPda } from "./addresses";
+import { sendServerTransaction } from "./server-transaction";
+import { retryRpc } from "./retry";
 import { isU64 } from "./amounts";
 import { ClientError, failure, transactionErrorName } from "./errors";
 import { createDevnetConnection, DEVNET_RPC_URL, DEVNET_WS_URL } from "./devnet";
@@ -27,7 +29,7 @@ export interface AnchorClientOptions {
 }
 const commitment = "confirmed";
 // Node's ESM loader exposes Anchor's CommonJS exports through default; browser builds expose named exports.
-const { BN, Program, utils } = (Reflect.get(anchor, "default") ?? anchor) as typeof anchor;
+const { BN, Program } = (Reflect.get(anchor, "default") ?? anchor) as typeof anchor;
 const transactionRead = { commitment, maxSupportedTransactionVersion: 1 } as const;
 
 function requireLocalUrl(value: string, protocol: "http:" | "ws:") {
@@ -152,7 +154,7 @@ export class AnchorAegisClient implements AegisClient {
 
   async swap(agent: Signer, vault: PublicKey, amountInRaw: bigint): Promise<TxResult> {
     try {
-      const state = await this.readVault(vault);
+      const state = await retryRpc(() => this.readVault(vault));
       return this.swapRaw(agent, {
         vault, vaultAuthority: deriveVaultAuthorityPda(vault)[0], inputVault: state.inputVault, outputVault: state.outputVault,
         pool: this.pool, poolAuthority: this.poolAuthority, inputReserve: this.inputReserve, outputReserve: this.outputReserve,
@@ -194,23 +196,8 @@ export class AnchorAegisClient implements AegisClient {
   }
 
   private async send(signer: Signer, build: () => Promise<TransactionInstruction[]>): Promise<TxResult> {
-    let signature: string | undefined;
-    try {
-      const instructions = await build();
-      const lifetime = await this.connection.getLatestBlockhash(commitment);
-      const transaction = new Transaction({ feePayer: signer.publicKey, ...lifetime }).add(...instructions);
-      try { transaction.sign(signer); } catch { throw new ClientError("SigningFailed"); }
-      signature = utils.bytes.bs58.encode(transaction.signature!);
-      // Deliberately land rejected demo transactions so RPC history can show the program's rejection.
-      await this.connection.sendRawTransaction(transaction.serialize(), { skipPreflight: true, maxRetries: 3 });
-      const confirmation = await this.connection.confirmTransaction({ signature, ...lifetime }, commitment);
-      if (confirmation.value.err) {
-        // A log lookup outage must not turn a confirmed rejection into a success or an RPC failure.
-        const transaction = await this.connection.getTransaction(signature, transactionRead).catch(() => null);
-        return { ok: false, signature, origin: "program", error: transactionErrorName(confirmation.value.err, transaction?.meta?.logMessages) };
-      }
-      return { ok: true, signature };
-    } catch (error) { return failure(error, signature); }
+    // Rejected demo trades still land so activity can show the program's decision.
+    return sendServerTransaction(this.connection, signer, build, { skipPreflight: true });
   }
 
   async listActivity(vault: PublicKey): Promise<Activity[]> {

@@ -1,6 +1,7 @@
+import { sendServerTransaction } from "../../../packages/sdk/src/server-transaction";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { Keypair, PublicKey, Transaction, sendAndConfirmTransaction } from "@solana/web3.js";
+import { Keypair, PublicKey, Transaction } from "@solana/web3.js";
 import { createAssociatedTokenAccountIdempotentInstruction, createMintToCheckedInstruction, getAssociatedTokenAddressSync, getMint } from "@solana/spl-token";
 import type { Connect, Plugin } from "vite";
 import { AnchorAegisClient, type ChainDeployment } from "../../../packages/sdk/src/index";
@@ -59,7 +60,9 @@ export function faucetApiMiddleware(root: string, environment: "localnet" | "dev
         createAssociatedTokenAccountIdempotentInstruction(authority.publicKey, destination, recipient, mint),
         createMintToCheckedInstruction(mint, destination, authority.publicKey, 1_000_000_000n, 6),
       );
-      const signature = await sendAndConfirmTransaction(client.connection, transaction, [authority], { commitment: "confirmed" });
+      const result = await sendServerTransaction(client.connection, authority, async () => transaction.instructions);
+      if (!result.ok) throw new ApiError(503, "Faucet request could not be confirmed. Check your token balance before retrying later.");
+      const signature = result.signature;
       json(response, 200, { signature, amountRaw: "1000000000" });
     })().catch((error: unknown) => {
       if (error instanceof ApiError && error.retryAfter !== undefined) response.setHeader("retry-after", String(error.retryAfter));

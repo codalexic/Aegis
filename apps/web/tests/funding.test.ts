@@ -34,6 +34,12 @@ it.each(["fund", "faucet", "withdraw", "partial failure"])("keeps %s pending unt
   expect(finished).toHaveBeenCalledExactlyOnceWith(kind === "partial failure" ? failure : "confirmed");
 });
 
+it("does not turn a confirmed funding result into a failure when balance refresh is unavailable", async () => {
+  await expect(withWalletBalanceRefresh(async () => "confirmed", async () => { throw new Error("network timeout"); })).resolves.toBe("confirmed");
+  const original = new Error("InsufficientFunds");
+  await expect(withWalletBalanceRefresh(async () => { throw original; }, async () => { throw new Error("network timeout"); })).rejects.toBe(original);
+});
+
 describe("Step 2 funding action", () => {
   function render(balance: bigint | null, options: { hasFaucet?: boolean; hasVault?: boolean; locked?: boolean } = {}) {
     return renderToStaticMarkup(createElement(FundingStep, {

@@ -12,13 +12,6 @@ import { isWalletDisconnected, walletRequestError } from "./wallet-lifecycle";
 // and confirmation remain entirely in the SDK.
 class ProgressWalletClient extends WalletAegisClient {
   onProgress?: ProgressCallback;
-  blockhashNotFound = false;
-  protected override rpcErrorName(error: unknown): string | undefined {
-    const value = error as { message?: unknown; data?: { err?: unknown } } | undefined;
-    if (this.deployment.environment === "devnet" &&
-      /blockhash[\s_-]*not[\s_-]*found/i.test(`${value?.message ?? ""} ${value?.data?.err ?? ""}`)) this.blockhashNotFound = true;
-    return super.rpcErrorName(error);
-  }
   override rpc<T>(method: string, params: unknown[]): Promise<T> {
     if (method === "sendTransaction") this.onProgress?.("Confirming on Solana…");
     return super.rpc<T>(method, params);
@@ -66,16 +59,15 @@ export async function connectWalletDashboard(environment: "localnet" | "devnet",
     if (balance !== null && balance < need) return { ok: false, error: NO_DEVNET_SOL, origin: "client" };
     client.onProgress = onProgress;
     clearSigningFailure();
-    client.blockhashNotFound = false;
+    client.onRetry = () => onProgress?.("Network busy, retrying…");
     try {
       const result = await action();
       if (result.ok) onProgress?.("Done");
       if (!result.ok && signingFailure.error) return { ...result, error: signingFailure.error.message, detail: signingFailure.error.detail };
-      if (!result.ok && client.blockhashNotFound) return { ...result, error: "BlockhashNotFound" };
       return result;
     } catch (error) {
       throw signingFailure.error ?? error;
-    } finally { client.onProgress = undefined; clearSigningFailure(); }
+    } finally { client.onProgress = undefined; client.onRetry = undefined; clearSigningFailure(); }
   };
   // Conservative estimates: creation includes vault + token-account rent.
   const create = (onProgress?: ProgressCallback) => withSol(10_000_000n, async () => {

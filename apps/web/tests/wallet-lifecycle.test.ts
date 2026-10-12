@@ -282,16 +282,16 @@ it.each([
   await click("Connect wallet");
   expect(alerts()).toHaveLength(0);
   expect(container.querySelector(".notice.info p")?.textContent).toBe(WALLET_CANCELLED);
-  expect(container.querySelector(".notice-code")?.textContent).toBe(error.message);
+  expect(container.querySelector(".notice-code")).toBeNull();
 });
 
-it("shows Devnet guidance and muted Phantom detail for a generic connect failure", async () => {
+it("shows Devnet guidance without raw Phantom details for a generic connect failure", async () => {
   phantom.connect.mockRejectedValueOnce(new Error("Unexpected connection failure"));
   await mount();
   await click("Connect wallet");
   expect(alerts()).toHaveLength(1);
   expect(container.querySelector('[role="alert"] p')?.textContent).toBe(WALLET_REQUEST_FAILED);
-  expect(container.querySelector(".notice-code")?.textContent).toBe("Unexpected connection failure");
+  expect(container.querySelector(".notice-code")).toBeNull();
 });
 
 it("offers installation with neutral guidance when Phantom is not detected on desktop", async () => {
@@ -398,7 +398,7 @@ it("hides the canonical notice on the configured origin", async () => {
   expect(container.querySelector(".canonical-site-notice")).toBeNull();
 });
 
-it.each(["Unexpected signing failure", "Transaction simulation failed: AccountNotFound", "Blockhash not found"])("keeps signing failure guidance and detail for %s", async (message) => {
+it.each(["Unexpected signing failure", "Transaction simulation failed: AccountNotFound", "Blockhash not found"])("keeps plain signing failure guidance for %s", async (message) => {
   vi.spyOn(WalletAegisClient.prototype, "revoke").mockImplementation(async (wallet) => {
     // The SDK can normalize missing-account errors to NoDevnetSol. The UI
     // must retain the wallet's message after the devnet simulation passed.
@@ -411,7 +411,7 @@ it.each(["Unexpected signing failure", "Transaction simulation failed: AccountNo
   await click("Revoke agent");
   expect(alerts()).toHaveLength(1);
   expect(container.querySelector('[role="alert"] p')?.textContent).toBe(WALLET_REQUEST_FAILED);
-  expect(container.querySelector(".notice-code")?.textContent).toBe(message);
+  expect(container.querySelector(".notice-code")).toBeNull();
 });
 
 it.each(["WalletDisconnectedError", "WalletNotConnectedError"])("ignores background %s while still mounted", async (name) => {
@@ -449,7 +449,7 @@ it.each(["resolve", "reject"])("reports explicit sign rejection, but drops a sta
   expect(container.textContent).toContain(WALLET_CANCELLED);
   expect(alerts()).toHaveLength(0);
   expect(container.querySelectorAll(".notice.info")).toHaveLength(1);
-  expect(container.querySelector(".notice-code")?.textContent).toBe("User rejected the request");
+  expect(container.querySelector(".notice-code")).toBeNull();
   const late = deferred<unknown>();
   phantom.signTransaction.mockReturnValueOnce(late.promise);
   await click("Revoke agent");

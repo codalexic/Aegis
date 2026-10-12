@@ -11,6 +11,22 @@ export const WALLET_REJECTED = "WalletRejected";
 export class RpcError extends Error {}
 export class ProgramError extends Error {}
 
+export function isBlockhashNotFound(error: unknown): boolean {
+  return matchesError(error, (value) => /blockhash[\s_-]*not[\s_-]*found/i.test(String(value.message ?? "")));
+}
+
+/** Transport/lifetime failures only. Never retry a policy or token-program rejection. */
+export function isTransientRpcError(error: unknown): boolean {
+  if (error instanceof ProgramError || isWalletRejected(error)) return false;
+  if (isRateLimited(error) || isBlockhashNotFound(error)) return true;
+  return matchesError(error, (value) => {
+    const code = Number(value.status ?? value.code);
+    return (code >= 500 && code <= 599) || [-32603, -32004, -32005, -32016].includes(code) ||
+      /\b5\d\d\b|RpcError|RpcTransient|ConfirmationTimedOut|TransactionExpired|block.?height.?exceeded|block height.*exceed|node.*(?:behind|unhealthy|lag)|minimum context slot|\btimeout\b|timed out|TimeoutError|AbortError|fetch failed|failed to fetch|network|socket|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|service unavailable|already.?processed/i
+        .test(`${value.name ?? ""} ${value.message ?? ""} ${value.code ?? ""}`);
+  });
+}
+
 /** Wallet adapters may wrap the provider error in `cause` or `error`. */
 export function isRateLimited(error: unknown): boolean {
   return matchesError(error, (value) => value.status === 429 || value.code === 429 ||
@@ -25,7 +41,8 @@ export function isWalletRejected(error: unknown): boolean {
 function matchesError(error: unknown, test: (value: Record<string, unknown>) => boolean, depth = 0): boolean {
   if (depth > 4 || error == null) return false;
   const value = typeof error === "object" ? error as Record<string, unknown> : { message: error };
-  return test(value) || matchesError(value.cause, test, depth + 1) || matchesError(value.error, test, depth + 1);
+  return test(value) || matchesError(value.cause, test, depth + 1) || matchesError(value.error, test, depth + 1) ||
+    matchesError(value.data, test, depth + 1) || matchesError(value.err, test, depth + 1);
 }
 
 const errors = new Map([aegisIdl, dexIdl].map((idl) => [
@@ -79,7 +96,7 @@ export function transactionErrorName(error: unknown, logs?: readonly string[] | 
 export function failure(error: unknown, signature?: string): Extract<TxResult, { ok: false }> {
   if (error instanceof ProgramError) return { ok: false, error: error.message, origin: "program", ...(signature && { signature }) };
   if (isRateLimited(error)) return { ok: false, error: RPC_RATE_LIMITED, origin: "rpc", ...(signature && { signature }) };
-  if (error instanceof RpcError) return { ok: false, error: "RpcError", origin: "rpc", ...(signature && { signature }) };
+  if (error instanceof RpcError) return { ok: false, error: ["ConfirmationTimedOut", "BlockhashNotFound", "RpcTransient"].includes(error.message) ? error.message : "RpcError", origin: "rpc", ...(signature && { signature }) };
   if (error instanceof ClientError) return { ok: false, error: error.message, origin: "client", ...(error.detail && { detail: error.detail }), ...(signature && { signature }) };
   const logs = error && typeof error === "object" && "logs" in error ? error.logs : undefined;
   const name = Array.isArray(logs) && logs.every((log) => typeof log === "string") ? programErrorName(logs) : undefined;

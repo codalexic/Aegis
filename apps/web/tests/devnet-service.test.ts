@@ -3,12 +3,12 @@ import type { IncomingMessage } from "node:http";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getMint, TOKEN_PROGRAM_ID } from "@solana/spl-token";
-import { sendAndConfirmTransaction } from "@solana/web3.js";
+import { sendServerTransaction } from "../../../packages/sdk/src/server-transaction";
 import { environmentSigner, checkFaucetHistory, devnetClient, mintTestUsdc, deployment } from "../server/devnet-service";
 import { IpLimiter } from "../server/public-limits";
 import { readBody } from "../server/http";
 
-vi.mock("@solana/web3.js", async (original) => ({ ...await original<object>(), sendAndConfirmTransaction: vi.fn() }));
+vi.mock("../../../packages/sdk/src/server-transaction", () => ({ sendServerTransaction: vi.fn() }));
 vi.mock("@solana/spl-token", async (original) => ({ ...await original<object>(), getMint: vi.fn() }));
 afterEach(() => { vi.restoreAllMocks(); vi.clearAllMocks(); });
 
@@ -35,12 +35,13 @@ describe("faucet transaction", () => {
     vi.mocked(getMint).mockResolvedValue({ decimals: 6, mintAuthority: authority.publicKey } as Awaited<ReturnType<typeof getMint>>);
     const client = devnetClient();
     vi.spyOn(Object.getPrototypeOf(client.connection), "getSignaturesForAddress").mockResolvedValue([]);
-    vi.mocked(sendAndConfirmTransaction).mockResolvedValue("test-only-signature");
+    vi.mocked(sendServerTransaction).mockResolvedValue({ ok: true, signature: "test-only-signature" });
     const recipient = Keypair.generate().publicKey;
     const result = await mintTestUsdc({ AEGIS_FAUCET_SECRET: JSON.stringify(Array(64).fill(1)) }, recipient);
     expect(result).toEqual({ signature: "test-only-signature", amountRaw: "1000000000" });
-    const [, transaction, signers] = vi.mocked(sendAndConfirmTransaction).mock.calls[0];
-    expect(signers).toEqual([authority]);
+    const [, signer, build] = vi.mocked(sendServerTransaction).mock.calls[0];
+    const transaction = { instructions: await build() };
+    expect(signer).toBe(authority);
     expect(authority.publicKey.toBase58()).not.toBe(deployment.owner);
     expect(transaction.instructions).toHaveLength(2);
     expect(transaction.instructions[0].keys[0].pubkey.equals(authority.publicKey)).toBe(true);
@@ -61,13 +62,13 @@ describe("faucet transaction", () => {
     vi.spyOn(Keypair, "fromSecretKey").mockReturnValue({ publicKey: new PublicKey(deployment.faucet) } as Keypair);
     vi.mocked(getMint).mockResolvedValue(state as Awaited<ReturnType<typeof getMint>>);
     await expect(mintTestUsdc({ AEGIS_FAUCET_SECRET: JSON.stringify(Array(64).fill(1)) }, Keypair.generate().publicKey)).rejects.toThrow("mint configuration mismatch");
-    expect(sendAndConfirmTransaction).not.toHaveBeenCalled();
+    expect(sendServerTransaction).not.toHaveBeenCalled();
   });
   it.each([deployment.owner, Keypair.generate().publicKey.toBase58()])("rejects a secret for %s before RPC or sending", async (publicKey) => {
     vi.spyOn(Keypair, "fromSecretKey").mockReturnValue({ publicKey: new PublicKey(publicKey) } as Keypair);
     await expect(mintTestUsdc({ AEGIS_FAUCET_SECRET: JSON.stringify(Array(64).fill(1)) }, Keypair.generate().publicKey)).rejects.toThrow("AEGIS_FAUCET_SECRET is missing or does not match");
     expect(getMint).not.toHaveBeenCalled();
-    expect(sendAndConfirmTransaction).not.toHaveBeenCalled();
+    expect(sendServerTransaction).not.toHaveBeenCalled();
   });
   it.each([undefined, deployment.owner])("rejects a missing or deployer faucet in the manifest", async (faucet) => {
     const original = deployment.faucet;
@@ -76,7 +77,7 @@ describe("faucet transaction", () => {
       await expect(mintTestUsdc({}, Keypair.generate().publicKey)).rejects.toThrow("dedicated faucet");
     } finally { deployment.faucet = original; }
     expect(getMint).not.toHaveBeenCalled();
-    expect(sendAndConfirmTransaction).not.toHaveBeenCalled();
+    expect(sendServerTransaction).not.toHaveBeenCalled();
   });
 });
 

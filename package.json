@@ -8,6 +8,7 @@
   },
   "scripts": {
     "build": "anchor build",
+    "test": "vitest run tests/program packages/sdk/tests scripts/agent/tests scripts/devnet/tests/support.test.ts scripts/stage/tests && pnpm --filter web test",
     "build:vercel": "node scripts/vercel/build.mjs",
     "test:vercel": "pnpm build:vercel && node scripts/vercel/smoke.mjs",
     "idl:sync": "node scripts/idl-sync.mjs",

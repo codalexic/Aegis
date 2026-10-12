@@ -7,18 +7,23 @@ import deployment from "../../../deployments/localnet.json";
 import { DEVNET_RPC_URL, DEVNET_WS_URL } from "../../../packages/sdk/src/devnet";
 import { RPC_RATE_LIMITED, WALLET_REJECTED } from "../../../packages/sdk/src/errors";
 
-afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 const owner = Keypair.generate();
 const params = { vaultId: 9_007_199_254_740_993n, agent: new PublicKey(deployment.agent), maxTradeRaw: 50_000_000n, budgetRaw: 100_000_000n, expiryUnix: 1_900_000_000n };
 
 function fixture(environment: "devnet" | "localnet" = "devnet") {
   const client = new WalletAegisClient({ ...deployment, environment,
     ...(environment === "devnet" && { rpcUrl: DEVNET_RPC_URL, wsUrl: DEVNET_WS_URL }) });
+  const accepted = new Set<string>();
   const rpc = vi.spyOn(client, "rpc").mockImplementation(async (method, args) => {
     if (method === "getLatestBlockhash") return { value: { blockhash: PublicKey.default.toBase58(), lastValidBlockHeight: 100 } };
     if (method === "simulateTransaction") return { value: { err: null } };
-    if (method === "sendTransaction") return encodeSignature(VersionedTransaction.deserialize(Buffer.from(args[0] as string, "base64")).signatures[0]);
-    if (method === "getSignatureStatuses") return { value: [{ err: null, confirmationStatus: "confirmed" }] };
+    if (method === "sendTransaction") {
+      const signature = encodeSignature(VersionedTransaction.deserialize(Buffer.from(args[0] as string, "base64")).signatures[0]);
+      accepted.add(signature); return signature;
+    }
+    if (method === "getSignatureStatuses") return { value: (args[0] as string[]).map((signature) => accepted.has(signature) ? { err: null, confirmationStatus: "confirmed" } : null) };
+    if (method === "getBlockHeight") return 10;
     throw new Error(`Unexpected RPC ${method}`);
   });
   const sign = vi.fn<WalletSigner["signTransaction"]>(async (transaction) => {
@@ -192,13 +197,16 @@ describe("wallet-adapter owner signing", () => {
   });
 
   it.each(["getLatestBlockhash", "simulateTransaction", "sendTransaction", "getSignatureStatuses"])("never calls a 429 from %s SigningFailed", async (stage) => {
+    vi.useFakeTimers();
     const { client, rpc, wallet, sign } = fixture();
     const original = rpc.getMockImplementation()!;
     rpc.mockImplementation(async (method, params) => {
       if (method === stage) throw Object.assign(new Error("429 Too Many Requests: private provider context"), { status: 429 });
       return original(method, params);
     });
-    expect(await client.createVault(wallet, params)).toMatchObject({ ok: false, origin: "rpc", error: RPC_RATE_LIMITED });
+    const pending = client.createVault(wallet, params);
+    await vi.runAllTimersAsync();
+    expect(await pending).toMatchObject({ ok: false, origin: "rpc", error: ["getLatestBlockhash", "simulateTransaction"].includes(stage) ? RPC_RATE_LIMITED : "ConfirmationTimedOut" });
     expect(RPC_RATE_LIMITED).toBe("RpcRateLimited");
     expect(sign).toHaveBeenCalledTimes(["getLatestBlockhash", "simulateTransaction"].includes(stage) ? 0 : 1);
   });

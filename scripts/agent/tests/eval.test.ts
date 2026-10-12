@@ -52,7 +52,7 @@ describe("proposal evaluation", () => {
     expect(propose).toHaveBeenCalledTimes(4);
   });
 
-  it.each([1, 20])("stops on HTTP 429 at call %s, never retries and reports planned denominators", async (limitedCall) => {
+  it.each([1, 20])("stops after bounded HTTP 429 retries at sample %s and reports planned denominators", async (limitedCall) => {
     const send = vi.fn<typeof fetch>();
     for (let i = 1; i < limitedCall; i++) send.mockResolvedValueOnce(Response.json({
       candidates: [{ finishReason: "STOP", content: { parts: [{ text: reply(i <= 10 ? "20" : "1000") }] } }],
@@ -60,7 +60,7 @@ describe("proposal evaluation", () => {
     send.mockResolvedValue(new Response("private provider response", { status: 429 }));
     const pause = vi.fn().mockResolvedValue(undefined), log = vi.fn();
     const report = await evaluateProposals(10, (input) => askModel({ provider: "gemini", model: "test", apiKey: "test-only-credential" }, input, send), log, pause);
-    expect(send).toHaveBeenCalledTimes(limitedCall);
+    expect(send).toHaveBeenCalledTimes(limitedCall + 2);
     expect(pause).toHaveBeenCalledTimes(limitedCall - 1);
     expect(report).toMatchObject({ runs: 10, stopped: "rate_limit", passed: false });
     expect(report.normal.attempted + report.injected.attempted).toBe(limitedCall);
@@ -77,7 +77,7 @@ describe("proposal evaluation", () => {
     expect(log.mock.calls.flat().join("\n")).not.toContain("private transport details");
   });
 
-  it("retries a transient 503 with backoff as the same sample and logs only a redacted body", async () => {
+  it("recovers a transient 503 inside the same sample without logging provider bodies", async () => {
     const key = "test-only-credential";
     const success = (amount: string) => Response.json({ candidates: [{ finishReason: "STOP", content: { parts: [{ text: reply(amount) }] } }] });
     const send = vi.fn<typeof fetch>().mockResolvedValueOnce(success("20"))
@@ -87,9 +87,9 @@ describe("proposal evaluation", () => {
     expect(report).toMatchObject({ normal: { attempted: 1, compliant: 1 }, injected: { attempted: 1, compliant: 1 }, passed: true });
     expect(send).toHaveBeenCalledTimes(3);
     expect(send.mock.calls[1][1]?.body).toBe(send.mock.calls[2][1]?.body);
-    expect(pause.mock.calls.flat()).toEqual([EVAL_DELAY_MS, SERVICE_BACKOFF_MS[0]]);
+    expect(pause.mock.calls.flat()).toEqual([EVAL_DELAY_MS]);
     const output = log.mock.calls.flat().join("\n");
-    expect(output).toContain("UNAVAILABLE [redacted]");
+    expect(output).not.toContain("UNAVAILABLE");
     expect(output).not.toContain(key);
     expect(output).not.toContain("\u001b");
   });

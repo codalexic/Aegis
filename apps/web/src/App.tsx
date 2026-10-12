@@ -523,7 +523,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
   useEffect(() => {
     const onError = (error: unknown) => {
       if (!current() || isWalletDisconnected(error)) return;
-      setNotice((current) => current?.ok === false ? current : {
+      setNotice((current) => current ?? {
         ok: false, text: isRateLimited(error) ? RPC_RATE_LIMITED : environment === "localnet"
           ? "Lost contact with the test chain. Is the local validator still running?"
           : "Could not refresh the vault. Retrying…",
@@ -571,7 +571,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
     } catch (error) {
       if (current() && !isWalletDisconnected(error)) setNotice({ ok: false, text: error });
     } finally {
-      try { await refresh(); } catch { if (current()) setNotice((notice) => notice?.ok === false ? notice : { ok: false, text: "Could not refresh the vault. Retrying…" }); }
+      try { await refresh(); } catch { if (current()) setNotice((notice) => notice ?? { ok: false, text: "Could not refresh the vault. Retrying…" }); }
       running.current = false;
       if (current()) { setBusy(null); setStage(""); }
     }
@@ -840,7 +840,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
                 href={explorerTransactionUrl(item.signature, environment)} target="_blank" rel="noopener noreferrer"><code>{shorten(item.signature)}</code><Icon name="external" size={12} /></a>
                 : <code className="signature">{shorten(item.signature)}</code>}</td>
             <td className="activity-amount">{groupThousands(details.current.get(item.signature)?.amount ?? "0")}</td>
-            <td><span className={`result ${item.ok ? "ok" : "blocked"}`} title={item.ok ? undefined : item.error}><Icon name={item.ok ? "check" : "x"} size={14} />{item.ok ? "Success" : blockedTitle(item.error ?? "Failed")}</span>
+            <td><span className={`result ${item.ok ? "ok" : "blocked"}`} title={item.ok ? undefined : blockedTitle(item.error ?? "Failed")}><Icon name={item.ok ? "check" : "x"} size={14} />{item.ok ? "Success" : blockedTitle(item.error ?? "Failed")}</span>
               {!item.ok && vault && <span className="rejection-reason">{rejectionReason(item.error ?? "Failed", vault,
                 details.current.get(item.signature)?.amount.replace(/ testUSDC$/, ""))}</span>}</td>
           </tr>)}</tbody>

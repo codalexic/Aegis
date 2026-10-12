@@ -3,7 +3,7 @@ import type { VaultState } from "@aegis/sdk";
 import { rawAmountToUi } from "../../../packages/sdk/src/amounts";
 import type { Step } from "../../../scripts/agent/run";
 import { Icon, type IconName } from "./icons";
-import { PROGRAM_ERROR_MESSAGES } from "./errors";
+import { describeError, PROGRAM_ERROR_MESSAGES } from "./errors";
 import { Notice } from "./Notice";
 import { ProgressButton } from "./Progress";
 
@@ -121,13 +121,13 @@ export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, en
         ? "Demo request limit reached. Wait a minute before retrying."
         : "The server is temporarily unavailable. Try again later." }));
       if (!response.ok) {
-        setError(typeof value.error === "string" ? value.error : "Agent request failed. Try again.");
+        setError(describeError(typeof value.error === "string" ? value.error : "Agent request failed. Try again.").text);
       } else if (Array.isArray(value.steps)) setSteps(value.steps);
       else setError("The server returned an unreadable result. Try again.");
     } catch { setError("Could not reach the agent. Is the dashboard server running?"); }
     finally {
       setProgress("Refreshing vault…");
-      try { await onComplete(); } catch { setError("Could not refresh the vault. Try again in a moment."); }
+      try { await onComplete(); } catch { /* Confirmed outcomes remain authoritative during read outages. */ }
       running.current = false; setBusy(false); onBusy(false);
     }
   }
@@ -167,6 +167,7 @@ export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, en
     </ul>
     <div className="agent-result-area" aria-busy={busy}>
       {reply && <p><span className="status">{reply.source === "live" ? "AI decided" : reply.source === "scripted" ? "Recorded reply" : "Fixed hacker request · No AI"}</span>{reply.source === "live" && model && <> {model}</>}</p>}
+      {steps.some((step) => step.type === "notice" && step.code === "live_fallback") && <p>Live AI was busy, so a recorded reply was used.</p>}
       {busy && <div className="agent-running">
         <div><strong>{progress}</strong><p>{progress === "Refreshing vault…" ? "Updating balances and activity."
           : "Waiting for the agent’s result. Solana transactions can take 5–15 seconds; live AI adds a few more seconds."}</p></div>

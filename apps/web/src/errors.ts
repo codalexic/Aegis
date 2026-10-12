@@ -1,6 +1,6 @@
-import { isRateLimited, isWalletRejected } from "../../../packages/sdk/src/errors";
+import { isRateLimited, isWalletRejected, isTransientRpcError } from "../../../packages/sdk/src/errors";
 import { isNoDevnetSol } from "../../../packages/sdk/src/wallet-errors";
-import { DEVNET_GUIDANCE, WALLET_CANCELLED, WALLET_REQUEST_FAILED } from "./wallet-lifecycle";
+import { WALLET_CANCELLED, WALLET_REQUEST_FAILED } from "./wallet-lifecycle";
 
 export const DEVNET_FAUCET_URL = "https://faucet.solana.com";
 export const NO_DEVNET_SOL_MESSAGE = "Your wallet has no devnet SOL for fees. Get free devnet SOL, then try again.";
@@ -24,6 +24,8 @@ const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   ...PROGRAM_ERROR_MESSAGES,
   RpcError: RPC_BUSY,
   RpcRateLimited: RPC_BUSY,
+  RpcTransient: RPC_BUSY,
+  BlockhashNotFound: RPC_BUSY,
   RateLimited: "Too many requests. Wait a few seconds and try again.",
   WalletRejected: WALLET_REJECTED,
   UserRejected: WALLET_REJECTED,
@@ -44,7 +46,7 @@ const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   DeploymentClusterMismatch: "The RPC is connected to the wrong Solana cluster. Use Solana devnet and try again.",
   InvalidDevnetRpcUrl: "The devnet RPC address is invalid. Contact the demo operator.",
   InvalidTransaction: "The transaction could not be read. Refresh the page and try again.",
-  TransactionExpired: "The transaction expired before confirmation. Check your balance and activity before retrying.",
+  TransactionExpired: "The transaction expired. Please try the action again.",
   ConfirmationTimedOut: "Confirmation is taking too long. Check your balance and activity before retrying.",
   TransactionFailed: "The transaction failed. Check your balance and try again.",
 };
@@ -63,29 +65,26 @@ export function describeError(error: unknown): ErrorDescription {
     return { ...detail, text: `Vault created, but funding failed. ${detail.text} Use Fund 1,000 to retry.` };
   }
 
-  const walletDetail = typeof value?.detail === "string" ? value.detail : undefined;
   if (message === WALLET_CANCELLED || message === "UserRejected" || isWalletRejected(error)) {
-    return { text: WALLET_CANCELLED, tone: "info", ...(walletDetail && { detail: walletDetail }) };
+    return { text: WALLET_CANCELLED, tone: "info" };
   }
-  if (message === WALLET_REQUEST_FAILED) return { text: message, ...(walletDetail && { detail: walletDetail }) };
-  if (/blockhash[\s_-]*not[\s_-]*found/i.test(`${message} ${walletDetail ?? ""}`)) {
-    return { text: `The transaction’s blockhash could not be found. ${DEVNET_GUIDANCE}`, ...(walletDetail && { detail: walletDetail }) };
-  }
+  if (message === WALLET_REQUEST_FAILED) return { text: message };
 
   if (isNoDevnetSol(error)) return { text: NO_DEVNET_SOL_MESSAGE, faucet: true };
 
   for (const code of [value?.code, message]) {
     if (typeof code === "string" && Object.hasOwn(ERROR_MESSAGES, code)) return {
       text: ERROR_MESSAGES[code],
-      ...(["WalletSigningError", "WalletModifiedTransaction"].includes(code) && typeof value?.detail === "string" && { detail: value.detail }),
     };
   }
   if (isWalletRejected(error)) return { text: WALLET_REJECTED };
   if (isRateLimited(error)) return { text: RPC_BUSY };
 
-  // Keep existing actionable prose (for example, the faucet's ten-minute cooldown).
-  // Unrecognised identifiers belong in the small diagnostic line, never the headline.
-  const code = value?.code ?? (/^[\w.:-]+(?:\([^\s]*\))?$/.test(message) ? message : undefined);
-  if (typeof code === "string" || typeof code === "number") return { text: FALLBACK, code: String(code) };
+  if (isTransientRpcError(error)) return { text: RPC_BUSY };
+  // Never render provider statuses, identifiers, stack traces or wallet diagnostics.
+  if (value?.code !== undefined || /\bHTTP\b|\b[45]\d\d\b|\b[A-Za-z]+(?:Error|Exception)\b|0x[\da-f]+|custom program|blockhash|\bcode\s*[:=]/i.test(message) ||
+      /\b(?:UNAVAILABLE|RESOURCE_EXHAUSTED|DEADLINE_EXCEEDED|ECONNRESET|ETIMEDOUT)\b/.test(message) ||
+      /\b\w*[a-z][A-Z]\w*\b|\b[A-Z]{2,}(?:_[A-Z0-9]+)+\b/.test(message.replace(/testUSDC|testSOL/g, "")) ||
+      /^[\w.:-]+(?:\([^\s]*\))?$/.test(message)) return { text: FALLBACK };
   return { text: message || FALLBACK };
 }

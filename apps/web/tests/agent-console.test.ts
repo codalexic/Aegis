@@ -11,7 +11,7 @@ vi.mock("react", async (importOriginal) => {
 });
 afterEach(() => vi.clearAllMocks());
 
-async function render(live: boolean, source?: "live" | "scripted" | "fixed", hasVault = true) {
+async function render(live: boolean, source?: "live" | "scripted" | "fixed", hasVault = true, fallback = false) {
   const connection = await connectDashboard("mock");
   const created = await connection.create();
   const vault = await connection.client.getVault(created.vault!);
@@ -20,6 +20,7 @@ async function render(live: boolean, source?: "live" | "scripted" | "fixed", has
     { type: "request", amountUsdc: "20", amountRaw: "20000000" },
     { type: "result", result: { ok: true, signature: "mock-1" } },
   ] : [];
+  if (fallback) steps.push({ type: "notice", code: "live_fallback", message: "Live AI was busy, so a recorded reply was used." });
   vi.mocked(useState).mockImplementationOnce(() => [live, vi.fn()])
     .mockImplementationOnce(() => ["test-model", vi.fn()])
     .mockImplementationOnce(() => [steps, vi.fn()]);
@@ -29,6 +30,11 @@ async function render(live: boolean, source?: "live" | "scripted" | "fixed", has
 }
 
 describe("agent scenario and reply copy", () => {
+  it("shows automatic fallback outside collapsed details without asking for a scripted retry", async () => {
+    const markup = await render(true, "scripted", true, true);
+    expect(markup.split('<details class="agent-details">')[0]).toContain("Live AI was busy, so a recorded reply was used.");
+    expect(markup).not.toContain("Retry scripted");
+  });
   it("explains what each scenario does and why the vault accepts or blocks it", async () => {
     const markup = await render(false);
     expect(markup).toContain("Swaps 20 testUSDC.</p>");

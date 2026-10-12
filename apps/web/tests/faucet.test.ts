@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import { readFile } from "node:fs/promises";
-import { Keypair, sendAndConfirmTransaction } from "@solana/web3.js";
+import { Keypair } from "@solana/web3.js";
+import { sendServerTransaction } from "../../../packages/sdk/src/server-transaction";
 import { getMint } from "@solana/spl-token";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FaucetLimiter, faucetApiMiddleware } from "../server/faucet-api";
@@ -8,7 +9,7 @@ import deployment from "../../../deployments/localnet.json";
 import devnet from "../../../deployments/devnet.json";
 
 vi.mock("node:fs/promises", () => ({ readFile: vi.fn(), writeFile: vi.fn(), rename: vi.fn() }));
-vi.mock("@solana/web3.js", async (original) => ({ ...await original<object>(), sendAndConfirmTransaction: vi.fn() }));
+vi.mock("../../../packages/sdk/src/server-transaction", () => ({ sendServerTransaction: vi.fn() }));
 vi.mock("@solana/spl-token", async (original) => ({ ...await original<object>(), getMint: vi.fn() }));
 afterEach(() => vi.clearAllMocks());
 
@@ -74,14 +75,14 @@ describe("faucet HTTP boundary", () => {
       throw new Error("Unexpected file read");
     });
     vi.mocked(getMint).mockResolvedValue({ decimals: 6, mintAuthority: kind === "wrong-authority" ? owner.publicKey : faucet.publicKey } as Awaited<ReturnType<typeof getMint>>);
-    vi.mocked(sendAndConfirmTransaction).mockResolvedValue("test-only-signature");
+    vi.mocked(sendServerTransaction).mockResolvedValue({ ok: true, signature: "test-only-signature" });
     const response = await fetch(`${url}/api/faucet`, { method: "POST", headers: { origin: url, "content-type": "application/json", "x-aegis-faucet": "devnet" }, body: JSON.stringify({ wallet: owner.publicKey.toBase58() }) });
     expect(readFile).not.toHaveBeenCalledWith("/unused/.keys/devnet-deployer.json", "utf8");
     expect(response.status).toBe(kind === "valid" ? 200 : 503);
     if (kind === "valid") {
-      expect(vi.mocked(sendAndConfirmTransaction).mock.calls[0][2].map(key => key.publicKey.toBase58())).toEqual([faucet.publicKey.toBase58()]);
+      expect([vi.mocked(sendServerTransaction).mock.calls[0][1].publicKey.toBase58()]).toEqual([faucet.publicKey.toBase58()]);
     } else {
-      expect(sendAndConfirmTransaction).not.toHaveBeenCalled();
+      expect(sendServerTransaction).not.toHaveBeenCalled();
       if (kind !== "wrong-authority") expect(getMint).not.toHaveBeenCalled();
     }
   }, "devnet"));

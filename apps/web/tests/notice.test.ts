@@ -22,8 +22,12 @@ const knownCodes = [...new Set([...clientCodes, ...[aegisIdl, dexIdl].flatMap((i
 const renderError = (message: unknown) => renderToStaticMarkup(createElement(Notice, { tone: "error", message }));
 
 describe("notice error copy", () => {
-  it.each(["BlockhashNotFound", "Blockhash not found"])("adds cluster guidance for %s", (message) => {
-    expect(describeError(message).text).toContain(DEVNET_GUIDANCE);
+  it.each(["Gemini returned HTTP 503", "HTTP 502 Bad Gateway", "UNAVAILABLE: overloaded", "TypeError: failed request", "CustomProgramError(9999)", "Transaction simulation failed: Blockhash not found"])("hides raw infrastructure detail: %s", (message) => {
+    const markup = renderError(Object.assign(new Error(message), { detail: "HTTP 429 internal provider detail" }));
+    expect(markup).not.toMatch(/HTTP|503|502|429|UNAVAILABLE|TypeError|CustomProgramError|Blockhash|internal provider/);
+  });
+  it.each(["BlockhashNotFound", "Blockhash not found"])("explains temporary network trouble for %s", (message) => {
+    expect(describeError(message).text).toContain("busy or rate limited");
   });
 
   it("renders a normalized SDK rejection as a neutral cancellation", () => {
@@ -71,7 +75,7 @@ describe("notice error copy", () => {
     const detail = describeError(`Vault created, but funding failed: ${code}. Use Fund 1,000 to retry.`);
     expect(detail.text).toBe(`Vault created, but funding failed. ${describeError(code).text} Use Fund 1,000 to retry.`);
     expect(detail.text).not.toContain(code);
-    expect(detail.code).toBe(code === "FutureFundingError" ? code : undefined);
+    expect(detail.code).toBeUndefined();
   });
 
   it("preserves useful faucet cooldown copy", () => {
@@ -79,20 +83,20 @@ describe("notice error copy", () => {
     expect(describeError(text)).toEqual({ text });
   });
 
-  it.each(["WalletSigningError", "Vault created, but funding failed: WalletSigningError. Use Fund 1,000 to retry."])("keeps wallet details muted for %s", (message) => {
+  it.each(["WalletSigningError", "Vault created, but funding failed: WalletSigningError. Use Fund 1,000 to retry."])("hides internal wallet details for %s", (message) => {
     const error = Object.assign(new Error(message), { detail: "Wallet connection timed out." });
-    expect(describeError(error).detail).toBe("Wallet connection timed out.");
-    expect(renderError(error)).toContain('<small class="notice-code">Wallet connection timed out.</small>');
+    expect(describeError(error).detail).toBeUndefined();
+    expect(renderError(error)).not.toContain("Wallet connection timed out.");
     expect(describeError(error).text).not.toContain("Wallet connection timed out.");
   });
 
-  it.each(["FutureError", "CustomProgramError(6010)", "UNKNOWN_CODE", "constructor"])("shows %s only as a small diagnostic", (code) => {
-    expect(describeError(code)).toEqual({ text: "Something went wrong. Try again.", code });
-    expect(renderError(code)).toContain(`<p>Something went wrong. Try again.</p><small class="notice-code">${code}</small>`);
+  it.each(["FutureError", "CustomProgramError(6010)", "UNKNOWN_CODE", "constructor"])("hides internal diagnostic %s", (code) => {
+    expect(describeError(code)).toEqual({ text: "Something went wrong. Try again." });
+    expect(renderError(code)).not.toContain(code);
   });
 
   it("handles numeric unknown codes and missing errors", () => {
-    expect(describeError({ code: 12345, message: "internal detail" })).toEqual({ text: "Something went wrong. Try again.", code: "12345" });
+    expect(describeError({ code: 12345, message: "internal detail" })).toEqual({ text: "Something went wrong. Try again." });
     expect(describeError(null)).toEqual({ text: "Something went wrong. Try again." });
   });
 });

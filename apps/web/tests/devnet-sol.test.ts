@@ -7,25 +7,37 @@ import { connectWalletDashboard } from "../src/wallet-client";
 import { describeError, NO_DEVNET_SOL_MESSAGE } from "../src/errors";
 import { DEVNET_GUIDANCE } from "../src/wallet-lifecycle";
 
-afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
-it("adds Devnet guidance when submitting a signed transaction returns BlockhashNotFound", async () => {
+it("recovers from a preflight blockhash miss without asking Phantom to sign again", async () => {
+  vi.useFakeTimers();
   const f = walletSvm();
-  let failSend = true;
+  let failSend = true, accepted = false;
+  const submissions: string[] = [];
   vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
     if (url === "/api/deployment") return Response.json({ ...f.deployment, environment: "devnet", rpcUrl: DEVNET_RPC_URL, wsUrl: DEVNET_WS_URL });
     if (url.startsWith("/api/actions/latest-vault")) return Response.json({ vault: null });
     const { method, params } = JSON.parse(init!.body as string);
-    if (method === "sendTransaction" && failSend) return Response.json({ error: { message: "Transaction simulation failed: Blockhash not found", data: { err: "BlockhashNotFound", logs: [] } } });
+    if (method === "getSignatureStatuses" && !accepted) return Response.json({ result: { value: [null] } });
+    if (method === "getBlockHeight") return Response.json({ result: 10 });
+    if (method === "sendTransaction") {
+      submissions.push(params[0]);
+      if (failSend) {
+        failSend = false;
+        return Response.json({ error: { message: "Transaction simulation failed: Blockhash not found", data: { err: "BlockhashNotFound", logs: [] } } });
+      }
+      accepted = true;
+    }
     return Response.json({ result: method === "getBalance" ? { value: 10_000_000 } : await f.rpc(method, params) });
   }));
   const dashboard = await connectWalletDashboard("devnet", f.wallet);
-  const result = await dashboard.create();
+  const progress = vi.fn(), pending = dashboard.create(progress);
+  await vi.runAllTimersAsync();
+  expect(await pending).toMatchObject({ ok: true });
   expect(f.sign).toHaveBeenCalledTimes(1);
-  expect(result).toMatchObject({ ok: false, error: "BlockhashNotFound" });
-  expect(describeError(!result.ok && result.error).text).toContain(DEVNET_GUIDANCE);
-  failSend = false;
-  expect(await dashboard.create()).toMatchObject({ ok: true });
+  expect(submissions).toHaveLength(2);
+  expect(submissions[0]).toBe(submissions[1]);
+  expect(progress).toHaveBeenCalledWith("Network busy, retrying…");
 });
 
 async function fixture(lamports: unknown = 10_000_000) {

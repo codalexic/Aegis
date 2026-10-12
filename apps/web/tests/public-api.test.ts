@@ -55,14 +55,17 @@ describe("public devnet functions", () => {
     expect(response.status).toBe(403);
     expect(askModel).not.toHaveBeenCalled(); expect(swap).not.toHaveBeenCalled();
   });
-  it.each([429, 500, 503])("reports Gemini HTTP %s, hides provider diagnostics, and permits a scripted retry", async (status) => {
+  it.each([429, 500, 503])("automatically runs a recorded reply after Gemini %s and hides provider diagnostics", async (status) => {
     vi.mocked(askModel).mockRejectedValueOnce(new ModelHttpError(status, "gemini", "private-provider-diagnostic"));
     const response = await post("normal", { live: true, vault: vault.toBase58() });
-    expect(response.status).toBe(status === 429 ? 429 : 503);
+    expect(response.status).toBe(200);
     const data = await response.json();
-    expect(data).toMatchObject({ scriptedAvailable: true, error: expect.stringContaining(`HTTP ${status}`) });
+    expect(data.steps).toContainEqual(expect.objectContaining({ type: "model_reply", source: "scripted" }));
+    expect(data.steps).toContainEqual(expect.objectContaining({ type: "notice", code: "live_fallback" }));
+    expect(data.steps).toContainEqual(expect.objectContaining({ type: "result", result: expect.objectContaining({ ok: true }) }));
+    expect((await client.getVault(vault)).spentRaw).toBe(20_000_000n);
+    expect(JSON.stringify(data)).not.toMatch(/HTTP|429|503/);
     expect(JSON.stringify(data)).not.toMatch(/private-provider|test-provider-credential/);
-    expect((await post("normal")).status).toBe(200);
   });
   it.each([{}, { live: "false", vault: "invalid" }, { live: false, vault: "invalid" }, { live: false, vault: deployment.pool, amount: "50" }])("rejects invalid agent input before loading keys: %j", async (body) => {
     expect((await post("normal", body)).status).toBe(400);

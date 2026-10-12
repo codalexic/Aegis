@@ -1,13 +1,27 @@
+import { beforeDeadline, retryDelay, sleep } from "../../packages/sdk/src/retry";
 import { rawAmountToUi, uiAmountToRaw, type VaultState } from "../../packages/sdk/src/index";
 
 export const SCRIPTED_HINT = "Try pnpm agent --mode scripted (no AI or network required).";
 export class AgentError extends Error {}
 export class ModelHttpError extends AgentError {
-  constructor(readonly status: number, provider: string, readonly responseBody?: string) {
-    super(status === 503 ? `${provider} API returned HTTP 503 (service unavailable). Try again shortly.`
-      : `${provider} API returned HTTP ${status}. Check the key, model access and quota.`);
+  constructor(readonly status: number, _provider: string, readonly responseBody?: string) {
+    super([429, 500, 502, 503, 504].includes(status) ? "Live AI is temporarily busy. Try again shortly."
+      : "Live AI is unavailable. Check the server settings or use Scripted.");
   }
 }
+export class ModelUnavailableError extends AgentError {
+  constructor() { super("Live AI is temporarily busy. Try again shortly."); }
+}
+export function isTransientModelError(error: unknown, depth = 0): boolean {
+  if (depth > 4) return false;
+  if (error instanceof ModelUnavailableError) return true;
+  if (error instanceof ModelHttpError) return [429, 500, 502, 503, 504].includes(error.status);
+  const value = error as { status?: number | string; code?: number | string; message?: string; name?: string; cause?: unknown } | null;
+  return !!value && ([429, 500, 502, 503, 504].includes(Number(value.status ?? value.code)) ||
+    /\b(?:429|500|502|503|504)\b|UNAVAILABLE|overload|RESOURCE_EXHAUSTED|DEADLINE_EXCEEDED|network|fetch failed|failed to fetch|timeout|timed out|ECONNRESET|ETIMEDOUT|EAI_AGAIN/i.test(`${value.name ?? ""} ${value.message ?? ""} ${value.status ?? ""}`) ||
+    (value.cause !== undefined && value.cause !== error && isTransientModelError(value.cause, depth + 1)));
+}
+export const LIVE_FALLBACK_NOTE = "Live AI was busy, so a recorded reply was used.";
 export type ModelMode = "normal" | "injected";
 export type Trade = { amountUsdc: string; reason: string; amountRaw: bigint };
 
@@ -113,21 +127,38 @@ export async function askModel(config: ModelConfig, input: string, send: typeof 
       text: { format: { type: "json_schema", name: "trade", strict: true, schema } },
     };
   }
-  let response: Response;
+  // At most three attempts and twelve seconds for the whole model call. Leave
+  // ample room in the 180-second function for the fallback transaction + reads.
+  const deadline = Date.now() + 12_000;
   let data: any;
-  try {
-    response = await send(url, {
-      method: "POST", headers, body: JSON.stringify(body), redirect: "error", signal: AbortSignal.timeout(45_000),
-    });
-    if (!response.ok) {
-      const detail = response.status === 503
-        ? diagnosticBody(await response.text().catch(() => "Response body unavailable."), apiKey) : undefined;
-      throw new ModelHttpError(response.status, provider, detail);
-    }
-    data = await response.json();
-  } catch (error) {
-    if (error instanceof AgentError) throw error;
-    throw new AgentError(`${provider} API call failed or timed out; check the connection and provider settings.`);
+  for (let attempt = 0; ; attempt++) {
+    const controller = new AbortController();
+    try {
+      data = await beforeDeadline(async () => {
+        const response = await send(url, {
+          method: "POST", headers, body: JSON.stringify(body), redirect: "error", signal: controller.signal,
+        });
+        if (!response.ok) {
+          const detail = response.status === 503
+            ? diagnosticBody(await response.text().catch(() => "Response body unavailable."), apiKey) : undefined;
+          throw new ModelHttpError(response.status, provider, detail);
+        }
+        const value = await response.json();
+        if (value?.error) {
+          if ([429, 500, 502, 503, 504].includes(value.error.code) ||
+              /UNAVAILABLE|overload|RESOURCE_EXHAUSTED|DEADLINE_EXCEEDED/i.test(`${value.error.status} ${value.error.message}`)) throw new ModelUnavailableError();
+          throw new AgentError("Live AI could not produce a reply. Use Scripted or try again later.");
+        }
+        return value;
+      }, Math.min(deadline, Date.now() + 5_000));
+      break;
+    } catch (error) {
+      controller.abort();
+      const failure = error instanceof AgentError ? error : new ModelUnavailableError();
+      const delay = retryDelay(attempt);
+      if (!isTransientModelError(failure) || attempt >= 2 || Date.now() + delay >= deadline) throw failure;
+      await sleep(delay);
+    } finally { controller.abort(); }
   }
   let parts: unknown;
   if (provider === "gemini") {

@@ -79,7 +79,7 @@ describe("IDL-typed instructions and signing", () => {
       f.owner.publicKey, f.vault, f.accounts.vaultAuthority, f.inputMint, f.outputMint,
       f.accounts.inputVault, f.accounts.outputVault, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID, SystemProgram.programId,
     ]);
-    expect(f.confirmTransaction).toHaveBeenCalledWith({ signature: result.signature, ...f.lifetime }, "confirmed");
+    expect(f.confirmTransaction).toHaveBeenCalledWith({ signature: result.signature, ...f.lifetime, abortSignal: expect.any(AbortSignal) }, "confirmed");
   });
 
   it("funds with a checked SPL transfer and references the vault for activity discovery", async () => {
@@ -108,7 +108,7 @@ describe("IDL-typed instructions and signing", () => {
       f.agent.publicKey, f.vault, f.accounts.vaultAuthority, f.accounts.inputVault, f.accounts.outputVault,
       f.accounts.pool, f.accounts.poolAuthority, f.accounts.inputReserve, f.accounts.outputReserve, DEMO_DEX_PROGRAM_ID, TOKEN_PROGRAM_ID,
     ]);
-    expect(f.sendRawTransaction).toHaveBeenCalledWith(expect.any(Buffer), { skipPreflight: true, maxRetries: 3 });
+    expect(f.sendRawTransaction).toHaveBeenCalledWith(expect.any(Buffer), { skipPreflight: true, preflightCommitment: "confirmed", maxRetries: 3 });
   });
 
   it.each(["vault", "vaultAuthority", "inputVault", "outputVault", "pool", "poolAuthority", "inputReserve", "outputReserve", "demoDexProgram", "tokenProgram"] as const)(
@@ -156,7 +156,7 @@ describe("IDL-typed instructions and signing", () => {
     expect(ix.keys.map((item) => item.pubkey)).toEqual([f.owner.publicKey, f.vault]);
     expect(ix.keys[0].isSigner).toBe(true);
     expect(ix.keys[1]).toMatchObject({ isSigner: false, isWritable: true });
-    expect(f.confirmTransaction).toHaveBeenCalledWith({ signature: result.signature, ...f.lifetime }, "confirmed");
+    expect(f.confirmTransaction).toHaveBeenCalledWith({ signature: result.signature, ...f.lifetime, abortSignal: expect.any(AbortSignal) }, "confirmed");
   });
 
   it("returns controlled signing and RPC errors from rotation", async () => {
@@ -168,7 +168,7 @@ describe("IDL-typed instructions and signing", () => {
     expect(f.sendRawTransaction).not.toHaveBeenCalled();
     f.confirmTransaction.mockRejectedValue(new Error("sensitive RPC context"));
     expect(await f.client.rotateAgent(f.owner, f.vault, newAgent))
-      .toEqual({ ok: false, error: "RpcError", origin: "rpc", signature: expect.any(String) });
+      .toEqual({ ok: true, signature: expect.any(String) });
   });
 
   it.each(["input", "output"])("withdraws %s after revocation/expiry and creates the owner's destination ATA", async (side) => {
@@ -237,10 +237,10 @@ describe("confirmation and program errors", () => {
     expect(await f.client.swapRaw(f.agent, f.accounts, 20n)).toMatchObject({ ok: false, error: "InsufficientReserve", origin: "program" });
   });
 
-  it("preserves the real signature on confirmation failure without claiming a program rejection", async () => {
+  it("recovers a confirmation timeout through signature status without repeating the payment", async () => {
     const f = await fixture();
     f.confirmTransaction.mockRejectedValue(new Error("Timeout"));
-    expect(await f.client.revoke(f.owner, f.vault)).toMatchObject({ ok: false, signature: expect.any(String), error: "RpcError", origin: "rpc" });
+    expect(await f.client.revoke(f.owner, f.vault)).toMatchObject({ ok: true, signature: expect.any(String) });
     expect(f.sent).toHaveLength(1);
   });
 

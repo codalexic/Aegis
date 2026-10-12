@@ -6,7 +6,7 @@ import type { JSX } from "react";
  * Strokes follow the parent's `color`; retheme with `--illus-accent` and `--illus-bg`.
  */
 export function SidebarIllustration({ className }: { className?: string }): JSX.Element {
-  const accent = "var(--illus-accent, #c9c4f7)";
+  const accent = "var(--illus-accent)";
   return (
     <svg
       className={className}
@@ -23,7 +23,7 @@ export function SidebarIllustration({ className }: { className?: string }): JSX.
     >
       <g transform="translate(0 -10)">
         {/* ground shadow and ground line */}
-        <ellipse cx={116} cy={141} rx={80} ry={4} fill="var(--illus-bg, #f3f3f6)" stroke="none" />
+        <ellipse cx={116} cy={141} rx={80} ry={4} fill="var(--illus-bg)" stroke="none" />
         <line x1={36} y1={140} x2={190} y2={140} />
 
         {/* vault: chunky body, door panel, dial, handle, two feet */}
@@ -53,8 +53,8 @@ export function SidebarIllustration({ className }: { className?: string }): JSX.
         <path d="M66 112Q60 106 53 107" />
 
         {/* shield with check mark */}
-        <path d="M44 104l14 5v12q0 12-14 19-14-7-14-19v-12z" fill="var(--good-bg, #e3f6ec)" />
-        <path d="M37 121l5 5 9-10" stroke="var(--good, #1f9d61)" strokeWidth={2.5} />
+        <path d="M44 104l14 5v12q0 12-14 19-14-7-14-19v-12z" fill="var(--good-bg)" />
+        <path d="M37 121l5 5 9-10" stroke="var(--good)" strokeWidth={2.5} />
 
         {/* four-point sparkles, matching the sparkle icon in icons.tsx */}
         <path d="M104 62c.3 2.6 1.9 4.3 4.6 4.7-2.7.4-4.3 2.1-4.6 4.7-.3-2.6-1.9-4.3-4.6-4.7 2.7-.4 4.3-2.1 4.6-4.7Z" fill="currentColor" stroke="none" />

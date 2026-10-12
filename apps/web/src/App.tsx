@@ -278,13 +278,17 @@ function OwnerApp({ environment, walletMode, wallet, changed, walletNotReady, is
   }}>
     <Icon name="wallet" size={16} />{wallet.connected ? "Disconnect" : "Connect wallet"}
   </ProgressButton>}
-    {environment === "devnet" && !wallet.connected && <small className="wallet-network-hint">Phantom must be on Solana Devnet.</small>}
   </div>;
+  const walletHint = walletMode && environment === "devnet" && !wallet.connected
+    ? <small className="wallet-network-hint">Phantom must be on Solana Devnet.</small> : null;
   const siteNotice = environment === "devnet" && walletMode ? <CanonicalSiteNotice /> : null;
   const environmentPill = <div className="environment" title={environmentTitle(environment)}><span className="environment-dot" />{environmentShort(environment)}</div>;
   const startBar = <header className="start-bar">
     <a className="brand start-brand" href="/" aria-label="Aegis home"><Logo size={36} withWordmark /></a>
-    <div className="rail-top">{environmentPill}{walletControl("start-connect")}</div>
+    <div className="header-controls">
+      <div className="rail-top">{environmentPill}{walletControl("start-connect")}</div>
+      {walletHint}
+    </div>
   </header>;
 
   if (!connection) {
@@ -309,7 +313,7 @@ function OwnerApp({ environment, walletMode, wallet, changed, walletNotReady, is
       </div>
     </Shell>;
   }
-  return <Dashboard key={`${environment}:${connection.owner.toBase58()}`} connection={connection} isCurrent={isCurrent} onBusyChange={setActionsBusy} siteNotice={siteNotice} toolbar={<>{environmentPill}{walletControl("start-connect rail-action")}</>} />;
+  return <Dashboard key={`${environment}:${connection.owner.toBase58()}`} connection={connection} isCurrent={isCurrent} onBusyChange={setActionsBusy} siteNotice={siteNotice} toolbar={<>{environmentPill}{walletControl("start-connect rail-action")}</>} toolbarHint={walletHint} />;
 }
 
 const TRY_STEPS: { title: string; body: ReactNode }[] = [
@@ -409,9 +413,10 @@ function KeyRow({ label, value, note }: { label: string; value: string; note?: s
    Dashboard
    -------------------------------------------------------------------------- */
 const alwaysCurrent = () => true;
-export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBusyChange, siteNotice }: {
+export function Dashboard({ connection, toolbar, toolbarHint, isCurrent = alwaysCurrent, onBusyChange, siteNotice }: {
   connection: DashboardConnection; toolbar: ReactNode; isCurrent?(): boolean; onBusyChange?(busy: boolean): void;
   siteNotice?: ReactNode;
+  toolbarHint?: ReactNode;
 }) {
   const mounted = useRef(true);
   useEffect(() => {
@@ -675,9 +680,12 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       <div>
         <h1>{PAGE_TITLE[page]}</h1>
       </div>
-      <div className="content-toolbar">
-        {toolbar}
-        <span className="avatar" title={owner.toBase58()} aria-label={`Owner ${owner.toBase58()}`}>{owner.toBase58().slice(0, 2).toUpperCase()}</span>
+      <div className="header-controls">
+        <div className="content-toolbar">
+          {toolbar}
+          <span className="avatar" title={owner.toBase58()} aria-label={`Owner ${owner.toBase58()}`}>{owner.toBase58().slice(0, 2).toUpperCase()}</span>
+        </div>
+        {toolbarHint}
       </div>
     </div>
     {siteNotice}

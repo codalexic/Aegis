@@ -179,7 +179,6 @@ button.primary[data-busy] { background: var(--accent); border-color: var(--accen
 .nav a[aria-current="true"]::before { opacity: 0; }
 .nav a[aria-current="true"]::after { content: ""; width: 6px; height: 6px; margin-left: auto; border-radius: 50%; background: currentColor; opacity: 1; }
 .sidebar-foot { margin-top: auto; display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
-.sidebar-illustration { color: var(--ink); padding: 0 6px; }
 .sidebar-foot .primary { width: 100%; border-radius: 999px; }
 .sidebar-hint {
   display: inline-flex; align-self: center; align-items: center; justify-content: center;
@@ -1389,7 +1388,6 @@ th.activity-result, td.activity-result { text-align: center; }
   .nav a { justify-content: center; gap: 6px; padding: 8px 6px; font-size: 13px; }
   .nav a[aria-current="true"]::after { display: none; }
   .sidebar-foot { margin: 0 0 0 auto; }
-  .sidebar-illustration { display: none; }
   .content { padding: 20px 16px 20px; }
   .content-top { flex-direction: column; align-items: stretch; }
   .content-toolbar { margin-left: 0; width: 100%; flex-wrap: wrap; justify-content: flex-end; }

@@ -12,7 +12,6 @@ import { isRateLimited, RPC_RATE_LIMITED } from "../../../packages/sdk/src/error
 import { explorerTransactionUrl } from "../../../packages/sdk/src/explorer";
 import { Icon, type IconName } from "./icons";
 import { Logo } from "./Logo";
-import { SidebarIllustration } from "./Illustration";
 import { TradeBars, type TradeBar } from "./TradeBars";
 import { Notice } from "./Notice";
 import { Toast, ToastStack } from "./Toast";
@@ -150,7 +149,6 @@ function Shell({ active, cta, rail, hideNav, children }: {
       <a className="brand" href="#/vault" aria-label="Aegis home"><Logo size={30} withWordmark /></a>
       <Nav active={active} />
       <div className="sidebar-foot">
-        <SidebarIllustration className="sidebar-illustration" />
         {cta}
       </div>
     </aside>
@@ -671,7 +669,6 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
 
   const cta = <>
     <ProgressButton className="primary" disabled={!ready || locked} busy={busy === "New demo vault"} progress="Setting up…" onClick={() => void newDemo()}><Icon name="sparkle" size={16} />New demo vault</ProgressButton>
-    <span className="sidebar-hint">Create & fund in one step</span>
   </>;
 
   const pageLoading = <p className="page-loading" role="status">Loading…</p>;

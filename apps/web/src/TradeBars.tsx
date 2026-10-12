@@ -6,7 +6,7 @@ import { PROGRAM_ERROR_MESSAGES } from "./errors";
 /** One agent swap request: how much it asked for and whether the program let it through. */
 export type TradeBar = { amount: number; ok: boolean; error?: string; time?: string };
 
-const W = 360, H = 148, PAD_TOP = 26, BASE = 124, MAX_BARS = 12, GAP = 10, COL = 20, PLOT = BASE - PAD_TOP;
+const W = 360, H = 148, PAD_TOP = 26, BASE = 124, MAX_BARS = 12, MIN_GAP = 8, MAX_GAP = 30, COL = 20, PLOT = BASE - PAD_TOP;
 const DOMAIN_X = 2;
 
 /** Hover copy for one bar: which kind of request it was and why Aegis allowed or blocked it. */
@@ -39,6 +39,10 @@ export function TradeBars({ trades, cap, unit, className }: {
     return Math.max(10, Math.min(PLOT, (v / domain) * PLOT));
   };
   const capY = BASE - (cap / domain) * PLOT;
+  // Spread bars across the plot: wide gaps for a few requests, tighter as more arrive.
+  const GAP = shown.length > 1 ? Math.max(MIN_GAP, Math.min(MAX_GAP, (W - 32 - shown.length * COL) / (shown.length - 1))) : 0;
+  // Full amounts need ~34 units; tighter columns switch to compact labels (1,000 → 1k).
+  const valueLabel = (v: number) => COL + GAP >= 36 || v < 1000 ? v.toLocaleString() : `${Number((v / 1000).toFixed(1))}k`;
   const span = shown.length * COL + Math.max(0, shown.length - 1) * GAP;
   const startX = Math.max(16, (W - span) / 2);
 
@@ -89,7 +93,7 @@ export function TradeBars({ trades, cap, unit, className }: {
                 fontWeight={700}
                 fill={t.ok ? "var(--chart-ink)" : "var(--chart-bad)"}
               >
-                {t.amount.toLocaleString()}
+                {valueLabel(t.amount)}
               </text>
             </>}
           </g>

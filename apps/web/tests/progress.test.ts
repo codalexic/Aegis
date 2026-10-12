@@ -90,7 +90,7 @@ it("keeps a wallet action busy through real prepare, approve, confirm and refres
   await flush(() => { window.location.hash = "#/vault"; window.dispatchEvent(new HashChangeEvent("hashchange")); });
   expect(lock).toHaveBeenLastCalledWith(true);
   await flush(() => f.simulation.resolve({ value: { err: null } }));
-  expect(container.querySelector('.dashboard-notice [role="status"]')?.textContent).toContain("Approve in Phantom…");
+  expect(container.querySelector('[data-testid="toast-stack"] [role="status"]')?.textContent).toContain("Approve in Phantom…");
   expect(f.methods).not.toContain("sendTransaction");
   const signed = VersionedTransaction.deserialize(f.sign.mock.calls[0][0].serialize()); signed.sign([owner]);
   await flush(() => f.signature.resolve(signed));
@@ -101,7 +101,8 @@ it("keeps a wallet action busy through real prepare, approve, confirm and refres
   f.reads.mockReturnValueOnce(refresh.promise);
   await flush(() => f.confirmation.resolve({ value: [{ err: null, confirmationStatus: "confirmed" }] }));
   expect(container.textContent).toContain("Refreshing vault…");
-  expect(container.querySelector('[data-testid="vault-skeleton"]')).not.toBeNull();
+  expect(action.getAttribute("aria-busy")).toBe("true");
+  expect(container.querySelector('[data-testid="vault-skeleton"]')).toBeNull();
   await flush(() => refresh.resolve({ ...vault, revoked: true }));
   expect(container.textContent).toContain("Agent revoked. You can still withdraw your funds.");
   expect(container.querySelector('[data-busy="true"]')).toBeNull();

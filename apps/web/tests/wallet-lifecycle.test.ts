@@ -244,7 +244,7 @@ it("drops a connect failure after the adapter has disconnected", async () => {
   expect(alerts()).toHaveLength(0);
 });
 
-it("shows connection progress, then skeletons while discovering the wallet's vault", async () => {
+it("shows connection progress, then the logo loader while discovering the wallet's vault", async () => {
   const connecting = deferred<void>();
   const discovery = deferred<Response>();
   phantom.connect.mockReturnValueOnce(connecting.promise);
@@ -256,10 +256,11 @@ it("shows connection progress, then skeletons while discovering the wallet's vau
   expect(button?.querySelector(".progress-spinner")).not.toBeNull();
   expect(container.textContent).toContain("Approve connection in Phantom…");
   await flush(() => connecting.resolve());
-  expect(container.querySelector('[data-testid="vault-skeleton"]')).not.toBeNull();
-  expect(container.querySelectorAll(".tile .skeleton-value")).toHaveLength(4);
+  expect(container.querySelector('[data-testid="connecting-logo"]')).not.toBeNull();
+  expect(container.querySelector(".connecting-mark")).not.toBeNull();
+  expect(container.querySelector('[data-testid="vault-skeleton"]')).toBeNull();
   await flush(() => discovery.resolve(Response.json({ vault: vaultA.toBase58() })));
-  expect(container.querySelectorAll(".skeleton")).toHaveLength(0);
+  expect(container.querySelector('[data-testid="connecting-logo"]')).toBeNull();
   expect(ownerVisible(A)).not.toBeNull();
 });
 

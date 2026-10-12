@@ -370,16 +370,17 @@ function Tile({ tone, icon, label, value, unit, sub, subTone, testId, children, 
   </div>;
 }
 
-function Step({ number, state, title, text, children }: { number: number; state: "done" | "next" | "todo"; title: string; text: ReactNode; children: ReactNode }) {
+function Step({ number, state, title, text, children }: { number: number; state: "done" | "next" | "todo"; title: string; text: ReactNode; children?: ReactNode }) {
   return <div className={`step ${state}`}>
     <span className="step-num" aria-hidden="true">{state === "done" ? <Icon name="check" size={18} /> : number}</span>
-    <div><strong>{state === "done" && <span className="sr-only">Done: </span>}{title}</strong><p>{text}</p></div>
+    <div><strong>{state === "done" && <span className="sr-only">Done: </span>}{title}</strong>{text && <p>{text}</p>}</div>
     {children}
   </div>;
 }
 
-export function FundingStep({ state, text, balance, hasFaucet, hasVault, finished, locked, busy, onFaucet, onFund, onNewDemo }: {
+export function FundingStep({ state, text, balance, hasFaucet, hasVault, finished, locked, busy, needsFunding = state === "next", onFaucet, onFund, onNewDemo }: {
   state: "done" | "next" | "todo"; text: string; balance: bigint | null; hasFaucet: boolean;
+  needsFunding?: boolean;
   hasVault: boolean; finished: boolean; locked: boolean; busy: string | null; onFaucet(): void; onFund(): void; onNewDemo(): void;
 }) {
   if (finished) return <Step number={2} state={state} title="Add testUSDC"
@@ -390,9 +391,9 @@ export function FundingStep({ state, text, balance, hasFaucet, hasVault, finishe
   const getTokens = busy === "Get testUSDC" || (busy !== "Fund vault" && needsFaucet(balance, hasFaucet));
   const isBusy = busy === (getTokens ? "Get testUSDC" : "Fund vault");
   return <Step number={2} state={state} title="Add testUSDC" text={<>
-    {text}<br />Wallet: {balance === null ? "—" : amount(balance)} testUSDC
+    {state !== "done" && <>{text}<br /></>}Wallet: {balance === null ? "—" : amount(balance)} testUSDC
   </>}>
-    <ProgressButton className={state === "next" ? "primary" : ""} disabled={!hasVault || locked}
+    <ProgressButton className={needsFunding ? "primary" : ""} disabled={!hasVault || locked}
       busy={isBusy} progress={getTokens ? "Getting tokens…" : "Funding…"}
       onClick={getTokens ? onFaucet : onFund}>{getTokens ? "Get 1,000 testUSDC" : "Fund 1,000"}</ProgressButton>
   </Step>;
@@ -722,8 +723,9 @@ export function Dashboard({ connection, toolbar, toolbarHint, isCurrent = always
               <h2 id="vault-setup-title">{stepsDone === 3 ? "Vault ready" : "Trading vault"}</h2>
               <span className={`status ${status.toLowerCase().replace(" ", "-")}`} data-testid="vault-status"><span className="small-dot" aria-hidden="true" />{status}</span>
             </div>
-            <p className="go-live-lead">{stepsDone === 3
-              ? "Try the agent, or revoke and withdraw."
+            <p className="go-live-lead">{finished ? "Start again with a funded vault."
+              : hasInput ? "Try the agent, or revoke and withdraw."
+              : vault ? "Fund the vault to start."
               : "Create and fund a vault, then test the agent."}</p>
           </div>
           <div className="go-live-progress" aria-label={`${stepsDone} of 3 steps done`}>
@@ -731,21 +733,43 @@ export function Dashboard({ connection, toolbar, toolbarHint, isCurrent = always
             <div className="go-live-track" aria-hidden="true"><span style={{ width: `${(stepsDone / 3) * 100}%` }} /></div>
           </div>
         </div>
-        <div className="steps">
-          <Step number={1} state={step1} title={vault ? "Vault created" : "Vault setup"} text="">
-            <div className="step-action">
-              {!vault && <ProgressButton className={step1 === "next" ? "primary" : ""} disabled={!ready || locked} busy={busy === "Create vault"} progress="Creating…" onClick={() => void create()}>Create vault</ProgressButton>}
-            </div>
+        {stepsDone === 3 ? <>
+          <div className="steps steps--complete" role="group" aria-label="Setup complete">
+            <Step number={1} state="done" title="Vault created" text="Guardrails set." />
+            <Step number={2} state="done" title="Add testUSDC" text="Funding completed." />
+            <Step number={3} state="done" title="Try the agent" text="Agent request submitted." />
+          </div>
+          <div className="setup-next">
+            {finished || !hasInput ? <FundingStep state="next" balance={walletBalance} hasFaucet={!!connection.faucet} hasVault={!!vault} finished={finished} locked={locked} busy={busy}
+              text="Fund the vault to trade again."
+              onFaucet={() => void run("Get testUSDC", connection.faucet!)} onFund={() => void fund()} onNewDemo={() => void newDemo()} />
+              : <Step number={3} state="next" title="Try the agent" text="Trade normally, then test an attack.">
+                <button type="button" className="primary" onClick={() => go("agent")}>Go to agent <Icon name="arrow" size={14} /></button>
+              </Step>}
+          </div>
+        </> : <div className="steps">
+          <Step number={1} state={step1} title={vault ? "Vault created" : "Vault setup"} text={vault ? "Guardrails set." : "Create a vault with fixed guardrails."}>
+            {!vault && <ProgressButton className={step1 === "next" ? "primary" : ""} disabled={!ready || locked} busy={busy === "Create vault"} progress="Creating…" onClick={() => void create()}>Create vault</ProgressButton>}
           </Step>
-          <FundingStep state={step2} balance={walletBalance} hasFaucet={!!connection.faucet} hasVault={!!vault} finished={finished} locked={locked} busy={busy}
+          <FundingStep state={step2} needsFunding={!!vault && !hasInput} balance={walletBalance} hasFaucet={!!connection.faucet} hasVault={!!vault} finished={finished} locked={locked} busy={busy}
             text={needsFaucet(walletBalance, !!connection.faucet) ? (vault ? "Get testUSDC before funding."
                 : "Set up your vault first.")
               : "Transfer from your wallet."}
             onFaucet={() => void run("Get testUSDC", connection.faucet!)} onFund={() => void fund()} onNewDemo={() => void newDemo()} />
           <Step number={3} state={step3} title="Try the agent" text="Trade normally, then test an attack.">
-            <button type="button" className="step-ok" onClick={() => go("agent")}>Go to agent <Icon name="arrow" size={14} /></button>
+            {!finished && <button type="button" className={step3 === "next" ? "primary" : "step-ok"} onClick={() => go("agent")}>Go to agent <Icon name="arrow" size={14} /></button>}
           </Step>
-        </div>
+        </div>}
+        {vault && <div className="owner-panel">
+          <div className="owner-panel-copy">
+            <strong>Owner controls.</strong>
+            <p>Funds stay withdrawable after revocation or expiry.</p>
+          </div>
+          <div className="owner-panel-actions">
+            <ProgressButton className="danger" disabled={vault.revoked || locked} busy={busy === "Revoke agent"} progress="Revoking…" onClick={() => void revoke()}>Revoke agent</ProgressButton>
+            <ProgressButton className="primary" disabled={!hasBalance || locked} busy={busy === "Withdraw all"} progress="Withdrawing…" onClick={() => void withdraw()}>Withdraw all</ProgressButton>
+          </div>
+        </div>}
       </section>
 
       <div className="panel-grid">
@@ -770,16 +794,6 @@ export function Dashboard({ connection, toolbar, toolbarHint, isCurrent = always
             <KeyRow label="Agent" value={agent.toBase58()} note={vault?.revoked ? "revoked" : undefined} />
             {vault && <KeyRow label="Vault" value={vault.address.toBase58()} />}
           </div>
-          {vault && <div className="owner-panel">
-            <div className="owner-panel-copy">
-              <strong>Owner controls.</strong>
-              <p>Funds stay withdrawable after revocation or expiry.</p>
-            </div>
-            <div className="owner-panel-actions">
-              <ProgressButton className="danger" disabled={vault.revoked || locked} busy={busy === "Revoke agent"} progress="Revoking…" onClick={() => void revoke()}>Revoke agent</ProgressButton>
-              <ProgressButton className="primary" disabled={!hasBalance || locked} busy={busy === "Withdraw all"} progress="Withdrawing…" onClick={() => void withdraw()}>Withdraw all</ProgressButton>
-            </div>
-          </div>}
         </section>
       </div>
       </>}

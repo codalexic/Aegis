@@ -307,19 +307,32 @@ button.primary[data-busy] { background: var(--accent); border-color: var(--accen
   from { opacity: 0; transform: translateY(3px); }
   to { opacity: 1; transform: translateY(0); }
 }
+.trade-bars .trade-bar { transition: transform 520ms cubic-bezier(.16, 1, .3, 1); }
 .trade-bars .trade-bar-shape {
   transform-box: fill-box;
   transform-origin: 50% 100%;
-  animation: trade-bar-grow 520ms cubic-bezier(.22, 1, .36, 1) both;
+  animation: trade-bar-grow 760ms cubic-bezier(.16, 1, .3, 1) both;
   animation-delay: var(--bar-delay, 0ms);
 }
 .trade-bars .trade-bar-value {
-  animation: trade-bar-fade 280ms ease-out both;
-  animation-delay: calc(var(--bar-delay, 0ms) + 200ms);
+  animation: trade-bar-fade 360ms ease-out both;
+  animation-delay: calc(var(--bar-delay, 0ms) + 320ms);
+  transition: opacity 160ms ease;
 }
+.trade-bars:has(.trade-bar.is-active) .trade-bar:not(.is-active) .trade-bar-value { opacity: .45; }
+@keyframes trade-tip-in {
+  from { opacity: 0; transform: translate(-50%, calc(-100% - 4px)); }
+  to { opacity: 1; transform: translate(-50%, calc(-100% - 10px)); }
+}
+.trade-tip { animation: trade-tip-in 160ms cubic-bezier(.16, 1, .3, 1) both; }
+.chart-stat { transition: border-color 240ms ease, background-color 240ms ease; }
+.chart-stat strong { font-variant-numeric: tabular-nums; transition: color 240ms ease; }
+.chart-legend { animation: trade-bar-fade 360ms ease-out 400ms both; }
 @media (prefers-reduced-motion: reduce) {
   .trade-bars .trade-bar-shape,
-  .trade-bars .trade-bar-value { animation: none !important; }
+  .trade-bars .trade-bar-value,
+  .trade-tip, .chart-legend { animation: none !important; }
+  .trade-bars .trade-bar { transition: none; }
 }
 .keys { display: grid; gap: 0; }
 .key-row {
@@ -1224,13 +1237,6 @@ th.activity-result, td.activity-result { text-align: center; }
 .shell .account-chip .account-chip-button img { width: 44px; height: 44px; border-radius: 12px; object-fit: cover; }
 .shell .account-chip .account-chip-button:focus-visible { outline: 2px solid var(--accent, #AB9FF2); outline-offset: 2px; }
 .account-chip .account-chip-button { cursor: pointer; }
-/* Agent page: scenario cards sit in the vertical middle of the page (header height mirrored below). */
-.page-view:has(> .agent-console) { padding-bottom: 72px; }
-.page-view > .agent-console { margin-block: auto; }
-@media (max-width: 860px) {
-  .page-view:has(> .agent-console) { padding-bottom: 0; }
-  .page-view > .agent-console { margin-block: 0; }
-}
 .account-copied {
   position: absolute; top: calc(100% + 6px); left: 50%; z-index: 20;
   padding: 4px 8px; border-radius: 8px; background: #1C1C24; border: 1px solid var(--line-2);

@@ -399,6 +399,27 @@ export function AccountChip({ address, walletIcon }: { address: string; walletNa
   </div>;
 }
 
+/** Counts smoothly from the previous value to the new one; the final number is always rendered for tests and screen readers. */
+function CountUp({ value }: { value: number }) {
+  const [shown, setShown] = useState(value);
+  const from = useRef(value);
+  useEffect(() => {
+    const start = from.current;
+    from.current = value;
+    if (start === value || typeof window.matchMedia !== "function" || window.matchMedia("(prefers-reduced-motion: reduce)").matches) { setShown(value); return; }
+    let frame = 0;
+    const began = performance.now();
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - began) / 600);
+      setShown(Math.round(start + (value - start) * (1 - Math.pow(1 - p, 3))));
+      if (p < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [value]);
+  return <>{shown}</>;
+}
+
 function KeyRow({ label, value, note }: { label: string; value: string; note?: string }) {
   const [copied, setCopied] = useState(false);
   useEffect(() => { if (!copied) return; const timer = window.setTimeout(() => setCopied(false), 1500); return () => window.clearTimeout(timer); }, [copied]);
@@ -649,7 +670,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
   // Oldest → newest for the chart; activity arrives newest first.
   const bars: TradeBar[] = swaps.slice(0, 16).reverse().map((item) => ({
     amount: Number((details.current.get(item.signature)?.amount ?? "0").replace(/[^0-9.]/g, "")) || 0,
-    ok: item.ok, error: item.error, time: timeLabel(item.blockTime),
+    id: item.signature, ok: item.ok, error: item.error, time: timeLabel(item.blockTime),
   }));
   const capUi = vault ? Number(rawAmountToUi(vault.maxTradeRaw, 6)) : 50;
   // A revoked or expired vault is finished: nothing is "next" except starting over.
@@ -789,12 +810,12 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       </div>
       {!ready || !activityReady ? pageLoading : <>
         <div className="chart-stats">
-          <div className="chart-stat"><strong>{swaps.length}</strong><span>requests</span></div>
-          <div className={`chart-stat${allowedSwaps > 0 ? " is-ok" : ""}`}><strong>{allowedSwaps}</strong><span>allowed</span></div>
-          <div className={`chart-stat${blocked > 0 ? " is-bad" : ""}`}><strong>{blocked}</strong><span>blocked</span></div>
+          <div className="chart-stat"><strong><CountUp value={swaps.length} /></strong><span>requests</span></div>
+          <div className={`chart-stat${allowedSwaps > 0 ? " is-ok" : ""}`}><strong><CountUp value={allowedSwaps} /></strong><span>allowed</span></div>
+          <div className={`chart-stat${blocked > 0 ? " is-bad" : ""}`}><strong><CountUp value={blocked} /></strong><span>blocked</span></div>
         </div>
         {swaps.length > 0 ? <>
-          <div className="chart-plot" key={bars.map((b) => `${b.amount}-${b.ok}`).join("|")}>
+          <div className="chart-plot">
             <TradeBars trades={bars} cap={capUi} unit="testUSDC" />
           </div>
           <div className="chart-legend" aria-hidden="true">

@@ -1,10 +1,10 @@
 // Bars are scaled so the per-trade cap sits at half the plot (domain = cap × 2).
 // Larger requests fill the plot and keep their true amount in the value label.
-import { useState, type JSX } from "react";
+import { useEffect, useRef, useState, type JSX } from "react";
 import { PROGRAM_ERROR_MESSAGES } from "./errors";
 
 /** One agent swap request: how much it asked for and whether the program let it through. */
-export type TradeBar = { amount: number; ok: boolean; error?: string; time?: string };
+export type TradeBar = { id?: string; amount: number; ok: boolean; error?: string; time?: string };
 
 const W = 360, H = 148, PAD_TOP = 26, BASE = 124, MAX_BARS = 12, MIN_GAP = 8, MAX_GAP = 30, COL = 20, PLOT = BASE - PAD_TOP;
 const DOMAIN_X = 2;
@@ -31,6 +31,9 @@ export function TradeBars({ trades, cap, unit, className }: {
   className?: string;
 }): JSX.Element {
   const [active, setActive] = useState<number | null>(null);
+  // Stagger only the first reveal; bars that arrive later grow in on their own.
+  const firstReveal = useRef(true);
+  useEffect(() => { firstReveal.current = false; }, []);
   const shown = trades.slice(-MAX_BARS);
   const blocked = shown.filter((t) => !t.ok).length;
   const domain = cap * DOMAIN_X || 1;
@@ -74,19 +77,20 @@ export function TradeBars({ trades, cap, unit, className }: {
         const h = heightFor(t.amount);
         const info = barInfo(t, unit);
         return (
-          <g key={`b${i}`} className={`trade-bar trade-bar--${t.ok ? "ok" : "blocked"}${active === i ? " is-active" : ""}`} style={{ ["--bar-delay" as string]: `${i * 50}ms` }}
+          <g key={t.id ?? `b${i}`} className={`trade-bar trade-bar--${t.ok ? "ok" : "blocked"}${active === i ? " is-active" : ""}`}
+            style={{ transform: `translateX(${x}px)`, ["--bar-delay" as string]: firstReveal.current ? `${i * 60}ms` : "0ms" }}
             tabIndex={0} aria-label={`${info.kind}. ${info.reason} ${info.meta}`}
             onMouseEnter={() => setActive(i)} onFocus={() => setActive(i)} onBlur={() => setActive(null)}>
-            <rect className="trade-bar-hit" x={x - GAP / 2} y={PAD_TOP - 20} width={COL + GAP} height={BASE - PAD_TOP + 20} fill="transparent" />
+            <rect className="trade-bar-hit" x={-GAP / 2} y={PAD_TOP - 20} width={COL + GAP} height={BASE - PAD_TOP + 20} fill="transparent" />
             {h > 0 && <>
               <path
                 className="trade-bar-shape"
-                d={roundedTopBar(x, BASE - h, COL, h, 7)}
+                d={roundedTopBar(0, BASE - h, COL, h, 7)}
                 fill={t.ok ? "url(#tb-ok)" : "url(#tb-bad)"}
               />
               <text
                 className="trade-bar-value"
-                x={x + COL / 2}
+                x={COL / 2}
                 y={BASE - h - 8}
                 textAnchor="middle"
                 fontSize={11}

@@ -141,9 +141,16 @@ export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, en
   const detailSteps = steps.filter((step) => step.type !== "result");
   return <>
     <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">{busy ? progress : ""}</span>
-    <section id="agent" className="card agent-console" aria-label="Agent console" aria-busy={busy}>
+    <section id="agent" className="go-live agent-console" aria-labelledby="agent-title" aria-busy={busy}>
+    <div className="go-live-head">
+      <div>
+        <div className="go-live-title"><h2 id="agent-title">Try the agent</h2></div>
+        <p className="go-live-lead">{!vault ? "Set up and fund your vault first."
+          : finished ? "This vault is finished. Start a new demo vault to try again."
+          : "Run a normal trade, then try both attacks. Aegis checks every request on-chain."}</p>
+      </div>
+    </div>
     {live && !model && <p className="muted agent-model">No AI key is set up on this server. Switch back to Scripted to run the scenarios.</p>}
-    {!usable && !vault && <Notice tone="error" className="agent-model" message="Set up and fund your vault first." />}
     <ul className="scenario-list">
       {SCENARIOS.map((scenario) => <li key={scenario.id} className="scenario">
         <span className={`scenario-icon ${scenario.tone}`} aria-hidden="true"><Icon name={scenario.icon} size={20} /></span>

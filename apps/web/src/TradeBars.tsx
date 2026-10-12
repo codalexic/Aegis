@@ -1,4 +1,5 @@
 // Bars are scaled so the per-trade cap sits at half the plot (domain = cap × 2).
+// The SVG is drawn 1:1 in CSS pixels at the container's width, so text and bars never scale up on wide screens.
 // Larger requests fill the plot and keep their true amount in the value label.
 import { useEffect, useRef, useState, type JSX } from "react";
 import { PROGRAM_ERROR_MESSAGES } from "./errors";
@@ -6,7 +7,7 @@ import { PROGRAM_ERROR_MESSAGES } from "./errors";
 /** One agent swap request: how much it asked for and whether the program let it through. */
 export type TradeBar = { id?: string; amount: number; ok: boolean; error?: string; time?: string };
 
-const W = 360, H = 148, PAD_TOP = 26, BASE = 124, MAX_BARS = 12, MIN_GAP = 8, MAX_GAP = 30, COL = 20, PLOT = BASE - PAD_TOP;
+const H = 154, PAD_TOP = 30, BASE = 146, MAX_BARS = 12, MIN_GAP = 8, MAX_GAP = 36, COL = 18, PLOT = BASE - PAD_TOP;
 const DOMAIN_X = 2;
 
 /** Hover copy for one bar: which kind of request it was and why Aegis allowed or blocked it. */
@@ -31,6 +32,15 @@ export function TradeBars({ trades, cap, unit, className }: {
   className?: string;
 }): JSX.Element {
   const [active, setActive] = useState<number | null>(null);
+  const wrap = useRef<HTMLDivElement>(null);
+  const [W, setW] = useState(360);
+  useEffect(() => {
+    const node = wrap.current;
+    if (!node || typeof ResizeObserver !== "function") return;
+    const observer = new ResizeObserver(([entry]) => { if (entry) setW(Math.max(260, Math.round(entry.contentRect.width))); });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
   // Stagger only the first reveal; bars that arrive later grow in on their own.
   const firstReveal = useRef(true);
   useEffect(() => { firstReveal.current = false; }, []);
@@ -43,11 +53,11 @@ export function TradeBars({ trades, cap, unit, className }: {
   };
   const capY = BASE - (cap / domain) * PLOT;
   // Spread bars across the plot: wide gaps for a few requests, tighter as more arrive.
-  const GAP = shown.length > 1 ? Math.max(MIN_GAP, Math.min(MAX_GAP, (W - 32 - shown.length * COL) / (shown.length - 1))) : 0;
+  const GAP = shown.length > 1 ? Math.max(MIN_GAP, Math.min(MAX_GAP, (W - 48 - shown.length * COL) / (shown.length - 1))) : 0;
   // Full amounts need ~34 units; tighter columns switch to compact labels (1,000 → 1k).
-  const valueLabel = (v: number) => COL + GAP >= 36 || v < 1000 ? v.toLocaleString() : `${Number((v / 1000).toFixed(1))}k`;
+  const valueLabel = (v: number) => COL + GAP >= 38 || v < 1000 ? v.toLocaleString() : `${Number((v / 1000).toFixed(1))}k`;
   const span = shown.length * COL + Math.max(0, shown.length - 1) * GAP;
-  const startX = Math.max(16, (W - span) / 2);
+  const startX = Math.max(24, (W - span) / 2);
 
   const label = shown.length === 0
     ? "No trade requests yet"
@@ -55,22 +65,22 @@ export function TradeBars({ trades, cap, unit, className }: {
       + (shown.some((t) => t.amount > domain) ? `; scale capped at ${domain.toLocaleString()} ${unit}; taller requests are marked` : "");
 
   return (
-    <div className="trade-bars-wrap" onMouseLeave={() => setActive(null)}>
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={label} className={`trade-bars${className ? ` ${className}` : ""}`}>
+    <div className="trade-bars-wrap" ref={wrap} onMouseLeave={() => setActive(null)}>
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} role="img" aria-label={label} className={`trade-bars${className ? ` ${className}` : ""}`}>
       <defs>
         <linearGradient id="tb-ok" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="var(--chart-ink)" stopOpacity="1" />
-          <stop offset="100%" stopColor="var(--chart-ink)" stopOpacity="0.7" />
+          <stop offset="100%" stopColor="var(--chart-ink)" stopOpacity="0.45" />
         </linearGradient>
         <linearGradient id="tb-bad" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="var(--chart-bad)" stopOpacity="1" />
-          <stop offset="100%" stopColor="var(--chart-bad)" stopOpacity="0.72" />
+          <stop offset="100%" stopColor="var(--chart-bad)" stopOpacity="0.45" />
         </linearGradient>
       </defs>
       <rect x={0} y={capY} width={W} height={BASE - capY} fill="var(--chart-band, var(--chart-ink))" />
       <line x1={0} x2={W} y1={BASE} y2={BASE} stroke="var(--chart-line)" strokeWidth={1} />
-      <line x1={16} x2={W - 16} y1={capY} y2={capY} stroke="var(--chart-muted)" strokeWidth={1} strokeDasharray="3 5" opacity={0.9} />
-      <text x={20} y={capY - 6} fontSize={10} fontWeight={650} fill="var(--chart-muted)">per-trade cap {cap.toLocaleString()}</text>
+      <line x1={0} x2={W} y1={capY} y2={capY} stroke="var(--chart-cap, var(--chart-muted))" strokeWidth={1.25} strokeDasharray="2 6" strokeLinecap="round" />
+      <text x={W - 12} y={capY - 8} textAnchor="end" fontSize={11} fontWeight={600} fill="var(--chart-muted)">Cap {cap.toLocaleString()}</text>
 
       {shown.map((t, i) => {
         const x = startX + i * (COL + GAP);
@@ -85,7 +95,7 @@ export function TradeBars({ trades, cap, unit, className }: {
             {h > 0 && <>
               <path
                 className="trade-bar-shape"
-                d={roundedTopBar(0, BASE - h, COL, h, 7)}
+                d={roundedTopBar(0, BASE - h, COL, h, 6)}
                 fill={t.ok ? "url(#tb-ok)" : "url(#tb-bad)"}
               />
               <text
@@ -94,7 +104,7 @@ export function TradeBars({ trades, cap, unit, className }: {
                 y={BASE - h - 8}
                 textAnchor="middle"
                 fontSize={11}
-                fontWeight={700}
+                fontWeight={600}
                 fill={t.ok ? "var(--chart-ink)" : "var(--chart-bad)"}
               >
                 {valueLabel(t.amount)}

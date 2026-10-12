@@ -1207,7 +1207,7 @@ a.signature:hover, a.signature:focus-visible { color: #2454a0; text-decoration-c
 .shell--dark .result.ok { background: rgba(196, 181, 255, .16); color: #f0ecff; }
 .shell--dark .result.blocked { background: rgba(240, 138, 144, .14); color: #ffb0b4; }
 .shell--dark .status.active { background: rgba(196, 181, 255, .16); color: #e8e2ff; }
-.account-chip { position: relative; flex: 0 0 auto; }
+.account-chip { position: relative; flex: 0 0 auto; display: flex; }
 .account-chip-button {
   display: inline-grid; place-items: center; width: 36px; height: 36px; padding: 0; border-radius: 999px;
   border: 1px solid var(--line-2); background: rgba(255, 255, 255, .04); color: var(--ink);
@@ -1217,11 +1217,10 @@ a.signature:hover, a.signature:focus-visible { color: #2454a0; text-decoration-c
 .shell .account-chip .account-chip-button, .shell .account-chip .account-chip-button:hover {
   width: auto; height: auto; padding: 0; border: 0; border-radius: 8px; background: transparent; box-shadow: none;
 }
-/* The logo takes exactly the height of the wallet button beside it. */
-.content-toolbar:has(> .account-chip) { align-items: stretch; }
-.content-toolbar > .account-chip { display: flex; }
-.shell .content-toolbar .account-chip .account-chip-button { height: 100%; aspect-ratio: 1 / 1; overflow: hidden; border-radius: 12px; }
-.shell .account-chip .account-chip-button img { width: 100%; height: 100%; border-radius: 12px; object-fit: cover; }
+/* Wallet button and logo share one fixed height. */
+.content-toolbar .start-connect { height: 44px; min-height: 44px; padding-block: 0; }
+.shell .content-toolbar .account-chip .account-chip-button { width: 44px; height: 44px; overflow: hidden; border-radius: 12px; }
+.shell .account-chip .account-chip-button img { width: 44px; height: 44px; border-radius: 12px; object-fit: cover; }
 .shell .account-chip .account-chip-button:focus-visible { outline: 2px solid var(--accent, #AB9FF2); outline-offset: 2px; }
 .account-chip .account-chip-button { cursor: pointer; }
 /* Agent page: scenario cards sit in the vertical middle of the page (header height mirrored below). */

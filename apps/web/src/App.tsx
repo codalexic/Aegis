@@ -307,7 +307,8 @@ function OwnerApp({ environment, walletMode, wallet, changed, walletNotReady, is
       </div>
     </Shell>;
   }
-  return <Dashboard key={`${environment}:${connection.owner.toBase58()}`} connection={connection} isCurrent={isCurrent} onBusyChange={setActionsBusy} siteNotice={siteNotice} toolbar={<>{environmentPill}{walletControl("start-connect rail-action")}</>} />;
+  return <Dashboard key={`${environment}:${connection.owner.toBase58()}`} connection={connection} isCurrent={isCurrent} onBusyChange={setActionsBusy} siteNotice={siteNotice} toolbar={<>{environmentPill}{walletControl("start-connect rail-action")}</>}
+    walletName={wallet.wallet?.adapter.name} walletIcon={wallet.wallet?.adapter.icon} />;
 }
 
 const TRY_STEPS: { title: string; body: ReactNode }[] = [
@@ -392,6 +393,26 @@ export function FundingStep({ state, text, balance, hasFaucet, hasVault, finishe
   </Step>;
 }
 
+/** Connected owner account: wallet icon + short address; hover or focus shows the full address. */
+export function AccountChip({ address, walletName, walletIcon }: { address: string; walletName?: string; walletIcon?: string }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => { if (!copied) return; const timer = window.setTimeout(() => setCopied(false), 1500); return () => window.clearTimeout(timer); }, [copied]);
+  const copy = () => { void navigator.clipboard?.writeText(address).then(() => setCopied(true)).catch(() => {}); };
+  return <div className="account-chip">
+    <button type="button" className="account-chip-button" aria-label={`Owner ${address}`}>
+      {walletIcon ? <img src={walletIcon} alt="" width={20} height={20} /> : <Icon name="wallet" size={16} />}
+      <span>{shorten(address)}</span>
+    </button>
+    <div className="account-pop" role="tooltip">
+      <div className="account-pop-card">
+        <span className="account-pop-label">{walletName ? `${walletName} account` : "Owner account"}</span>
+        <code>{address}</code>
+        <button type="button" className="small" onClick={copy}><Icon name={copied ? "check" : "copy"} size={14} />{copied ? "Copied" : "Copy address"}</button>
+      </div>
+    </div>
+  </div>;
+}
+
 function KeyRow({ label, value, note }: { label: string; value: string; note?: string }) {
   const [copied, setCopied] = useState(false);
   useEffect(() => { if (!copied) return; const timer = window.setTimeout(() => setCopied(false), 1500); return () => window.clearTimeout(timer); }, [copied]);
@@ -407,9 +428,9 @@ function KeyRow({ label, value, note }: { label: string; value: string; note?: s
    Dashboard
    -------------------------------------------------------------------------- */
 const alwaysCurrent = () => true;
-export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBusyChange, siteNotice }: {
+export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBusyChange, siteNotice, walletName, walletIcon }: {
   connection: DashboardConnection; toolbar: ReactNode; isCurrent?(): boolean; onBusyChange?(busy: boolean): void;
-  siteNotice?: ReactNode;
+  siteNotice?: ReactNode; walletName?: string; walletIcon?: string;
 }) {
   const mounted = useRef(true);
   useEffect(() => {
@@ -675,7 +696,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       </div>
       <div className="content-toolbar">
         {toolbar}
-        <span className="avatar" title={owner.toBase58()} aria-label={`Owner ${owner.toBase58()}`}>{owner.toBase58().slice(0, 2).toUpperCase()}</span>
+        <AccountChip address={owner.toBase58()} walletName={walletName} walletIcon={walletIcon} />
       </div>
     </div>
     {siteNotice}

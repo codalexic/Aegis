@@ -827,7 +827,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       <div className="card-heading"><h2 id="activity-title">Vault activity</h2><span className="muted">{!activityReady || activity.length === 0 ? "" : `${activity.length} ${activity.length === 1 ? "event" : "events"}`}</span></div>
       {!ready || !activityReady ? pageLoading : activity.length === 0 ? <div className="empty-activity activity-in"><span aria-hidden="true"><Icon name="activity" /></span><strong>No activity yet</strong><p>Transactions appear here, newest first.</p></div> : <div className="table-scroll activity-in">
         <table>
-          <thead><tr><th>Time</th><th>Action</th><th>Amount</th><th>Result</th></tr></thead>
+          <thead><tr><th>Time</th><th>Action</th><th>Amount</th><th className="activity-result">Result</th></tr></thead>
           <tbody>{activity.map((item, index) => <tr key={item.signature} style={{ ["--i" as string]: index }}>
             <td><time>{timeLabel(item.blockTime)}</time></td>
             <td><span className="action-name">{details.current.get(item.signature)?.label ?? "Transaction"}</span>
@@ -835,9 +835,8 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
                 href={explorerTransactionUrl(item.signature, environment)} target="_blank" rel="noopener noreferrer"><code>{shorten(item.signature)}</code><Icon name="external" size={12} /></a>
                 : <code className="signature">{shorten(item.signature)}</code>}</td>
             <td className="activity-amount">{groupThousands(details.current.get(item.signature)?.amount ?? "0")}</td>
-            <td><span className={`result ${item.ok ? "ok" : "blocked"}`} title={item.ok ? undefined : blockedTitle(item.error ?? "Failed")}><Icon name={item.ok ? "check" : "x"} size={14} />{item.ok ? "Success" : blockedTitle(item.error ?? "Failed")}</span>
-              {!item.ok && vault && <span className="rejection-reason">{rejectionReason(item.error ?? "Failed", vault,
-                details.current.get(item.signature)?.amount.replace(/ testUSDC$/, ""))}</span>}</td>
+            <td className="activity-result"><span className={`result ${item.ok ? "ok" : "blocked"}`} title={item.ok || !vault ? undefined : rejectionReason(item.error ?? "Failed", vault,
+              details.current.get(item.signature)?.amount.replace(/ testUSDC$/, ""))}><Icon name={item.ok ? "check" : "x"} size={14} />{item.ok ? "Success" : blockedTitle(item.error ?? "Failed")}</span></td>
           </tr>)}</tbody>
         </table>
       </div>}

@@ -1173,6 +1173,7 @@ td time { color: var(--ink-2); font-variant-numeric: tabular-nums; white-space: 
 a.signature { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-2); text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 3px; transition: color 160ms ease, text-decoration-color 160ms ease; }
 a.signature:hover, a.signature:focus-visible { color: #2454a0; text-decoration-color: currentColor; }
 .activity-amount { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--ink); font-weight: 600; }
+th.activity-result, td.activity-result { text-align: center; }
 .result { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; font-size: 13px; font-weight: 650; white-space: normal; overflow-wrap: anywhere; text-align: left; }
 .result.ok { background: var(--good-bg); color: var(--good-ink); }
 .result.blocked { background: var(--bad-bg); color: var(--bad-ink); }
@@ -1413,6 +1414,7 @@ a.signature:hover, a.signature:focus-visible { color: #2454a0; text-decoration-c
   td:nth-child(2) { grid-area: action; white-space: normal; }
   td:nth-child(3) { grid-area: amount; justify-self: end; text-align: right; }
   td:nth-child(4) { grid-area: result; margin-top: 4px; }
+  td.activity-result { text-align: left; }
   .action-name { white-space: nowrap; }
 }
 @media (max-width: 520px) {

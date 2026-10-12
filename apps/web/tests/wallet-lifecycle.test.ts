@@ -10,7 +10,7 @@ import deployment from "../../../deployments/devnet.json";
 import { App } from "../src/App";
 import { WalletProvider } from "../src/WalletProvider";
 import { useWallet } from "../src/wallet-react";
-import { isWalletDisconnected, WALLET_CHANGED, WALLET_REQUEST_FAILED } from "../src/wallet-lifecycle";
+import { isWalletDisconnected, WALLET_CHANGED, WALLET_CANCELLED, WALLET_REQUEST_FAILED } from "../src/wallet-lifecycle";
 
 const key = (byte: number) => new PublicKey(new Uint8Array(32).fill(byte));
 const A = new PublicKey(deployment.owner), B = new PublicKey(deployment.agent), vaultA = key(3), vaultB = key(4);
@@ -183,11 +183,76 @@ it("keeps cancelled connect visible, but ignores unrequested background errors",
   expect(alerts()).toHaveLength(0);
   phantom.connect.mockRejectedValueOnce(Object.assign(new Error("User rejected"), { code: 4001 }));
   await click("Connect wallet");
-  expect(container.textContent).toContain(WALLET_REQUEST_FAILED);
-  expect(alerts()).toHaveLength(1);
+  expect(container.textContent).toContain(WALLET_CANCELLED);
+  expect(alerts()).toHaveLength(0);
+  expect(container.querySelector(".notice.info")?.textContent).toContain(WALLET_CANCELLED);
   await click("Connect wallet");
   expect(ownerVisible(A)).not.toBeNull();
   expect(alerts()).toHaveLength(0);
+});
+
+it.each([
+  new Error("User rejected the request"),
+  Object.assign(new Error("Request closed"), { code: 4001 }),
+  new Error("User cancelled"),
+])("shows an adapter-wrapped cancellation as neutral: %s", async (error) => {
+  phantom.connect.mockRejectedValueOnce(error);
+  await mount();
+  await click("Connect wallet");
+  expect(alerts()).toHaveLength(0);
+  expect(container.querySelector(".notice.info p")?.textContent).toBe(WALLET_CANCELLED);
+  expect(container.querySelector(".notice-code")?.textContent).toBe(error.message);
+});
+
+it("shows Devnet guidance and muted Phantom detail for a generic connect failure", async () => {
+  phantom.connect.mockRejectedValueOnce(new Error("Unexpected connection failure"));
+  await mount();
+  await click("Connect wallet");
+  expect(alerts()).toHaveLength(1);
+  expect(container.querySelector('[role="alert"] p')?.textContent).toBe(WALLET_REQUEST_FAILED);
+  expect(container.querySelector(".notice-code")?.textContent).toBe("Unexpected connection failure");
+});
+
+it("keeps the Devnet hint beside Connect wallet, including during connection", async () => {
+  await mount();
+  const control = container.querySelector(".wallet-control")!;
+  expect(control.querySelector("button")?.textContent).toBe("Connect wallet");
+  expect(control.querySelector("small")?.textContent).toBe("Phantom must be on Solana Devnet.");
+  phantom.connect.mockReturnValueOnce(deferred<void>().promise);
+  await click("Connect wallet");
+  expect(control.querySelector("small")?.textContent).toBe("Phantom must be on Solana Devnet.");
+});
+
+it("links an alias to the configured canonical site before and after connection", async () => {
+  vi.stubEnv("AEGIS_PUBLIC_ORIGIN", "https://canonical.example");
+  await connect();
+  const notice = container.querySelector(".canonical-site-notice")!;
+  expect(notice.textContent).toContain("write requests only work on the canonical site");
+  expect(notice.querySelector("a")?.href).toBe("https://canonical.example/");
+  await click("Disconnect");
+  expect(container.querySelector(".canonical-site-notice a")?.getAttribute("href")).toBe("https://canonical.example");
+});
+
+it("hides the canonical notice on the configured origin", async () => {
+  vi.stubEnv("AEGIS_PUBLIC_ORIGIN", window.location.origin);
+  await mount();
+  expect(container.querySelector(".canonical-site-notice")).toBeNull();
+});
+
+it.each(["Unexpected signing failure", "Transaction simulation failed: AccountNotFound", "Blockhash not found"])("keeps signing failure guidance and detail for %s", async (message) => {
+  vi.spyOn(WalletAegisClient.prototype, "revoke").mockImplementation(async (wallet) => {
+    // The SDK can normalize missing-account errors to NoDevnetSol. The UI
+    // must retain the wallet's message after the devnet simulation passed.
+    try { await wallet.signTransaction({} as never); }
+    catch { return { ok: false, error: "NoDevnetSol", origin: "client" }; }
+    return { ok: true, signature: "test-signature" };
+  });
+  await connect();
+  phantom.signTransaction.mockRejectedValueOnce(new Error(message));
+  await click("Revoke agent");
+  expect(alerts()).toHaveLength(1);
+  expect(container.querySelector('[role="alert"] p')?.textContent).toBe(WALLET_REQUEST_FAILED);
+  expect(container.querySelector(".notice-code")?.textContent).toBe(message);
 });
 
 it.each(["WalletDisconnectedError", "WalletNotConnectedError"])("ignores background %s while still mounted", async (name) => {
@@ -222,7 +287,10 @@ it.each(["resolve", "reject"])("reports explicit sign rejection, but drops a sta
   await connect();
   phantom.signTransaction.mockRejectedValueOnce(new Error("User rejected the request"));
   await click("Revoke agent");
-  expect(container.textContent).toContain(WALLET_REQUEST_FAILED);
+  expect(container.textContent).toContain(WALLET_CANCELLED);
+  expect(alerts()).toHaveLength(0);
+  expect(container.querySelectorAll(".notice.info")).toHaveLength(1);
+  expect(container.querySelector(".notice-code")?.textContent).toBe("User rejected the request");
   const late = deferred<unknown>();
   phantom.signTransaction.mockReturnValueOnce(late.promise);
   await click("Revoke agent");

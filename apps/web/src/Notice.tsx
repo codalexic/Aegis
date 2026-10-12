@@ -9,8 +9,9 @@ type NoticeProps = {
 
 export function Notice({ tone, message, className = "", onDismiss, faucet }: NoticeProps) {
   const detail: ErrorDescription = tone === "error" ? describeError(message) : { text: message };
-  return <div className={`notice ${tone}${className ? ` ${className}` : ""}`} role={tone === "error" ? "alert" : "status"}>
-    {tone !== "busy" && <Icon name={tone === "error" ? "alert" : tone === "success" ? "check" : "info"} size={16} />}
+  const displayTone = detail.tone ?? tone;
+  return <div className={`notice ${displayTone}${className ? ` ${className}` : ""}`} role={displayTone === "error" ? "alert" : "status"}>
+    {displayTone !== "busy" && <Icon name={displayTone === "error" ? "alert" : displayTone === "success" ? "check" : "info"} size={16} />}
     <div className="notice-content"><p>{detail.text}{(detail.faucet || faucet) && <> <a href={DEVNET_FAUCET_URL} target="_blank" rel="noreferrer">Get free devnet SOL</a></>}</p>{(detail.detail || detail.code) && <small className="notice-code">{detail.detail || detail.code}</small>}</div>
     {onDismiss && <button type="button" className="icon-button notice-dismiss" aria-label="Dismiss" onClick={onDismiss}><Icon name="x" size={14} /></button>}
   </div>;

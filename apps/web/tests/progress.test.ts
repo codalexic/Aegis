@@ -119,7 +119,8 @@ it("clears progress and unlocks actions after Phantom rejects signing", async ()
   expect(container.querySelector('[data-busy="true"]')).toBeNull();
   expect(button("Revoke agent").disabled).toBe(false);
   expect(f.methods).not.toContain("sendTransaction");
-  expect(container.querySelector('[role="alert"]')).not.toBeNull();
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+  expect(container.querySelector('.notice.info[role="status"]')?.textContent).toContain("Connection cancelled in Phantom.");
 });
 
 it("shows stat and vault skeletons before the first load and keeps values visible during polling", async () => {

@@ -19,7 +19,8 @@ import { Toast, ToastStack } from "./Toast";
 import { ProgressButton, Skeleton, VaultSkeleton, LoadingDashboard } from "./Progress";
 import { DevnetSolHint } from "./DevnetSolHint";
 import { needsFaucet, newFundedDemo, withWalletBalanceRefresh } from "./funding";
-import { isWalletDisconnected, WALLET_CHANGED, WALLET_REQUEST_FAILED } from "./wallet-lifecycle";
+import { isWalletDisconnected, WALLET_CHANGED, walletRequestError } from "./wallet-lifecycle";
+import { CanonicalSiteNotice } from "./CanonicalSiteNotice";
 
 const nowUnix = () => BigInt(Math.floor(Date.now() / 1000));
 const shorten = (value: string) => `${value.slice(0, 4)}…${value.slice(-4)}`;
@@ -165,7 +166,7 @@ export function App({
   const generation = useRef(0);
   const [revision, setRevision] = useState(0);
   const [changed, setChanged] = useState(false);
-  const [requestError, setRequestError] = useState<string | null>(null);
+  const [requestError, setRequestError] = useState<Error | null>(null);
   useEffect(() => {
     if (!adapter) return;
     setRevision(generation.current);
@@ -193,21 +194,21 @@ export function App({
     setRequestError(null);
     try { return await action(); }
     catch (error) {
-      if (generation.current === started && !isWalletDisconnected(error)) setRequestError(WALLET_REQUEST_FAILED);
+      if (generation.current === started && !isWalletDisconnected(error)) setRequestError(walletRequestError(error));
       throw error;
     }
   }, []);
   return <>
     <OwnerApp key={`${environment}:${walletMode ? `${walletAddress}:${revision}` : "server"}`}
       environment={environment} walletMode={walletMode} wallet={wallet} changed={changed}
-      isCurrent={isCurrent} requestWallet={requestWallet} />
-    {requestError && <Notice tone="error" message={requestError} className="wallet-error" onDismiss={() => setRequestError(null)} />}
+      isCurrent={isCurrent} requestWallet={requestWallet} requestError={requestError} dismissRequestError={() => setRequestError(null)} />
   </>;
 }
 
-function OwnerApp({ environment, walletMode, wallet, changed, isCurrent, requestWallet }: {
+function OwnerApp({ environment, walletMode, wallet, changed, isCurrent, requestWallet, requestError, dismissRequestError }: {
   environment: AegisEnvironment; walletMode: boolean; wallet: ReturnType<typeof useWallet>; changed: boolean;
   isCurrent(): boolean; requestWallet<T>(action: () => Promise<T>): Promise<T>;
+  requestError: Error | null; dismissRequestError(): void;
 }) {
   const [connection, setConnection] = useState<DashboardConnection | null>(null);
   const [actionsBusy, setActionsBusy] = useState(false);
@@ -220,7 +221,7 @@ function OwnerApp({ environment, walletMode, wallet, changed, isCurrent, request
     const pending = walletMode ? connectWalletDashboard(environment as "localnet" | "devnet", {
       publicKey: wallet.publicKey!, signTransaction: async (transaction) => {
         if (!current()) throw new DOMException("Wallet changed.", "AbortError");
-        const signed = await requestWallet(() => wallet.signTransaction!(transaction));
+        const signed = await wallet.signTransaction!(transaction);
         if (!current()) throw new DOMException("Wallet changed.", "AbortError");
         return signed;
       },
@@ -232,11 +233,14 @@ function OwnerApp({ environment, walletMode, wallet, changed, isCurrent, request
     return () => controller.abort();
   }, [environment, walletMode, wallet.publicKey, wallet.signTransaction, isCurrent, requestWallet]);
 
-  const walletControl = (className: string) => walletMode && <ProgressButton type="button" className={className} busy={wallet.connecting || wallet.disconnecting} progress={wallet.disconnecting ? "Disconnecting…" : "Connecting…"} disabled={actionsBusy} onClick={() => {
+  const walletControl = (className: string) => walletMode && <div className="wallet-control"><ProgressButton type="button" className={className} busy={wallet.connecting || wallet.disconnecting} progress={wallet.disconnecting ? "Disconnecting…" : "Connecting…"} disabled={actionsBusy} onClick={() => {
     void (wallet.connected ? wallet.disconnect() : requestWallet(() => wallet.connect())).catch(() => {});
   }}>
     <Icon name="wallet" size={16} />{wallet.connected ? "Disconnect" : "Connect wallet"}
-  </ProgressButton>;
+  </ProgressButton>
+    {environment === "devnet" && !wallet.connected && <small className="wallet-network-hint">Phantom must be on Solana Devnet.</small>}
+  </div>;
+  const siteNotice = environment === "devnet" && walletMode ? <CanonicalSiteNotice /> : null;
   const environmentPill = <div className="environment" title={environmentTitle(environment)}><span className="environment-dot" />{environmentShort(environment)}</div>;
   const startBar = <header className="start-bar">
     <a className="brand start-brand" href="/" aria-label="Aegis home"><Logo size={36} withWordmark /></a>
@@ -248,6 +252,8 @@ function OwnerApp({ environment, walletMode, wallet, changed, isCurrent, request
     return <Shell active="vault" hideNav>
       <div className={waitingForWallet ? "start" : "start connecting-screen"}>
         {startBar}
+        {siteNotice}
+        <ToastStack>{requestError && <Toast tone="error" message={requestError} onDismiss={dismissRequestError} />}</ToastStack>
         <span className="sr-only" role="status" aria-live="polite">{wallet.connecting ? "Approve connection in Phantom…" : wallet.disconnecting ? "Disconnecting wallet…" : ""}</span>
         {waitingForWallet ? <>
           <div className="start-hero">
@@ -263,7 +269,7 @@ function OwnerApp({ environment, walletMode, wallet, changed, isCurrent, request
       </div>
     </Shell>;
   }
-  return <Dashboard key={`${environment}:${connection.owner.toBase58()}`} connection={connection} isCurrent={isCurrent} onBusyChange={setActionsBusy} toolbar={<>{environmentPill}{walletControl("start-connect rail-action")}</>} />;
+  return <Dashboard key={`${environment}:${connection.owner.toBase58()}`} connection={connection} isCurrent={isCurrent} onBusyChange={setActionsBusy} siteNotice={siteNotice} toolbar={<>{environmentPill}{walletControl("start-connect rail-action")}</>} />;
 }
 
 const TRY_STEPS: { title: string; body: ReactNode }[] = [
@@ -363,8 +369,9 @@ function KeyRow({ label, value, note }: { label: string; value: string; note?: s
    Dashboard
    -------------------------------------------------------------------------- */
 const alwaysCurrent = () => true;
-export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBusyChange }: {
+export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBusyChange, siteNotice }: {
   connection: DashboardConnection; toolbar: ReactNode; isCurrent?(): boolean; onBusyChange?(busy: boolean): void;
+  siteNotice?: ReactNode;
 }) {
   const mounted = useRef(true);
   useEffect(() => {
@@ -633,6 +640,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
         <span className="avatar" title={owner.toBase58()} aria-label={`Owner ${owner.toBase58()}`}>{owner.toBase58().slice(0, 2).toUpperCase()}</span>
       </div>
     </div>
+    {siteNotice}
     <ToastStack>
       {busy ? <Toast tone="busy" message={`${busy} · ${stage}`} />
         : notice && (notice.ok

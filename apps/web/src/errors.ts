@@ -1,5 +1,6 @@
 import { isRateLimited, isWalletRejected } from "../../../packages/sdk/src/errors";
 import { isNoDevnetSol } from "../../../packages/sdk/src/wallet-errors";
+import { DEVNET_GUIDANCE, WALLET_CANCELLED, WALLET_REQUEST_FAILED } from "./wallet-lifecycle";
 
 export const DEVNET_FAUCET_URL = "https://faucet.solana.com";
 export const NO_DEVNET_SOL_MESSAGE = "Your wallet has no devnet SOL for fees. Get free devnet SOL, then try again.";
@@ -18,7 +19,7 @@ export const PROGRAM_ERROR_MESSAGES: Readonly<Record<string, string>> = {
 };
 
 const RPC_BUSY = "The Solana devnet RPC is busy or rate limited. Wait a few seconds and try again.";
-const WALLET_REJECTED = "The wallet request was declined. Try again and approve it in Phantom.";
+const WALLET_REJECTED = WALLET_CANCELLED;
 const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   ...PROGRAM_ERROR_MESSAGES,
   RpcError: RPC_BUSY,
@@ -26,10 +27,10 @@ const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   RateLimited: "Too many requests. Wait a few seconds and try again.",
   WalletRejected: WALLET_REJECTED,
   UserRejected: WALLET_REJECTED,
-  SigningFailed: "The wallet could not sign the transaction. Check Phantom and try again.",
+  SigningFailed: WALLET_REQUEST_FAILED,
   WalletModifiedTransaction: "Phantom changed the transaction in a way Aegis cannot safely approve. Nothing was sent. Try again.",
   InvalidWalletSignature: "The wallet returned an invalid signature. Nothing was sent. Reconnect Phantom and try again.",
-  WalletSigningError: "Phantom could not sign the transaction. Check your wallet and try again.",
+  WalletSigningError: WALLET_REQUEST_FAILED,
   InsufficientFunds: "Not enough testUSDC in your wallet. Get 1,000 testUSDC first.",
   AccountAlreadyInUse: "This vault already exists. Use New demo vault to start again.",
   MintMismatch: "The token account uses the wrong mint. Reconnect your wallet and try again.",
@@ -48,7 +49,7 @@ const ERROR_MESSAGES: Readonly<Record<string, string>> = {
   TransactionFailed: "The transaction failed. Check your balance and try again.",
 };
 
-export interface ErrorDescription { text: string; code?: string; detail?: string; faucet?: boolean }
+export interface ErrorDescription { text: string; code?: string; detail?: string; faucet?: boolean; tone?: "info" }
 const FALLBACK = "Something went wrong. Try again.";
 
 export function describeError(error: unknown): ErrorDescription {
@@ -60,6 +61,15 @@ export function describeError(error: unknown): ErrorDescription {
   if (funding) {
     const detail = describeError({ message: funding[1], detail: value?.detail });
     return { ...detail, text: `Vault created, but funding failed. ${detail.text} Use Fund 1,000 to retry.` };
+  }
+
+  const walletDetail = typeof value?.detail === "string" ? value.detail : undefined;
+  if (message === WALLET_CANCELLED || message === "UserRejected" || isWalletRejected(error)) {
+    return { text: WALLET_CANCELLED, tone: "info", ...(walletDetail && { detail: walletDetail }) };
+  }
+  if (message === WALLET_REQUEST_FAILED) return { text: message, ...(walletDetail && { detail: walletDetail }) };
+  if (/blockhash[\s_-]*not[\s_-]*found/i.test(`${message} ${walletDetail ?? ""}`)) {
+    return { text: `The transaction’s blockhash could not be found. ${DEVNET_GUIDANCE}`, ...(walletDetail && { detail: walletDetail }) };
   }
 
   if (isNoDevnetSol(error)) return { text: NO_DEVNET_SOL_MESSAGE, faucet: true };

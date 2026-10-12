@@ -7,6 +7,7 @@ import dexIdl from "../../../artifacts/idl/demo_dex.json";
 import { RPC_RATE_LIMITED, WALLET_REJECTED } from "../../../packages/sdk/src/errors";
 import { describeError, PROGRAM_ERROR_MESSAGES } from "../src/errors";
 import { Notice } from "../src/Notice";
+import { DEVNET_GUIDANCE, WALLET_CANCELLED } from "../src/wallet-lifecycle";
 
 const clientCodes = [
   "NoDevnetSol", "AccountNotFound", "RpcError", "RpcRateLimited", "RateLimited", "WalletRejected", "UserRejected", "SigningFailed",
@@ -21,6 +22,17 @@ const knownCodes = [...new Set([...clientCodes, ...[aegisIdl, dexIdl].flatMap((i
 const renderError = (message: unknown) => renderToStaticMarkup(createElement(Notice, { tone: "error", message }));
 
 describe("notice error copy", () => {
+  it.each(["BlockhashNotFound", "Blockhash not found"])("adds cluster guidance for %s", (message) => {
+    expect(describeError(message).text).toContain(DEVNET_GUIDANCE);
+  });
+
+  it("renders a normalized SDK rejection as a neutral cancellation", () => {
+    const markup = renderError("WalletRejected");
+    expect(markup).toContain('class="notice info" role="status"');
+    expect(markup).toContain(WALLET_CANCELLED);
+    expect(markup).not.toContain('role="alert"');
+  });
+
   it.each(knownCodes)("never shows known code %s raw", (code) => {
     const detail = describeError(new Error(code));
     expect(detail.text).toMatch(/[.!]$/);

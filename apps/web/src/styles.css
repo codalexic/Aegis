@@ -344,6 +344,12 @@ button.primary[data-busy] { background: var(--accent); border-color: var(--accen
 .content-top { display: flex; align-items: center; justify-content: space-between; gap: 16px 20px; min-height: 44px; }
 .content-toolbar { display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: auto; }
 .content-toolbar .rail-action { margin-left: 0; }
+.wallet-control { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.wallet-network-hint { font-size: 11px; color: var(--ink-2); }
+.canonical-site-notice { font-size: 13px; color: var(--ink-2); margin-block: 12px; }
+.canonical-site-notice a { color: inherit; text-decoration: underline; }
+.shell--start .wallet-network-hint,
+.shell--start .canonical-site-notice { color: var(--start-muted); }
 .eyebrow { font-size: 11px; font-weight: 650; color: var(--ink-3); text-transform: uppercase; letter-spacing: .1em; margin-bottom: 4px; }
 h1 { font-size: 18px; font-weight: 750; letter-spacing: -.02em; line-height: 1.3; max-width: none; }
 .count-chip { display: inline-flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px 0 6px; border-radius: 999px; background: #fff; box-shadow: var(--shadow-card); font-size: 13px; color: var(--ink-2); white-space: nowrap; }

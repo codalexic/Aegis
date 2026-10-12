@@ -5,8 +5,28 @@ import { WalletAegisClient } from "../../../packages/sdk/src/wallet";
 import { DEVNET_RPC_URL, DEVNET_WS_URL } from "../../../packages/sdk/src/devnet";
 import { connectWalletDashboard } from "../src/wallet-client";
 import { describeError, NO_DEVNET_SOL_MESSAGE } from "../src/errors";
+import { DEVNET_GUIDANCE } from "../src/wallet-lifecycle";
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+it("adds Devnet guidance when submitting a signed transaction returns BlockhashNotFound", async () => {
+  const f = walletSvm();
+  let failSend = true;
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+    if (url === "/api/deployment") return Response.json({ ...f.deployment, environment: "devnet", rpcUrl: DEVNET_RPC_URL, wsUrl: DEVNET_WS_URL });
+    if (url.startsWith("/api/actions/latest-vault")) return Response.json({ vault: null });
+    const { method, params } = JSON.parse(init!.body as string);
+    if (method === "sendTransaction" && failSend) return Response.json({ error: { message: "Transaction simulation failed: Blockhash not found", data: { err: "BlockhashNotFound", logs: [] } } });
+    return Response.json({ result: method === "getBalance" ? { value: 10_000_000 } : await f.rpc(method, params) });
+  }));
+  const dashboard = await connectWalletDashboard("devnet", f.wallet);
+  const result = await dashboard.create();
+  expect(f.sign).toHaveBeenCalledTimes(1);
+  expect(result).toMatchObject({ ok: false, error: "BlockhashNotFound" });
+  expect(describeError(!result.ok && result.error).text).toContain(DEVNET_GUIDANCE);
+  failSend = false;
+  expect(await dashboard.create()).toMatchObject({ ok: true });
+});
 
 async function fixture(lamports: unknown = 10_000_000) {
   const f = walletSvm();

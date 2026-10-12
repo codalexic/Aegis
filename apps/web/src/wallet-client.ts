@@ -6,11 +6,19 @@ import { actionDetail } from "./activity";
 import type { DashboardConnection, ProgressCallback } from "./client";
 import { getAssociatedTokenAddressSync } from "./browser-token";
 import { readWalletBalance } from "./funding";
+import { isWalletDisconnected, walletRequestError } from "./wallet-lifecycle";
 
 // Observe the existing send flow; building, simulation, validation, submission
 // and confirmation remain entirely in the SDK.
 class ProgressWalletClient extends WalletAegisClient {
   onProgress?: ProgressCallback;
+  blockhashNotFound = false;
+  protected override rpcErrorName(error: unknown): string | undefined {
+    const value = error as { message?: unknown; data?: { err?: unknown } } | undefined;
+    if (this.deployment.environment === "devnet" &&
+      /blockhash[\s_-]*not[\s_-]*found/i.test(`${value?.message ?? ""} ${value?.data?.err ?? ""}`)) this.blockhashNotFound = true;
+    return super.rpcErrorName(error);
+  }
   override rpc<T>(method: string, params: unknown[]): Promise<T> {
     if (method === "sendTransaction") this.onProgress?.("Confirming on Solana…");
     return super.rpc<T>(method, params);
@@ -24,11 +32,19 @@ export async function connectWalletDashboard(environment: "localnet" | "devnet",
   if (!response.ok) throw new Error(deployment.error ?? "Cannot load this cluster's deployment.");
   if (deployment.environment !== environment) throw new Error("Deployment environment mismatch.");
   const client = new ProgressWalletClient(deployment, { devnetRpcUrl: import.meta.env.VITE_DEVNET_RPC_URL }), agent = new PublicKey(deployment.agent);
+  const signingFailure: { error?: ReturnType<typeof walletRequestError> } = {};
+  const clearSigningFailure = () => { signingFailure.error = undefined; };
   const progressWallet: WalletSigner = {
     publicKey: wallet.publicKey,
-    signTransaction: (transaction) => {
+    signTransaction: async (transaction) => {
       client.onProgress?.("Approve in Phantom…");
-      return wallet.signTransaction(transaction);
+      try { return await wallet.signTransaction(transaction); }
+      catch (error) {
+        // Preserve the adapter message for display even if the SDK maps it to a
+        // fee/account error. Devnet simulation already passed before signing.
+        if (environment === "devnet" && !isWalletDisconnected(error)) signingFailure.error = walletRequestError(error);
+        throw error;
+      }
     },
   };
   const latestResponse = await fetch(`/api/actions/latest-vault?account=${wallet.publicKey.toBase58()}`, { cache: "no-store", signal });
@@ -49,11 +65,17 @@ export async function connectWalletDashboard(environment: "localnet" | "devnet",
     signal?.throwIfAborted();
     if (balance !== null && balance < need) return { ok: false, error: NO_DEVNET_SOL, origin: "client" };
     client.onProgress = onProgress;
+    clearSigningFailure();
+    client.blockhashNotFound = false;
     try {
       const result = await action();
       if (result.ok) onProgress?.("Done");
+      if (!result.ok && signingFailure.error) return { ...result, error: signingFailure.error.message, detail: signingFailure.error.detail };
+      if (!result.ok && client.blockhashNotFound) return { ...result, error: "BlockhashNotFound" };
       return result;
-    } finally { client.onProgress = undefined; }
+    } catch (error) {
+      throw signingFailure.error ?? error;
+    } finally { client.onProgress = undefined; clearSigningFailure(); }
   };
   // Conservative estimates: creation includes vault + token-account rent.
   const create = (onProgress?: ProgressCallback) => withSol(10_000_000n, async () => {

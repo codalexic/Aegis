@@ -17,6 +17,9 @@ export default defineConfig(({ mode }) => {
   if (signing !== undefined && signing !== "wallet" && signing !== "server") throw new Error("AEGIS_SIGNING must be wallet or server.");
   const walletMode = environment === "devnet" || (environment === "localnet" && signing === "wallet");
   const settings = { ...loadEnv(mode, workspaceRoot, "AEGIS_"), ...process.env };
+  // Match the public API's existing origin configuration and Vercel fallback.
+  const publicHost = settings.VERCEL_ENV === "production" ? settings.VERCEL_PROJECT_PRODUCTION_URL : settings.VERCEL_URL;
+  const publicOrigin = settings.AEGIS_PUBLIC_ORIGIN ?? (publicHost ? `https://${publicHost}` : "");
   const devnetRpcUrl = process.env.VITE_DEVNET_RPC_URL ?? loadEnv(mode, workspaceRoot, "VITE_DEVNET_RPC_URL").VITE_DEVNET_RPC_URL;
   return {
     plugins: [
@@ -34,6 +37,7 @@ export default defineConfig(({ mode }) => {
     ],
     // Explicit public settings only; never expose the contents of the root .env file.
     define: { "import.meta.env.AEGIS_ENV": JSON.stringify(environment), "import.meta.env.AEGIS_WALLET": JSON.stringify(walletMode),
+      "import.meta.env.AEGIS_PUBLIC_ORIGIN": JSON.stringify(publicOrigin),
       "import.meta.env.VITE_DEVNET_RPC_URL": JSON.stringify(devnetRpcUrl ?? "https://api.devnet.solana.com"), "process.env.ANCHOR_BROWSER": "true" },
     server: {
       // Runtime lastVault updates should not restart the browser session.

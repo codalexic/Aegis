@@ -59,7 +59,7 @@ async function loadedVault(overrides: Partial<VaultState> = {}, activity: Activi
   return vault;
 }
 
-it("offers Create vault without a vault and replaces it with a checked status after creation", async () => {
+it("offers Create vault without a vault and keeps it disabled with a checked status after creation", async () => {
   await mount();
   let setup = container.querySelector(".steps .step")!;
   expect(setup.querySelector("button")?.textContent).toBe("Create vault");
@@ -67,19 +67,21 @@ it("offers Create vault without a vault and replaces it with a checked status af
   await click("Create vault");
   expectSteps("done", "next", "todo");
   setup = container.querySelector(".steps .step")!;
-  expect(setup.querySelector("button")).toBeNull();
+  expect(setup.querySelector("button")?.textContent).toBe("Create vault");
+  expect(setup.querySelector("button")?.disabled).toBe(true);
   expect(setup.querySelector(".step-num svg")).not.toBeNull();
-  expect(setup.textContent).toBe("Done: Vault createdYour vault is open with a 50 testUSDC per-trade cap and a 100 testUSDC total budget.");
+  expect(setup.textContent).toBe("Done: Vault createdYour vault is open with a 50 testUSDC per-trade cap and a 100 testUSDC total budget.Create vault");
 });
 
-it("shows a checked status without Create vault for a returning wallet", async () => {
+it("shows a checked status with a disabled Create vault for a returning wallet", async () => {
   await loadedVault();
   await mount();
   expectSteps("done", "next", "todo");
   const setup = container.querySelector(".steps .step")!;
-  expect(setup.querySelector("button")).toBeNull();
+  expect(setup.querySelector("button")?.textContent).toBe("Create vault");
+  expect(setup.querySelector("button")?.disabled).toBe(true);
   expect(setup.querySelector(".step-num svg")).not.toBeNull();
-  expect(setup.textContent).toBe("Done: Vault createdYour vault is open with a 50 testUSDC per-trade cap and a 100 testUSDC total budget.");
+  expect(setup.textContent).toBe("Done: Vault createdYour vault is open with a 50 testUSDC per-trade cap and a 100 testUSDC total budget.Create vault");
 });
 
 it.each([0n, 1_000_000_000n])("keeps completed funding actionable with wallet balance %s", async (balance) => {

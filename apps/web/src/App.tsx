@@ -19,8 +19,9 @@ import { Toast, ToastStack } from "./Toast";
 import { ProgressButton, Skeleton, VaultSkeleton, LoadingDashboard } from "./Progress";
 import { DevnetSolHint } from "./DevnetSolHint";
 import { needsFaucet, newFundedDemo, withWalletBalanceRefresh } from "./funding";
-import { isWalletDisconnected, WALLET_CHANGED, walletRequestError } from "./wallet-lifecycle";
+import { isWalletDisconnected, isWalletNotReady, WALLET_CHANGED, walletRequestError } from "./wallet-lifecycle";
 import { CanonicalSiteNotice } from "./CanonicalSiteNotice";
+import { isMobileBrowser, phantomBrowseUrl, PHANTOM_INSTALL_MESSAGE, PHANTOM_MOBILE_MESSAGE } from "./phantom-availability";
 
 const nowUnix = () => BigInt(Math.floor(Date.now() / 1000));
 const shorten = (value: string) => `${value.slice(0, 4)}…${value.slice(-4)}`;
@@ -175,6 +176,7 @@ export function App({
   const [revision, setRevision] = useState(0);
   const [changed, setChanged] = useState(false);
   const [requestError, setRequestError] = useState<Error | null>(null);
+  const [walletNotReady, setWalletNotReady] = useState(false);
   useLayoutEffect(() => {
     const switched = previousWalletAddress.current !== walletAddress;
     previousWalletAddress.current = walletAddress;
@@ -196,15 +198,19 @@ export function App({
       setRevision(++generation.current);
       setChanged(disconnected);
       setRequestError(null);
+      setWalletNotReady(false);
     };
     const onConnect = () => reset(false);
     const onDisconnect = () => reset(true);
+    const onReadyStateChange = () => setWalletNotReady(false);
     adapter.on("connect", onConnect);
     adapter.on("disconnect", onDisconnect);
+    adapter.on("readyStateChange", onReadyStateChange);
     return () => {
       ++generation.current;
       adapter.off("connect", onConnect);
       adapter.off("disconnect", onDisconnect);
+      adapter.off("readyStateChange", onReadyStateChange);
     };
   }, [adapter, walletMode]);
 
@@ -215,19 +221,22 @@ export function App({
     setRequestError(null);
     try { return await action(); }
     catch (error) {
-      if (generation.current === started && !isWalletDisconnected(error)) setRequestError(walletRequestError(error));
+      if (generation.current === started && !isWalletDisconnected(error)) {
+        if (isWalletNotReady(error)) setWalletNotReady(true);
+        else setRequestError(walletRequestError(error));
+      }
       throw error;
     }
   }, []);
   return <>
     <OwnerApp key={`${environment}:${walletMode ? `${walletAddress}:${revision}` : "server"}`}
-      environment={environment} walletMode={walletMode} wallet={wallet} changed={changed}
+      environment={environment} walletMode={walletMode} wallet={wallet} changed={changed} walletNotReady={walletNotReady}
       isCurrent={isCurrent} requestWallet={requestWallet} requestError={requestError} dismissRequestError={() => setRequestError(null)} />
   </>;
 }
 
-function OwnerApp({ environment, walletMode, wallet, changed, isCurrent, requestWallet, requestError, dismissRequestError }: {
-  environment: AegisEnvironment; walletMode: boolean; wallet: ReturnType<typeof useWallet>; changed: boolean;
+function OwnerApp({ environment, walletMode, wallet, changed, walletNotReady, isCurrent, requestWallet, requestError, dismissRequestError }: {
+  environment: AegisEnvironment; walletMode: boolean; wallet: ReturnType<typeof useWallet>; changed: boolean; walletNotReady: boolean;
   isCurrent(): boolean; requestWallet<T>(action: () => Promise<T>): Promise<T>;
   requestError: Error | null; dismissRequestError(): void;
 }) {
@@ -254,11 +263,21 @@ function OwnerApp({ environment, walletMode, wallet, changed, isCurrent, request
     return () => controller.abort();
   }, [environment, walletMode, wallet.publicKey, wallet.signTransaction, isCurrent, requestWallet]);
 
-  const walletControl = (className: string) => walletMode && <div className="wallet-control"><ProgressButton type="button" className={className} busy={wallet.connecting || wallet.disconnecting} progress={wallet.disconnecting ? "Disconnecting…" : "Connecting…"} disabled={actionsBusy} onClick={() => {
+  // WalletProviderBase keeps readyState current via the adapter's readyStateChange event.
+  const readyState = wallet.wallet?.readyState ?? "Unsupported";
+  const mobile = walletMode && isMobileBrowser();
+  const needsPhantom = walletMode && !wallet.connected && (walletNotReady
+    || readyState === "NotDetected" || readyState === "Unsupported" || (mobile && readyState === "Loadable"));
+  const walletControl = (className: string) => walletMode && <div className="wallet-control">{needsPhantom
+    ? <a className={className} href={mobile ? phantomBrowseUrl(window.location.href, import.meta.env.AEGIS_PUBLIC_ORIGIN) : "https://phantom.com/download"}
+      target={mobile ? undefined : "_blank"} rel={mobile ? undefined : "noopener noreferrer"}>
+      <Icon name="wallet" size={16} />{mobile ? "Open in Phantom" : "Install Phantom"}
+    </a>
+    : <ProgressButton type="button" className={className} busy={wallet.connecting || wallet.disconnecting} progress={wallet.disconnecting ? "Disconnecting…" : "Connecting…"} disabled={actionsBusy} onClick={() => {
     void (wallet.connected ? wallet.disconnect() : requestWallet(() => wallet.connect())).catch(() => {});
   }}>
     <Icon name="wallet" size={16} />{wallet.connected ? "Disconnect" : "Connect wallet"}
-  </ProgressButton>
+  </ProgressButton>}
     {environment === "devnet" && !wallet.connected && <small className="wallet-network-hint">Phantom must be on Solana Devnet.</small>}
   </div>;
   const siteNotice = environment === "devnet" && walletMode ? <CanonicalSiteNotice /> : null;
@@ -281,7 +300,7 @@ function OwnerApp({ environment, walletMode, wallet, changed, isCurrent, request
             <h1>AI agents can be tricked. Aegis still enforces the limits.</h1>
             {error
               ? <Notice tone="error" message={error} />
-              : <p className="connecting-hint" role="status">{changed ? WALLET_CHANGED : "Devnet SOL covers transaction fees."}</p>}
+              : <p className="connecting-hint" role="status">{needsPhantom ? (mobile ? PHANTOM_MOBILE_MESSAGE : PHANTOM_INSTALL_MESSAGE) : changed ? WALLET_CHANGED : "Devnet SOL covers transaction fees."}</p>}
           </div>
           {environment === "devnet" && <TryIt />}
         </> : error

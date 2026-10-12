@@ -3,6 +3,7 @@ import { EventEmitter } from "node:events";
 import { act, createElement, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { PublicKey } from "@solana/web3.js";
+import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { Activity, VaultState } from "@aegis/sdk";
 import { WalletAegisClient } from "../../../packages/sdk/src/wallet";
@@ -11,6 +12,7 @@ import { App } from "../src/App";
 import { WalletProvider } from "../src/WalletProvider";
 import { useWallet } from "../src/wallet-react";
 import { isWalletDisconnected, WALLET_CHANGED, WALLET_CANCELLED, WALLET_REQUEST_FAILED } from "../src/wallet-lifecycle";
+import { PHANTOM_INSTALL_MESSAGE, PHANTOM_MOBILE_MESSAGE } from "../src/phantom-availability";
 
 const key = (byte: number) => new PublicKey(new Uint8Array(32).fill(byte));
 const A = new PublicKey(deployment.owner), B = new PublicKey(deployment.agent), vaultA = key(3), vaultB = key(4);
@@ -290,6 +292,84 @@ it("shows Devnet guidance and muted Phantom detail for a generic connect failure
   expect(alerts()).toHaveLength(1);
   expect(container.querySelector('[role="alert"] p')?.textContent).toBe(WALLET_REQUEST_FAILED);
   expect(container.querySelector(".notice-code")?.textContent).toBe("Unexpected connection failure");
+});
+
+it("offers installation with neutral guidance when Phantom is not detected on desktop", async () => {
+  Reflect.deleteProperty(window, "phantom");
+  Reflect.deleteProperty(window, "isPhantomInstalled");
+  await mount();
+  expect(context.wallet?.readyState).toBe("NotDetected");
+  const link = container.querySelector<HTMLAnchorElement>(".wallet-control a");
+  expect(link?.textContent).toBe("Install Phantom");
+  expect(link?.href).toBe("https://phantom.com/download");
+  expect(link?.target).toBe("_blank");
+  expect(link?.rel).toContain("noopener");
+  expect(container.querySelector('.connecting-hint[role="status"]')?.textContent).toBe(PHANTOM_INSTALL_MESSAGE);
+  expect(container.textContent).not.toContain("Connect wallet");
+  expect(alerts()).toHaveLength(0);
+  expect(phantom.connect).not.toHaveBeenCalled();
+});
+
+it.each([
+  ["Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120.0 Mobile Safari/537.36", "NotDetected"],
+  ["Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1", "Loadable"],
+])("opens the current canonical URL in Phantom on mobile: %s", async (userAgent, readyState) => {
+  Reflect.deleteProperty(window, "phantom");
+  Reflect.deleteProperty(window, "isPhantomInstalled");
+  vi.spyOn(navigator, "userAgent", "get").mockReturnValue(userAgent);
+  vi.stubEnv("AEGIS_PUBLIC_ORIGIN", "https://demo.example/");
+  window.history.replaceState(null, "", "/demo?source=mobile&label=hello%20world");
+  await mount();
+  expect(context.wallet?.readyState).toBe(readyState);
+  const link = container.querySelector<HTMLAnchorElement>(".wallet-control a");
+  expect(link?.textContent).toBe("Open in Phantom");
+  expect(link?.getAttribute("href")).toBe("https://phantom.app/ul/browse/https%3A%2F%2Fdemo.example%2Fdemo%3Fsource%3Dmobile%26label%3Dhello%2520world?ref=https%3A%2F%2Fdemo.example");
+  expect(container.querySelector('.connecting-hint[role="status"]')?.textContent).toBe(PHANTOM_MOBILE_MESSAGE);
+  expect(container.textContent).not.toContain("Connect wallet");
+  expect(alerts()).toHaveLength(0);
+});
+
+it("offers neutral installation guidance for an unsupported adapter", async () => {
+  vi.spyOn(PhantomWalletAdapter.prototype, "readyState", "get").mockReturnValue("Unsupported" as PhantomWalletAdapter["readyState"]);
+  await mount();
+  expect(container.querySelector(".wallet-control a")?.textContent).toBe("Install Phantom");
+  expect(container.querySelector(".connecting-hint")?.textContent).toBe(PHANTOM_INSTALL_MESSAGE);
+  expect(alerts()).toHaveLength(0);
+});
+
+it.each(["direct", "wrapped"])("maps a %s WalletNotReadyError to neutral installation guidance and recovers on readiness", async (kind) => {
+  await mount();
+  const adapter = context.wallet!.adapter;
+  const error = Object.assign(new Error(), { name: "WalletNotReadyError" });
+  if (kind === "direct") vi.spyOn(adapter, "connect").mockRejectedValueOnce(error);
+  else phantom.connect.mockRejectedValueOnce(error);
+  await click("Connect wallet");
+  expect(container.querySelector(".wallet-control a")?.textContent).toBe("Install Phantom");
+  expect(container.querySelector('.connecting-hint[role="status"]')?.textContent).toBe(PHANTOM_INSTALL_MESSAGE);
+  expect(container.textContent).not.toContain(WALLET_REQUEST_FAILED);
+  expect(alerts()).toHaveLength(0);
+  await flush(() => adapter.emit("readyStateChange", adapter.readyState));
+  expect(container.querySelector(".wallet-control button")?.textContent).toBe("Connect wallet");
+  expect(container.textContent).not.toContain(PHANTOM_INSTALL_MESSAGE);
+  await click("Connect wallet");
+  expect(context.connected).toBe(true);
+});
+
+it("changes Install Phantom to Connect wallet when Phantom injects after load", async () => {
+  Reflect.deleteProperty(window, "phantom");
+  Reflect.deleteProperty(window, "isPhantomInstalled");
+  await mount();
+  expect(context.wallet?.readyState).toBe("NotDetected");
+  expect(container.querySelector(".wallet-control a")?.textContent).toBe("Install Phantom");
+  Object.defineProperty(window, "isPhantomInstalled", { configurable: true, value: true });
+  Object.defineProperty(window, "phantom", { configurable: true, value: { solana: phantom } });
+  await act(async () => { await vi.advanceTimersByTimeAsync(1_000); });
+  expect(context.wallet?.readyState).toBe("Installed");
+  expect(container.querySelector(".wallet-control button")?.textContent).toBe("Connect wallet");
+  expect(container.textContent).not.toContain(PHANTOM_INSTALL_MESSAGE);
+  expect(alerts()).toHaveLength(0);
+  await click("Connect wallet");
+  expect(context.connected).toBe(true);
 });
 
 it("keeps the Devnet hint beside Connect wallet, including during connection", async () => {

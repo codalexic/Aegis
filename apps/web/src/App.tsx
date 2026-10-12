@@ -44,9 +44,6 @@ function timeLabel(unix?: bigint): string {
   return unix === undefined ? "—" : new Date(Number(unix * 1000n)).toLocaleTimeString([], { hour12: false });
 }
 
-const environmentShort = (e: AegisEnvironment) => e === "mock" ? "Practice" : e === "localnet" ? "Localnet" : "Devnet";
-const environmentTitle = (environment: AegisEnvironment) => `${environment === "mock"
-  ? "Practice (mock)" : `Solana ${environment}`} · Test money, no real value`;
 
 /* --------------------------------------------------------------------------
    Shell: sidebar · content · rail. Pure layout; all state lives in Dashboard.
@@ -279,10 +276,9 @@ function OwnerApp({ environment, walletMode, wallet, changed, walletNotReady, is
     {environment === "devnet" && !wallet.connected && <small className="wallet-network-hint">Phantom must be on Solana Devnet.</small>}
   </div>;
   const siteNotice = environment === "devnet" && walletMode ? <CanonicalSiteNotice /> : null;
-  const environmentPill = <div className="environment" role="note" title={environmentTitle(environment)} aria-label={environmentTitle(environment)}><span className="environment-dot" />{environmentShort(environment)}</div>;
   const startBar = <header className="start-bar">
     <a className="brand start-brand" href="/" aria-label="Aegis home"><Logo size={36} withWordmark /></a>
-    <div className="rail-top">{environmentPill}{walletControl("start-connect")}</div>
+    <div className="rail-top">{walletControl("start-connect")}</div>
   </header>;
 
   if (!connection) {
@@ -307,7 +303,7 @@ function OwnerApp({ environment, walletMode, wallet, changed, walletNotReady, is
       </div>
     </Shell>;
   }
-  return <Dashboard key={`${environment}:${connection.owner.toBase58()}`} connection={connection} isCurrent={isCurrent} onBusyChange={setActionsBusy} siteNotice={siteNotice} toolbar={<>{environmentPill}{walletControl("start-connect rail-action")}</>}
+  return <Dashboard key={`${environment}:${connection.owner.toBase58()}`} connection={connection} isCurrent={isCurrent} onBusyChange={setActionsBusy} siteNotice={siteNotice} toolbar={walletControl("start-connect rail-action")}
     walletName={wallet.wallet?.adapter.name} walletIcon={wallet.wallet?.adapter.icon} />;
 }
 

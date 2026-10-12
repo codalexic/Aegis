@@ -149,14 +149,8 @@ export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, en
         <button aria-pressed={!live} disabled={locked} title="Replays a fixed reply. Works without an AI key" onClick={() => { userChose.current = true; setLive(false); }}>Scripted</button>
       </div>
     </div>
-    <p className="muted agent-model">{live
-      ? (model ? `Live AI: ${model} reads the news and decides the amount itself.` : "No AI key is set up on this server. Switch back to Scripted to run the scenarios.")
-      : "Scripted: a recorded reply, no AI call. The on-chain checks are identical."}</p>
-    {!usable && (
-      !vault
-        ? <Notice tone="error" className="agent-model" message="Set up and fund your vault first." />
-        : <Notice tone="error" className="agent-model" message="Trading stopped. Start again from the sidebar." />
-    )}
+    {live && !model && <p className="muted agent-model">No AI key is set up on this server. Switch back to Scripted to run the scenarios.</p>}
+    {!usable && !vault && <Notice tone="error" className="agent-model" message="Set up and fund your vault first." />}
     <ul className="scenario-list">
       {SCENARIOS.map((scenario) => <li key={scenario.id} className="scenario">
         <span className={`scenario-icon ${scenario.tone}`} aria-hidden="true"><Icon name={scenario.icon} size={20} /></span>

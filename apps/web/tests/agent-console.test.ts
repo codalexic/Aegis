@@ -47,11 +47,11 @@ describe("agent scenario and reply copy", () => {
     expect(markup).toMatch(/<button[^>]*>Hacker redirect<\/button>/);
     expect(markup).not.toContain("<strong>Wrong destination</strong>");
   });
-  it.each([true, false])("explains the selected mode even before a vault exists: live=%s", async (live) => {
+  it.each([true, false])("shows no mode subtext, only the setup notice before a vault exists: live=%s", async (live) => {
     const markup = await render(live, undefined, false);
-    expect(markup).toContain(live
-      ? "Live AI: test-model reads the news and decides the amount itself."
-      : "Scripted: a recorded reply, no AI call. The on-chain checks are identical.");
+    expect(markup).not.toContain("reads the news and decides the amount itself.");
+    expect(markup).not.toContain("Scripted: a recorded reply, no AI call.");
+    expect(markup).not.toContain("Trading stopped.");
     expect(markup).toContain("Set up and fund your vault first.");
   });
   it.each([true, false])("labels actual live replies outside collapsed details regardless of toggle: live=%s", async (live) => {

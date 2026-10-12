@@ -1208,6 +1208,7 @@ th.activity-result, td.activity-result { text-align: center; }
 .shell--dark .result.ok { background: rgba(34, 197, 94, .14); color: #22C55E; }
 .shell--dark .result.blocked { background: rgba(240, 138, 144, .14); color: #ffb0b4; }
 .shell--dark .status.active { background: rgba(196, 181, 255, .16); color: #e8e2ff; }
+.status.active .small-dot { background: #22C55E; box-shadow: 0 0 0 3px rgba(34, 197, 94, .18); }
 .account-chip { position: relative; flex: 0 0 auto; display: flex; }
 .account-chip-button {
   display: inline-grid; place-items: center; width: 36px; height: 36px; padding: 0; border-radius: 999px;

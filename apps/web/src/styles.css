@@ -1195,22 +1195,16 @@ a.signature:hover, a.signature:focus-visible { color: #2454a0; text-decoration-c
 }
 .shell .account-chip .account-chip-button img { width: 32px; height: 32px; border-radius: 8px; }
 .shell .account-chip .account-chip-button:focus-visible { outline: 2px solid var(--accent, #AB9FF2); outline-offset: 2px; }
-.account-pop {
-  position: absolute; right: 0; top: 100%; z-index: 20; padding-top: 8px;
-  opacity: 0; visibility: hidden; transform: translateY(-4px);
-  transition: opacity 160ms ease, transform 160ms ease, visibility 0s linear 160ms;
+.account-chip .account-chip-button { cursor: pointer; }
+.account-copied {
+  position: absolute; top: calc(100% + 6px); left: 50%; z-index: 20;
+  padding: 4px 8px; border-radius: 8px; background: #1C1C24; border: 1px solid var(--line-2);
+  color: #22C55E; font-size: 12px; font-weight: 600; white-space: nowrap; pointer-events: none;
+  opacity: 0; transform: translate(-50%, -4px); transition: opacity 160ms ease, transform 160ms ease;
 }
-.account-chip:hover .account-pop, .account-chip:focus-within .account-pop {
-  opacity: 1; visibility: visible; transform: translateY(0); transition-delay: 0s;
-}
-.account-pop-card {
-  display: grid; gap: 8px; width: 300px; padding: 14px; border-radius: 14px;
-  border: 1px solid var(--line-2); background: #1C1C24; box-shadow: 0 16px 36px rgba(0, 0, 0, .45);
-}
-.account-pop-label { font-size: 12px; font-weight: 600; color: var(--ink-2); }
-.account-pop code { font-size: 12px; line-height: 1.5; color: var(--ink); overflow-wrap: anywhere; word-break: break-all; }
-.account-pop .small { justify-self: start; display: inline-flex; align-items: center; gap: 6px; }
-@media (prefers-reduced-motion: reduce) { .account-pop { transition: none; transform: none; } }
+.account-copied:empty { border: 0; padding: 0; }
+.account-copied.is-visible { opacity: 1; transform: translate(-50%, 0); }
+@media (prefers-reduced-motion: reduce) { .account-copied { transition: none; } }
 .shell--dark .avatar {
   background: linear-gradient(135deg, #c4b5ff 0%, #8b7cff 100%);
   color: #07060c;

@@ -393,22 +393,16 @@ export function FundingStep({ state, text, balance, hasFaucet, hasVault, finishe
   </Step>;
 }
 
-/** Connected owner account: wallet icon + short address; hover or focus shows the full address. */
-export function AccountChip({ address, walletName, walletIcon }: { address: string; walletName?: string; walletIcon?: string }) {
+/** Connected owner account: the wallet logo; clicking it copies the owner address. */
+export function AccountChip({ address, walletIcon }: { address: string; walletName?: string; walletIcon?: string }) {
   const [copied, setCopied] = useState(false);
   useEffect(() => { if (!copied) return; const timer = window.setTimeout(() => setCopied(false), 1500); return () => window.clearTimeout(timer); }, [copied]);
   const copy = () => { void navigator.clipboard?.writeText(address).then(() => setCopied(true)).catch(() => {}); };
   return <div className="account-chip">
-    <button type="button" className="account-chip-button" aria-label={`Owner ${address}`}>
+    <button type="button" className="account-chip-button" aria-label={`Owner ${address}`} onClick={copy}>
       {walletIcon ? <img src={walletIcon} alt="" width={20} height={20} /> : <Icon name="wallet" size={16} />}
     </button>
-    <div className="account-pop" role="tooltip">
-      <div className="account-pop-card">
-        <span className="account-pop-label">{walletName ? `${walletName} account` : "Owner account"}</span>
-        <code>{address}</code>
-        <button type="button" className="small" onClick={copy}><Icon name={copied ? "check" : "copy"} size={14} />{copied ? "Copied" : "Copy address"}</button>
-      </div>
-    </div>
+    <span className={`account-copied${copied ? " is-visible" : ""}`} role="status" aria-live="polite">{copied ? "Copied!" : ""}</span>
   </div>;
 }
 

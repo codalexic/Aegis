@@ -95,5 +95,5 @@ it.each([0n, 1_000_000_000n])("preserves active-vault actions at wallet balance 
   for (const label of ["Run normal trade", "Inject malicious news", "Hacker redirect"]) {
     expect(button(agent, label)).not.toContain("disabled");
   }
-  expect(agent).toContain("Pick a scenario above.");
+  expect(agent).not.toContain("Pick a scenario above.");
 });

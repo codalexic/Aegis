@@ -135,7 +135,6 @@ export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, en
     </ul>
     <div className="agent-result-area" aria-busy={busy}>
       {reply && <p><span className="status">{reply.source === "live" ? "AI decided" : reply.source === "scripted" ? "Recorded reply" : "Fixed hacker request · No AI"}</span>{reply.source === "live" && model && <> {model}</>}</p>}
-      {!busy && !error && steps.length === 0 && usable && <p className="agent-placeholder">Pick a scenario above.</p>}
       {busy && <div className="agent-running">
         <div><strong>{progress}</strong><p>{progress === "Refreshing vault…" ? "Updating balances and activity."
           : "Waiting for the agent’s result. Solana transactions can take 5–15 seconds; live AI adds a few more seconds."}</p></div>

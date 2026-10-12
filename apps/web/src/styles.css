@@ -1217,9 +1217,16 @@ a.signature:hover, a.signature:focus-visible { color: #2454a0; text-decoration-c
 .shell .account-chip .account-chip-button, .shell .account-chip .account-chip-button:hover {
   width: auto; height: auto; padding: 0; border: 0; border-radius: 8px; background: transparent; box-shadow: none;
 }
-.shell .account-chip .account-chip-button img { width: 32px; height: 32px; border-radius: 8px; }
+.shell .account-chip .account-chip-button img { width: 42px; height: 42px; border-radius: 12px; }
 .shell .account-chip .account-chip-button:focus-visible { outline: 2px solid var(--accent, #AB9FF2); outline-offset: 2px; }
 .account-chip .account-chip-button { cursor: pointer; }
+/* Agent page: scenario cards sit in the vertical middle of the page (header height mirrored below). */
+.page-view:has(> .agent-console) { padding-bottom: 72px; }
+.page-view > .agent-console { margin-block: auto; }
+@media (max-width: 860px) {
+  .page-view:has(> .agent-console) { padding-bottom: 0; }
+  .page-view > .agent-console { margin-block: 0; }
+}
 .account-copied {
   position: absolute; top: calc(100% + 6px); left: 50%; z-index: 20;
   padding: 4px 8px; border-radius: 8px; background: #1C1C24; border: 1px solid var(--line-2);

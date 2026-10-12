@@ -69,7 +69,7 @@ describe.each(["revoked", "expired"] as const)("%s vault", (status) => {
     expect(button(markup, "New demo vault")).not.toContain("disabled");
 
     const agent = await render(status, balance, "input", "localnet", "#/agent");
-    for (const label of ["Run normal trade", "Inject malicious news", "Hacker redirect", "Live AI", "Scripted"]) {
+    for (const label of ["Run normal trade", "Inject malicious news", "Hacker redirect"]) {
       expect(button(agent, label)).toContain('disabled=""');
     }
     expect(agent).not.toContain("Pick a scenario above.");

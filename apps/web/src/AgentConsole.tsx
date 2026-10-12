@@ -141,14 +141,7 @@ export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, en
   const detailSteps = steps.filter((step) => step.type !== "result");
   return <>
     <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">{busy ? progress : ""}</span>
-    <section id="agent" className="card agent-console" aria-labelledby="agent-title" aria-busy={busy}>
-    <div className="card-heading">
-      <h2 id="agent-title">Agent console</h2>
-      <div className="segmented" role="group" aria-label="Agent mode">
-        <button aria-pressed={live} disabled={locked} title="A real AI model reads the news and proposes the trade" onClick={() => { userChose.current = true; setLive(true); }}>Live AI</button>
-        <button aria-pressed={!live} disabled={locked} title="Replays a fixed reply. Works without an AI key" onClick={() => { userChose.current = true; setLive(false); }}>Scripted</button>
-      </div>
-    </div>
+    <section id="agent" className="card agent-console" aria-label="Agent console" aria-busy={busy}>
     {live && !model && <p className="muted agent-model">No AI key is set up on this server. Switch back to Scripted to run the scenarios.</p>}
     {!usable && !vault && <Notice tone="error" className="agent-model" message="Set up and fund your vault first." />}
     <ul className="scenario-list">

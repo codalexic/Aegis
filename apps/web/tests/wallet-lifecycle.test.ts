@@ -138,7 +138,6 @@ it.each(["null account", "external disconnect", "button"])("clears the route on 
   await connect();
   await openPage("agent");
   expectPage("agent");
-  await click("Live AI");
   const replace = vi.spyOn(window.history, "replaceState");
   const length = window.history.length;
   if (kind === "button") await click("Disconnect");
@@ -153,19 +152,18 @@ it.each(["null account", "external disconnect", "button"])("clears the route on 
   expect(window.location.hash).toBe("#/overview");
   expectPage("vault");
   await openPage("agent");
-  expect(container.querySelector('button[aria-pressed="true"]')?.textContent).toBe("Scripted");
+  expect(container.querySelector(".scenario-list")).not.toBeNull();
 });
 
 it("opens Overview on an account switch and resets the previous account's page state", async () => {
   await connect();
   await openPage("agent");
-  await click("Live AI");
   await flush(() => phantom.switchAccount(B));
   expect(window.location.hash).toBe("#/overview");
   expect(ownerVisible(B)).not.toBeNull();
   expectPage("vault");
   await openPage("agent");
-  expect(container.querySelector('button[aria-pressed="true"]')?.textContent).toBe("Scripted");
+  expect(container.querySelector(".scenario-list")).not.toBeNull();
 });
 
 it("clears disconnected deep links on load and hash navigation, then connects to Overview", async () => {

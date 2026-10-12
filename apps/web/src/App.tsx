@@ -320,10 +320,6 @@ function Tile({ tone, icon, label, value, unit, sub, subTone, testId, children, 
   </div>;
 }
 
-function StepDone() {
-  return <span className="step-done"><Icon name="check" size={14} />Complete</span>;
-}
-
 function Step({ number, state, title, text, children }: { number: number; state: "done" | "next" | "todo"; title: string; text: ReactNode; children: ReactNode }) {
   return <div className={`step ${state}`}>
     <span className="step-num" aria-hidden="true">{state === "done" ? <Icon name="check" size={18} /> : number}</span>
@@ -680,11 +676,9 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
           </div>
         </div>
         <div className="steps">
-          <Step number={1} state={step1} title={vault ? "Vault created" : "Vault setup"} text={vault ? "Ready for funding." : ""}>
+          <Step number={1} state={step1} title={vault ? "Vault created" : "Vault setup"} text="">
             <div className="step-action">
-              {vault
-                ? <StepDone />
-                : <ProgressButton className={step1 === "next" ? "primary" : ""} disabled={!ready || locked} busy={busy === "Create vault"} progress="Creating…" onClick={() => void create()}>Create vault</ProgressButton>}
+              {!vault && <ProgressButton className={step1 === "next" ? "primary" : ""} disabled={!ready || locked} busy={busy === "Create vault"} progress="Creating…" onClick={() => void create()}>Create vault</ProgressButton>}
             </div>
           </Step>
           <FundingStep state={step2} balance={walletBalance} hasFaucet={!!connection.faucet} hasVault={!!vault} finished={finished} locked={locked} busy={busy}
@@ -702,6 +696,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
         <section className="rail-card guardrails-card" aria-labelledby="guard-title">
           <div className="rail-heading"><h2 id="guard-title">Guardrails</h2><span className="rail-badge"><Icon name="shield" size={16} /></span></div>
           <p className="rail-lead">{guardLead}</p>
+          <p className="rail-sub">Enforced on-chain. The agent cannot change them.</p>
           <div className="guard-rows">
             <div className="guard-row"><span className="label">Per-trade cap</span><span className="value">{vault ? amount(vault.maxTradeRaw) : "50"}<small>testUSDC</small></span></div>
             <div className="guard-row"><span className="label">Total budget</span><span className="value">{vault ? amount(vault.budgetRaw) : "100"}<small>testUSDC</small></span></div>
@@ -792,6 +787,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       </div>}
     </section>}
 
+    <footer><span>Aegis</span><span>{environmentShort(environment)} · Test money, no real value</span></footer>
     </div>
   </Shell>;
 }

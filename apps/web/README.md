@@ -36,9 +36,10 @@ directly over RPC every two seconds, including real signatures and the requested
 amounts on rejected transactions. `--mode scripted` exercises the same scenarios
 without calling an AI provider. Revoke agent and Withdraw all use the owner.
 
-The Agent console runs these scenarios from the dashboard. Live AI is selected
-by default and shows the configured model name. Scripted uses fixed replies;
-Hacker redirect always skips the model. News, the highlighted injection, model
+The Agent page runs these scenarios from the dashboard. It uses Live AI when a
+model is configured and recorded replies otherwise; if the model is unavailable,
+the scenario falls back to its recorded reply and says so. Hacker redirect always
+skips the model. News, the highlighted injection, model
 JSON, requests and outcomes are shown separately. If the model resists, **Retry
 scripted** sends the fixed attack with one click. Valid model proposals are
 always submitted unchanged, even when they resist the injection.

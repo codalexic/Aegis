@@ -1,6 +1,13 @@
 {
   "name": "aegis",
   "version": "0.1.0",
+  "description": "On-chain spending limits for AI trading agents on Solana",
+  "license": "MIT",
+  "homepage": "https://aegis.axssell.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/codalexic/Aegis.git"
+  },
   "private": true,
   "packageManager": "pnpm@12.9.1",
   "engines": {

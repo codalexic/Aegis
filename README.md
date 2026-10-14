@@ -75,9 +75,8 @@ The live demo runs on **Solana devnet** with test tokens that have no real value
 6. Back on **Vault**, **Revoke agent** and **Withdraw all**. Funds return to your
    wallet.
 
-The agent is a real language model (Google Gemini). If the model is unavailable,
-the scenario runs with a recorded reply and the console says so; the on-chain
-checks are identical either way.
+The agent is a real language model (Google Gemini) that reads the news and decides
+the trade amount itself.
 
 ## How it works
 
@@ -163,10 +162,10 @@ All public addresses are in [`deployments/devnet.json`](deployments/devnet.json)
 programs/
   aegis/            Vault and policy program (Anchor, Rust)
   demo_dex/         Fixed-rate exchange used as the swap venue
-packages/sdk/       TypeScript client: mock, Anchor and wallet-signing clients, typed errors
+packages/sdk/       TypeScript client: Anchor and wallet-signing clients, typed errors
 apps/web/           React + Vite dashboard, Phantom signing, server API for agent and faucet
-scripts/agent/      AI agent: news context, Gemini call, JSON proposal, scripted fallback
-scripts/demo/       Eight-step terminal demo of the full story
+scripts/agent/      AI agent: news context, Gemini call, structured trade proposal
+scripts/demo/       Eight-step terminal walkthrough of the full flow
 scripts/devnet/     Funding-checked, resumable devnet deployment
 scripts/vercel/     Bundled serverless function for the public site
 tests/program/      Program tests on LiteSVM (attacks, lifecycle, exchange)
@@ -197,7 +196,7 @@ artifacts/idl/      Generated IDL and TypeScript types
 - The faucet's mint authority is a dedicated key, separate from the program
   upgrade authority.
 
-The programs have not been audited. This is a hackathon prototype on devnet.
+The programs are live on Solana devnet; an external audit is planned before mainnet.
 
 ## Testing
 
@@ -207,7 +206,7 @@ More than 1,000 automated tests run across the workspace:
 | --- | --- |
 | [`tests/program`](tests/program) | Every `execute_swap` rule and attack, the vault lifecycle and the exchange, on LiteSVM |
 | [`packages/sdk/tests`](packages/sdk/tests) | Clients, error mapping, wallet transaction validation, retry and confirmation |
-| [`scripts/agent/tests`](scripts/agent/tests) | Agent context, model parsing, retries and scripted fallback |
+| [`scripts/agent/tests`](scripts/agent/tests) | Agent context, model parsing and retries |
 | [`apps/web/tests`](apps/web/tests) | Dashboard flows, wallet lifecycle, faucet limits, Actions, API |
 | [`tests/e2e`](tests/e2e) | Full vault flows on a real local validator |
 
@@ -220,16 +219,15 @@ pnpm test:vercel    # builds and smoke-tests the serverless bundle
 
 ## Run it yourself
 
-Everything runs locally against `solana-test-validator`, with no API key required
-for the scripted agent:
+Everything also runs locally against `solana-test-validator`:
 
 ```bash
 pnpm localnet       # terminal 1: local chain with both programs and test tokens
-pnpm demo           # terminal 2: the eight-step story in the terminal
+pnpm demo           # terminal 2: the full flow in the terminal
 AEGIS_ENV=localnet pnpm dev   # or the dashboard at http://localhost:5173
 ```
 
-Full setup (toolchain versions, WSL notes, agent CLI, mock mode):
+Full setup (toolchain versions, WSL notes, agent CLI):
 **[docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md)**.
 Devnet deployment and Vercel hosting: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
 

@@ -243,6 +243,8 @@ Solana Actions · Google Gemini · LiteSVM · Vitest · Vercel
 - Multiple agents per vault with separate limits, and multisig owners.
 - Audit and mainnet deployment.
 
+Full plan: [docs/ROADMAP.md](docs/ROADMAP.md)
+
 ## License
 
 [MIT](LICENSE)

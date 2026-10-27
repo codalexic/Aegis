@@ -12,6 +12,7 @@ import { isRateLimited, RPC_RATE_LIMITED } from "../../../packages/sdk/src/error
 import { explorerTransactionUrl } from "../../../packages/sdk/src/explorer";
 import { Icon, type IconName } from "./icons";
 import { Logo } from "./Logo";
+import { Landing } from "./Landing";
 import { TradeBars, type TradeBar } from "./TradeBars";
 import { Notice } from "./Notice";
 import { Toast, ToastStack } from "./Toast";
@@ -280,21 +281,22 @@ function OwnerApp({ environment, walletMode, wallet, changed, walletNotReady, is
 
   if (!connection) {
     const waitingForWallet = walletMode && (!wallet.connected || !wallet.publicKey);
+    const toasts = <ToastStack>{requestError && <Toast tone="error" message={requestError} onDismiss={dismissRequestError} />}</ToastStack>;
+    const walletStatus = <span className="sr-only" role="status" aria-live="polite">{wallet.connecting ? "Approve connection in Phantom…" : wallet.disconnecting ? "Disconnecting wallet…" : ""}</span>;
+    if (waitingForWallet) {
+      const hint = needsPhantom ? (mobile ? PHANTOM_MOBILE_MESSAGE : PHANTOM_INSTALL_MESSAGE) : changed ? WALLET_CHANGED : null;
+      return <Landing walletButton={walletControl}
+        status={error ? <Notice tone="error" message={error} /> : hint && <p className="connecting-hint" role="status">{hint}</p>}>
+        {siteNotice}{toasts}{walletStatus}
+      </Landing>;
+    }
     return <Shell active="vault" hideNav>
-      <div className={waitingForWallet ? "start" : "start connecting-screen"}>
+      <div className="start connecting-screen">
         {startBar}
         {siteNotice}
-        <ToastStack>{requestError && <Toast tone="error" message={requestError} onDismiss={dismissRequestError} />}</ToastStack>
-        <span className="sr-only" role="status" aria-live="polite">{wallet.connecting ? "Approve connection in Phantom…" : wallet.disconnecting ? "Disconnecting wallet…" : ""}</span>
-        {waitingForWallet ? <>
-          <div className="start-hero">
-            <h1>AI agents can be tricked. Aegis still enforces the limits.</h1>
-            {error
-              ? <Notice tone="error" message={error} />
-              : <p className="connecting-hint" role="status">{needsPhantom ? (mobile ? PHANTOM_MOBILE_MESSAGE : PHANTOM_INSTALL_MESSAGE) : changed ? WALLET_CHANGED : "Devnet SOL covers transaction fees."}</p>}
-          </div>
-          {environment === "devnet" && <TryIt />}
-        </> : error
+        {toasts}
+        {walletStatus}
+        {error
           ? <div className="connecting"><Notice tone="error" message={error} /></div>
           : <LoadingDashboard />}
       </div>
@@ -302,43 +304,6 @@ function OwnerApp({ environment, walletMode, wallet, changed, walletNotReady, is
   }
   return <Dashboard key={`${environment}:${connection.owner.toBase58()}`} connection={connection} isCurrent={isCurrent} onBusyChange={setActionsBusy} siteNotice={siteNotice} toolbar={walletControl("start-connect rail-action")}
     walletName={wallet.wallet?.adapter.name} walletIcon={wallet.wallet?.adapter.icon} />;
-}
-
-const TRY_STEPS: { title: string; body: ReactNode }[] = [
-  {
-    title: "Install Phantom",
-    body: <>Download from <a href="https://phantom.com/download" target="_blank" rel="noreferrer">phantom.com</a></>,
-  },
-  {
-    title: "Switch to devnet",
-    body: "In Phantom: Settings → Developer Settings → Testnet Mode → Solana Devnet.",
-  },
-  {
-    title: "Connect here",
-    body: "Use the top-right button; approve in Phantom.",
-  },
-  {
-    title: "Try the demo",
-    body: "Create and fund a vault, then test the agent.",
-  },
-];
-
-function TryIt() {
-  return <aside className="try-it" aria-labelledby="try-it-title">
-    <header className="try-it-head">
-      <h2 id="try-it-title">How to get started?</h2>
-    </header>
-    <ol className="try-it-steps">
-      {TRY_STEPS.map((step, index) => <li key={step.title} data-step={index + 1}>
-        <span className="try-it-marker" aria-hidden="true">{index + 1}</span>
-        <div>
-          <strong className="try-it-title">{step.title}</strong>
-          <p className="try-it-detail">{step.body}</p>
-        </div>
-      </li>)}
-    </ol>
-    <p className="try-it-foot">Need devnet SOL? Use the <a href="https://faucet.solana.com" target="_blank" rel="noreferrer">Solana Faucet</a>.</p>
-  </aside>;
 }
 
 /* --------------------------------------------------------------------------

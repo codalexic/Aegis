@@ -145,7 +145,7 @@ it.each(["null account", "external disconnect", "button"])("clears the route on 
   expect(window.location.hash).toBe("");
   expect(replace).toHaveBeenCalledWith(window.history.state, "", "/");
   expect(window.history.length).toBe(length);
-  expect(container.querySelector(".shell--start")).not.toBeNull();
+  expect(container.querySelector(".landing")).not.toBeNull();
   expect(container.querySelector(".nav")).toBeNull();
   phantom.publicKey = A;
   await click("Connect wallet");
@@ -174,7 +174,7 @@ it("clears disconnected deep links on load and hash navigation, then connects to
   expect(window.history.state).toEqual({ test: true });
   await openPage("activity");
   expect(window.location.hash).toBe("");
-  expect(container.querySelector(".shell--start")).not.toBeNull();
+  expect(container.querySelector(".landing")).not.toBeNull();
   await click("Connect wallet");
   expect(window.location.hash).toBe("#/overview");
   expectPage("vault");

@@ -31,7 +31,7 @@ afterEach(async () => {
 
 it.each(["mock", "localnet", "devnet"] as const)("shows no environment badge or footer on any %s page", async (environment) => {
   const expectNoBadge = () => {
-    expect(container.querySelector("footer")).toBeNull();
+    expect(container.querySelector("footer:not(.lp-foot)")).toBeNull();
     expect(container.querySelector(".environment")).toBeNull();
     expect(container.textContent).not.toContain("Test money, no real value");
   };
@@ -39,7 +39,7 @@ it.each(["mock", "localnet", "devnet"] as const)("shows no environment badge or 
   // Disconnected start page, then every dashboard route.
   await act(async () => root.render(createElement(WalletProvider, null,
     createElement(App, { environment, walletMode: true }))));
-  expect(container.querySelector(".shell--start")).not.toBeNull();
+  expect(container.querySelector(".landing")).not.toBeNull();
   expectNoBadge();
 
   const { connectDashboard: connectMock } = await vi.importActual<typeof import("../src/client")>("../src/client");

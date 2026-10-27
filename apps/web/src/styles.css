@@ -1,3 +1,7 @@
+/* The dashboard lives in a cascade layer so the landing page's unlayered, lp- scoped styles
+   (landing.css) always win over these bare element rules (button, input, h1…), whatever their
+   specificity. Inside the layer, order and specificity work exactly as before. */
+@layer dashboard {
 /* ==========================================================================
    Aegis dashboard — design tokens
    Light, calm, three-column shell: white sidebar · soft-gray content · white rail.
@@ -1454,3 +1458,4 @@ th.activity-result, td.activity-result { text-align: center; }
 @media (min-width: 1800px) { .shell { --zoom: 1.15; zoom: 1.15; } }
 @media (min-width: 2200px) { .shell { --zoom: 1.32; zoom: 1.32; } }
 @media (min-width: 3000px) { .shell { --zoom: 1.55; zoom: 1.55; } }
+} /* @layer dashboard */

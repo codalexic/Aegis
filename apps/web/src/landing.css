@@ -73,11 +73,11 @@ html:has(.landing), body:has(.landing) { background: #000; color-scheme: dark; }
 .lp-nav { position: fixed; inset: 14px 0 auto; z-index: 50; padding: 0 16px; pointer-events: none; }
 /* Floating frosted capsule: heavy blur + saturation on what scrolls beneath, a lit top edge and a deep shadow. */
 .lp-nav-in { pointer-events: auto; position: relative; display: flex; align-items: center; gap: 28px; max-width: 1132px; height: 60px; margin: 0 auto; padding: 0 9px 0 22px; border-radius: 999px;
-  background: linear-gradient(180deg, rgba(34, 32, 38, .55), rgba(14, 13, 16, .45));
-  backdrop-filter: blur(24px) saturate(170%); -webkit-backdrop-filter: blur(24px) saturate(170%);
+  background: linear-gradient(180deg, rgba(30, 28, 34, .72), rgba(12, 11, 14, .66));
+  backdrop-filter: blur(40px) saturate(180%); -webkit-backdrop-filter: blur(40px) saturate(180%);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .09), inset 0 1px 0 rgba(255, 255, 255, .12), 0 18px 50px -18px rgba(0, 0, 0, .9);
   transition: background .3s, box-shadow .3s; }
-.lp-nav.is-scrolled .lp-nav-in { background: linear-gradient(180deg, rgba(38, 35, 42, .78), rgba(16, 15, 18, .7));
+.lp-nav.is-scrolled .lp-nav-in { background: linear-gradient(180deg, rgba(32, 30, 36, .8), rgba(12, 11, 14, .74));
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), inset 0 1px 0 rgba(255, 255, 255, .14), 0 22px 60px -16px rgba(0, 0, 0, .95); }
 .lp-nav-logo { display: flex; color: var(--ae-text); }
 .lp-nav-links { display: flex; gap: 2px; margin-left: auto; }

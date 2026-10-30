@@ -236,15 +236,6 @@ Devnet deployment and Vercel hosting: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 Solana · Anchor 1.1 · Rust · TypeScript · React 19 · Vite · Phantom wallet adapter ·
 Solana Actions · Google Gemini · LiteSVM · Vitest · Vercel
 
-## Roadmap
-
-- Route swaps through a real aggregator (Jupiter) with per-route allowlists.
-- Richer policies: per-token limits, rolling daily budgets, allowed counterparties.
-- Multiple agents per vault with separate limits, and multisig owners.
-- Audit and mainnet deployment.
-
-Full plan: [docs/ROADMAP.md](docs/ROADMAP.md)
-
 ## License
 
 [MIT](LICENSE)

@@ -122,22 +122,16 @@ async function openPage(page: string) {
   });
 }
 
-function expectPage(page: "vault" | "agent" | "stats" | "activity") {
-  expect(container.querySelectorAll('.nav a[aria-current="true"]')).toHaveLength(1);
-  expect(container.querySelector('.nav a[aria-current="true"]')?.getAttribute("href")).toBe(`#/${page}`);
-  const heading = {
-    vault: "AI agents can be tricked. Aegis still enforces the limits.",
-    agent: "Test the agent’s limits.",
-    stats: "Requests against the per-trade cap.",
-    activity: "Every trade and every blocked attempt.",
-  }[page];
-  expect(container.querySelector("h1")?.textContent).toBe(heading);
+/** The connected dashboard: the header's page links with exactly one current page. */
+function expectDashboard(page = "overview") {
+  expect(container.querySelector("h1")?.textContent).toBe("Your Aegis vault");
+  expect(container.querySelectorAll('.site-links a[aria-current="page"]')).toHaveLength(1);
+  expect(container.querySelector('.site-links a[aria-current="page"]')?.getAttribute("href")).toBe(`#/${page}`);
 }
 
 it.each(["null account", "external disconnect", "button"])("clears the route on %s and reconnects to Overview with fresh page state", async (kind) => {
   await connect();
-  await openPage("agent");
-  expectPage("agent");
+  expectDashboard();
   const replace = vi.spyOn(window.history, "replaceState");
   const length = window.history.length;
   if (kind === "button") await click("Disconnect");
@@ -146,24 +140,19 @@ it.each(["null account", "external disconnect", "button"])("clears the route on 
   expect(replace).toHaveBeenCalledWith(window.history.state, "", "/");
   expect(window.history.length).toBe(length);
   expect(container.querySelector(".landing")).not.toBeNull();
-  expect(container.querySelector(".nav")).toBeNull();
+  expect(container.querySelector('.site-links a[href="#/overview"]')).toBeNull();
   phantom.publicKey = A;
   await click("Connect wallet");
   expect(window.location.hash).toBe("#/overview");
-  expectPage("vault");
-  await openPage("agent");
-  expect(container.querySelector(".scenario-list")).not.toBeNull();
+  expectDashboard();
 });
 
 it("opens Overview on an account switch and resets the previous account's page state", async () => {
   await connect();
-  await openPage("agent");
   await flush(() => phantom.switchAccount(B));
   expect(window.location.hash).toBe("#/overview");
   expect(ownerVisible(B)).not.toBeNull();
-  expectPage("vault");
-  await openPage("agent");
-  expect(container.querySelector(".scenario-list")).not.toBeNull();
+  expectDashboard();
 });
 
 it("clears disconnected deep links on load and hash navigation, then connects to Overview", async () => {
@@ -177,18 +166,19 @@ it("clears disconnected deep links on load and hash navigation, then connects to
   expect(container.querySelector(".landing")).not.toBeNull();
   await click("Connect wallet");
   expect(window.location.hash).toBe("#/overview");
-  expectPage("vault");
+  expectDashboard();
 });
 
-it.each(["vault", "agent", "stats", "activity"] as const)("honors #/%s when opened with an already-connected wallet", async (page) => {
+it.each(["overview", "agent", "analytics", "activity", "vault"] as const)("honors #/%s when opened with an already-connected wallet", async (page) => {
   await connect();
   await mount(false);
   window.history.replaceState(null, "", `/#/${page}`);
   await mount();
   expect(window.location.hash).toBe(`#/${page}`);
-  expectPage(page);
-  await openPage(page === "vault" ? "agent" : "vault");
-  expectPage(page === "vault" ? "agent" : "vault");
+  expectDashboard(page);
+  if (page === "agent") expect(container.querySelector("#agent .scenario-list")).not.toBeNull();
+  await openPage(page === "overview" ? "agent" : "overview");
+  expectDashboard(page === "overview" ? "agent" : "overview");
 });
 
 it("switches A → B, clears A immediately, and drops A's late vault discovery", async () => {
@@ -406,6 +396,7 @@ it.each(["Unexpected signing failure", "Transaction simulation failed: AccountNo
   });
   await connect();
   phantom.signTransaction.mockRejectedValueOnce(new Error(message));
+  await openPage("vault");
   await click("Revoke agent");
   expect(alerts()).toHaveLength(1);
   expect(container.querySelector('[role="alert"] p')?.textContent).toBe(WALLET_REQUEST_FAILED);
@@ -443,6 +434,7 @@ it.each(["resolve", "reject"])("reports explicit sign rejection, but drops a sta
   });
   await connect();
   phantom.signTransaction.mockRejectedValueOnce(new Error("User rejected the request"));
+  await openPage("vault");
   await click("Revoke agent");
   expect(container.textContent).toContain(WALLET_CANCELLED);
   expect(alerts()).toHaveLength(0);
@@ -483,7 +475,6 @@ it("shows connection progress, then the logo loader while discovering the wallet
   await flush(() => connecting.resolve());
   expect(container.querySelector('[data-testid="connecting-logo"]')).not.toBeNull();
   expect(container.querySelector(".connecting-mark")).not.toBeNull();
-  expect(container.querySelector('[data-testid="vault-skeleton"]')).toBeNull();
   await flush(() => discovery.resolve(Response.json({ vault: vaultA.toBase58() })));
   expect(container.querySelector('[data-testid="connecting-logo"]')).toBeNull();
   expect(ownerVisible(A)).not.toBeNull();

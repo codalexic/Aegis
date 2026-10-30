@@ -27,6 +27,13 @@ function button(label: string) {
   return found!;
 }
 
+/** Opens a dashboard page by its hash route, as the header links do. */
+async function openPage(page: "overview" | "agent" | "analytics" | "activity" | "vault") {
+  await flush(async () => {
+    window.location.hash = `#/${page}`;
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+  });
+}
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(1_900_000_000_000);
@@ -71,6 +78,7 @@ it("keeps a wallet action busy through real prepare, approve, confirm and refres
   const f = await walletFixture();
   const lock = vi.fn();
   await flush(() => root.render(createElement(Dashboard, { connection: f.connection, toolbar: null, onBusyChange: lock })));
+  await openPage("vault");
   await flush(() => button("Revoke agent").click());
   const action = button("Revoking…");
   expect(action.disabled).toBe(true);
@@ -79,14 +87,10 @@ it("keeps a wallet action busy through real prepare, approve, confirm and refres
   expect(action.style.width).toBe("160px");
   expect(container.textContent).toContain("Preparing…");
   expect(f.sign).not.toHaveBeenCalled();
-  for (const label of ["Create vault", "Fund 1,000", "New demo vault", "Withdraw all"]) {
-    expect(button(label).disabled, label).toBe(true);
-  }
-  await flush(() => { window.location.hash = "#/agent"; window.dispatchEvent(new HashChangeEvent("hashchange")); });
-  for (const label of ["Run normal trade", "Inject malicious news", "Hacker redirect"]) {
-    expect(button(label).disabled, label).toBe(true);
-  }
-  await flush(() => { window.location.hash = "#/vault"; window.dispatchEvent(new HashChangeEvent("hashchange")); });
+  for (const label of ["New demo vault", "Withdraw all"]) expect(button(label).disabled, label).toBe(true);
+  await openPage("agent");
+  for (const label of ["Run normal trade", "Inject malicious news", "Hacker redirect"]) expect(button(label).disabled, label).toBe(true);
+  await openPage("vault");
   expect(lock).toHaveBeenLastCalledWith(true);
   await flush(() => f.simulation.resolve({ value: { err: null } }));
   expect(container.querySelector('[data-testid="toast-stack"] [role="status"]')?.textContent).toContain("Approve in Phantom…");
@@ -101,7 +105,6 @@ it("keeps a wallet action busy through real prepare, approve, confirm and refres
   await flush(() => f.confirmation.resolve({ value: [{ err: null, confirmationStatus: "confirmed" }] }));
   expect(container.textContent).toContain("Refreshing vault…");
   expect(action.getAttribute("aria-busy")).toBe("true");
-  expect(container.querySelector('[data-testid="vault-skeleton"]')).toBeNull();
   await flush(() => refresh.resolve({ ...vault, revoked: true }));
   expect(container.textContent).toContain("Agent revoked. You can still withdraw your funds.");
   expect(container.querySelector('[data-busy="true"]')).toBeNull();
@@ -112,6 +115,7 @@ it("keeps a wallet action busy through real prepare, approve, confirm and refres
 it("clears progress and unlocks actions after Phantom rejects signing", async () => {
   const f = await walletFixture();
   await flush(() => root.render(createElement(Dashboard, { connection: f.connection, toolbar: null })));
+  await openPage("vault");
   await flush(() => button("Revoke agent").click());
   await flush(() => f.simulation.resolve({ value: { err: null } }));
   await flush(() => f.signature.reject(Object.assign(new Error("User rejected"), { code: 4001 })));
@@ -122,21 +126,20 @@ it("clears progress and unlocks actions after Phantom rejects signing", async ()
   expect(container.querySelector('.notice.info[role="status"]')?.textContent).toContain("Connection cancelled in Phantom.");
 });
 
-it("shows stat and vault skeletons before the first load and keeps values visible during polling", async () => {
+it("keeps the connect loader up until the first vault read, then never shows it during polling", async () => {
   const f = await walletFixture();
   const first = Promise.withResolvers<VaultState>();
   f.reads.mockReturnValueOnce(first.promise);
   await flush(() => root.render(createElement(Dashboard, { connection: f.connection, toolbar: null })));
-  expect(container.querySelector('#overview[aria-busy="true"]')).not.toBeNull();
-  expect(container.querySelectorAll(".tile .skeleton-value")).toHaveLength(4);
-  expect(container.querySelector('[data-testid="vault-skeleton"]')).not.toBeNull();
+  expect(container.querySelector('[data-testid="connecting-logo"].is-resumed')).not.toBeNull();
   expect(container.querySelector('[data-testid="input-balance"]')).toBeNull();
   await flush(() => first.resolve(vault));
-  expect(container.querySelectorAll(".skeleton")).toHaveLength(0);
+  expect(container.querySelector('[data-testid="connecting-logo"]')).toBeNull();
+  await openPage("overview");
   expect(container.querySelector('[data-testid="input-balance"]')?.textContent).toBe("1,000");
   const poll = Promise.withResolvers<VaultState>(); f.reads.mockReturnValueOnce(poll.promise);
   await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
-  expect(container.querySelectorAll(".skeleton")).toHaveLength(0);
+  expect(container.querySelector('[data-testid="connecting-logo"]')).toBeNull();
   expect(container.querySelector('[data-testid="input-balance"]')?.textContent).toBe("1,000");
   await flush(() => poll.resolve(vault));
 });

@@ -1,7 +1,7 @@
 import { createElement, useState } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AgentConsole } from "../src/AgentConsole";
+import { AgentConsole, friendlyAgentError } from "../src/AgentConsole";
 import { connectDashboard } from "../src/client";
 import type { Step } from "../../../scripts/agent/run";
 
@@ -71,3 +71,37 @@ describe("agent scenario and reply copy", () => {
     expect(markup).not.toContain("AI decided");
   });
 });
+
+describe("agent failures", () => {
+  const keyError = "Cannot load .keys/devnet-agent.json; run pnpm devnet:deploy to create a valid test agent key.";
+
+  it("shows a run that returned only an error as a failure, with the raw message kept in details", async () => {
+    const connection = await connectDashboard("mock");
+    const created = await connection.create();
+    const vault = await connection.client.getVault(created.vault!);
+    vi.mocked(useState).mockImplementationOnce(() => [false, vi.fn()])
+      .mockImplementationOnce(() => [null, vi.fn()])
+      .mockImplementationOnce(() => [[{ type: "notice", code: "error", message: keyError }] satisfies Step[], vi.fn()]);
+    const markup = renderToStaticMarkup(createElement(AgentConsole, {
+      vault, finished: false, disabled: false, onBusy: vi.fn(), onComplete: vi.fn(),
+    }));
+    const [visible, details] = markup.split('<details class="agent-details">');
+    expect(visible).toContain("The agent couldn’t run");
+    expect(visible).toContain("The demo AI agent isn’t set up on this server yet, so it can’t send trades.");
+    expect(visible).toContain(">Try again</button>");
+    expect(visible).toContain("Didn’t run");
+    expect(visible).not.toContain("to send this request through Aegis");
+    expect(visible).not.toContain(".keys/");
+    expect(details).toContain(keyError);
+    expect(markup).not.toContain("Use Scripted to retry without AI.");
+  });
+
+  it.each([
+    ["Demo request limit reached. Wait a minute before retrying.", "Too many demo requests right now. Wait a minute, then try again."],
+    ["Could not reach the agent. Is the dashboard server running?", "The demo server couldn’t be reached. Check your connection and try again."],
+    ["Something specific happened.", "Something specific happened."],
+  ])("explains %s in plain words", (message, expected) => {
+    expect(friendlyAgentError(message)).toBe(expected);
+  });
+});
+

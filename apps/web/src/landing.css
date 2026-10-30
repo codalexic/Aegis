@@ -73,11 +73,11 @@ html:has(.landing), body:has(.landing) { background: #000; color-scheme: dark; }
 .lp-nav { position: fixed; inset: 14px 0 auto; z-index: 50; padding: 0 16px; pointer-events: none; }
 /* Floating frosted capsule: heavy blur + saturation on what scrolls beneath, a lit top edge and a deep shadow. */
 .lp-nav-in { pointer-events: auto; position: relative; display: flex; align-items: center; gap: 28px; max-width: 1132px; height: 60px; margin: 0 auto; padding: 0 9px 0 22px; border-radius: 999px;
-  background: linear-gradient(180deg, rgba(30, 28, 34, .72), rgba(12, 11, 14, .66));
-  backdrop-filter: blur(40px) saturate(180%); -webkit-backdrop-filter: blur(40px) saturate(180%);
+  background: linear-gradient(180deg, rgba(30, 28, 34, .8), rgba(12, 11, 14, .76));
+  backdrop-filter: blur(72px) saturate(180%); -webkit-backdrop-filter: blur(72px) saturate(180%);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .09), inset 0 1px 0 rgba(255, 255, 255, .12), 0 18px 50px -18px rgba(0, 0, 0, .9);
   transition: background .3s, box-shadow .3s; }
-.lp-nav.is-scrolled .lp-nav-in { background: linear-gradient(180deg, rgba(32, 30, 36, .8), rgba(12, 11, 14, .74));
+.lp-nav.is-scrolled .lp-nav-in { background: linear-gradient(180deg, rgba(32, 30, 36, .86), rgba(12, 11, 14, .82));
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), inset 0 1px 0 rgba(255, 255, 255, .14), 0 22px 60px -16px rgba(0, 0, 0, .95); }
 .lp-nav-logo { display: flex; color: var(--ae-text); }
 .lp-nav-links { display: flex; gap: 2px; margin-left: auto; }
@@ -113,7 +113,11 @@ html:has(.landing), body:has(.landing) { background: #000; color-scheme: dark; }
 
 
 /* ---------- 2. Story: three compact, equal cards in a row ---------- */
-.lp-story { height: 420vh; }
+.lp-story { position: relative; height: 420vh; }
+/* One snap point in the middle of each step's scroll range ((420vh - 100vh) / 4 = 80vh per step), so a
+   fast scroll stops on every step. Proximity snapping leaves the rest of the page scrolling freely. */
+html:has(.landing) { scroll-snap-type: y proximity; }
+.lp-story-snap { position: absolute; left: 0; top: calc((var(--i) + .5) * 80vh); width: 1px; height: 1px; pointer-events: none; scroll-snap-align: start; scroll-snap-stop: always; }
 .lp-story-sticky { position: sticky; top: 0; height: 100vh; height: 100svh; display: grid; grid-template-rows: auto auto; align-content: center; justify-items: center; gap: 56px; padding: 96px 24px 48px; overflow: hidden; }
 .lp-story-sticky::before { content: ""; position: absolute; inset: 0; pointer-events: none;
   background-image: radial-gradient(rgba(255, 255, 255, .07) 1px, transparent 1.2px); background-size: 22px 22px;
@@ -190,7 +194,10 @@ html:has(.landing), body:has(.landing) { background: #000; color-scheme: dark; }
   .lp-flow.run .c1 i { animation-name: lp-d1; } .lp-flow.run .c2 i { animation-name: lp-d2; }
   @keyframes lp-d1 { 0%, 8% { top: 0; opacity: 0; } 12% { opacity: 1; } 26% { top: 100%; opacity: 1; } 29%, 100% { top: 100%; opacity: 0; } }
   @keyframes lp-d2 { 0%, 52% { top: 0; opacity: 0; } 56% { opacity: 1; } 70% { top: 100%; opacity: 1; } 73%, 100% { top: 100%; opacity: 0; } }
-  .lp-dots { right: auto; left: 50%; top: auto; bottom: 20px; transform: translateX(-50%); grid-auto-flow: column; }
+}
+/* Phones (portrait or landscape): a horizontal step row right under the cards instead of an edge rail. */
+@media (max-width: 800px), (max-height: 560px) {
+  .lp-dots { position: static; transform: none; grid-auto-flow: column; justify-content: center; }
   .lp-dots i.is-on { height: 4px; width: 18px; }
 }
 
@@ -209,7 +216,7 @@ html:has(.landing), body:has(.landing) { background: #000; color-scheme: dark; }
 .lp-t-amount .dec { color: rgba(255, 255, 255, .35); font-size: .62em; letter-spacing: -0.04em; }
 .lp-t-amount.over .dec { color: rgba(255, 46, 126, .55); }
 .lp-t-amount small { align-self: center; margin-left: 12px; display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px 0 6px; border-radius: 8px; font-family: var(--ae-font-sans); font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--ae-text-muted); background: rgba(255, 255, 255, .05); box-shadow: 0 0 0 1px rgba(255, 255, 255, .07) inset; }
-.lp-t-amount small::before { content: ""; width: 14px; height: 14px; border-radius: 50%; background: linear-gradient(180deg, #fff, #BDBAC4); }
+.lp-t-amount small::before { content: ""; width: 14px; height: 14px; border-radius: 50%; background: url("/usdc.svg") center / cover no-repeat; }
 .lp-t-amount.over { color: var(--ae-pink); }
 .lp-t-range { position: relative; padding: 6px 0; }
 .lp-t-range input { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 4px; border-radius: 2px; outline: none; cursor: pointer; margin: 0;
@@ -258,7 +265,7 @@ html:has(.landing), body:has(.landing) { background: #000; color-scheme: dark; }
 .lp-t-chip::before { content: ""; position: absolute; right: 100%; top: 50%; width: 64px; height: 2px; margin-top: -1px; border-radius: 2px; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55)); }
 .lp-t-chip.ok::before { background: linear-gradient(90deg, transparent, rgba(61, 220, 151, .8)); }
 .lp-t-chip.no::before { background: linear-gradient(90deg, transparent, rgba(255, 46, 126, .85)); }
-.lp-t-chip i { width: 20px; height: 20px; border-radius: 50%; background: linear-gradient(180deg, #fff, #BDBAC4); }
+.lp-t-chip i { width: 20px; height: 20px; border-radius: 50%; background: url("/usdc.svg") center / cover no-repeat; }
 .lp-t-chip.ok { box-shadow: inset 0 0 0 1px var(--ae-success), 0 0 24px -4px rgba(61, 220, 151, .55); }
 .lp-t-chip.no { background: linear-gradient(180deg, #FF5A9A, #E81E6C); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), 0 0 30px -4px rgba(255, 46, 126, .8); color: #fff; }
 .lp-tc-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
@@ -295,7 +302,6 @@ html:has(.landing), body:has(.landing) { background: #000; color-scheme: dark; }
   .lp-wrap { padding: 0 16px; }
   .lp-ctas .lp-btn { flex: 1 1 100%; }
   .lp-hero-mark { width: 104px; height: 104px; margin-bottom: 32px; }
-  .lp-dots i.is-on { height: 6px; width: 22px; }
   /* Nav wallet button collapses to its icon; the label is a text node, so hide it via font-size. */
   .lp-btn-wallet { width: 42px; padding: 0; font-size: 0; gap: 0; }
 }

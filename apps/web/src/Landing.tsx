@@ -248,6 +248,7 @@ function Story() {
       </div>
       <div className="lp-dots" aria-hidden="true">{SCENES.map((_, i) => <i key={i} className={i === scene ? "is-on" : undefined} />)}</div>
     </div>
+    {SCENES.map((_, i) => <span key={i} className="lp-story-snap" style={{ "--i": i } as CSSProperties} aria-hidden="true" />)}
   </section>;
 }
 

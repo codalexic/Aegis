@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { BrandLogo } from "./BrandLogo";
+import { SiteHeader } from "./SiteHeader";
 import "./landing.css";
 
 const GITHUB_URL = "https://github.com/codalexic/Aegis";
@@ -14,25 +15,12 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export function Landing({ walletButton, status, children }: {
   walletButton(className: string): ReactNode; status?: ReactNode; children?: ReactNode;
 }) {
-  const nav = useRef<HTMLElement>(null);
-  useEffect(() => {
-    const set = () => nav.current?.classList.toggle("is-scrolled", window.scrollY > 20);
-    window.addEventListener("scroll", set, { passive: true }); set();
-    return () => window.removeEventListener("scroll", set);
-  }, []);
-
   return <div className="landing">
-    <header className="lp-nav" ref={nav}>
-      <div className="lp-nav-in">
-        <a className="lp-nav-logo" href="/" aria-label="Aegis home"><BrandLogo height={22} title="" /></a>
-        <nav className="lp-nav-links" aria-label="Main">
-          <a href="#story">How it works</a>
-          <a href="#try">Try it</a>
-          <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer">GitHub</a>
-        </nav>
-        {walletButton("lp-btn lp-btn-wallet")}
-      </div>
-    </header>
+    <SiteHeader collapseLinks actions={walletButton("site-wallet")} links={<>
+      <a href="#story">How it works</a>
+      <a href="#try">Try it</a>
+      <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer">GitHub</a>
+    </>} />
 
     <main>
       <Hero walletButton={walletButton} status={status}>{children}</Hero>

@@ -1,5 +1,4 @@
 import { useLayoutEffect, useRef, type ButtonHTMLAttributes } from "react";
-import { Logo } from "./Logo";
 
 /** Keep the idle button's width while its label and icon change. */
 export function ProgressButton({ busy = false, progress, children, style, ...props }:
@@ -18,27 +17,19 @@ export function ProgressButton({ busy = false, progress, children, style, ...pro
   </button>;
 }
 
-export function Skeleton({ className = "" }: { className?: string }) {
-  return <span className={`skeleton ${className}`} aria-hidden="true" />;
-}
-
-export function VaultSkeleton() {
-  return <div className="vault-skeleton" data-testid="vault-skeleton">
-    {[1, 2, 3].map((row) => <div className="skeleton-row" key={row}>
-      <Skeleton className="skeleton-circle" /><div><Skeleton /><Skeleton className="skeleton-short" /></div><Skeleton className="skeleton-button" />
-    </div>)}
-  </div>;
-}
-
-/** Centered Aegis mark + spinner while the dashboard connection resolves. */
-export function LoadingDashboard() {
-  return <div className="connecting" role="status" aria-live="polite" aria-busy="true" data-testid="connecting-logo">
+/** The Aegis mark draws itself inside a turning ring while the dashboard connection resolves. */
+export function LoadingDashboard({ resume = false }: { resume?: boolean }) {
+  // `resume` continues the connect screen's loader without replaying the draw-in.
+  return <div className={`connecting${resume ? " is-resumed" : ""}`} role="status" aria-live="polite" aria-busy="true" data-testid="connecting-logo">
     <div className="connecting-mark" aria-hidden="true">
       <span className="connecting-glow" />
-      <span className="connecting-ring connecting-ring--outer" />
-      <span className="connecting-ring connecting-ring--inner" />
-      <Logo size={44} />
+      <span className="connecting-ring" />
+      <svg viewBox="0 0 100 100">
+        <rect className="cm-bar" x="14" y="12" width="72" height="12" rx="6" />
+        <path className="cm-peak" d="M20 86 L41 50 Q50 35 59 50 L80 86" pathLength={100} />
+      </svg>
     </div>
-    <p>Connecting to the vault…</p>
+    <p className="connecting-title">Connecting to the vault…</p>
+    <p className="connecting-sub">Looking up your vault on Solana. This takes a few seconds.</p>
   </div>;
 }

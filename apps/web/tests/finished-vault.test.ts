@@ -10,9 +10,9 @@ vi.mock("react", async (importOriginal) => {
 });
 
 const now = 1_800_000_000n;
-const finishedMessage = "Start again with a funded vault.";
+const finishedMessage = "This vault is closed";
 
-function stubWindow(hash = "#/vault") {
+function stubWindow(hash = "#/overview") {
   const location = {
     hash,
     replace(next: string) { location.hash = next; },
@@ -29,13 +29,13 @@ function stubWindow(hash = "#/vault") {
 beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(Number(now) * 1000);
-  stubWindow("#/vault");
+  stubWindow("#/overview");
 });
 afterEach(() => { vi.clearAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 async function render(status: "revoked" | "expired" | "active", walletBalance: bigint,
   funds: "input" | "output" | "empty" = "input", environment: "localnet" | "mock" | "devnet" = "localnet",
-  hash = "#/vault") {
+  hash = "#/overview") {
   stubWindow(hash);
   const connection = await connectDashboard("mock");
   const created = await connection.create();
@@ -76,24 +76,29 @@ describe.each(["revoked", "expired"] as const)("%s vault", (status) => {
   });
 
   it.each(["input", "output", "empty"] as const)("allows withdrawal only with funds: %s", async (funds) => {
-    const markup = await render(status, 0n, funds);
+    const markup = await render(status, 0n, funds, "localnet", "#/vault");
     expect(button(markup, "Withdraw all").includes('disabled=""')).toBe(funds === "empty");
   });
 
-  it("also disables practice trades", async () => {
-    expect(button(await render(status, 0n, "input", "mock", "#/agent"), "Swap")).toContain('disabled=""');
+  it("also disables the cases in mock mode", async () => {
+    const markup = await render(status, 0n, "input", "mock", "#/agent");
+    for (const label of ["Run normal trade", "Inject malicious news", "Hacker redirect"]) {
+      expect(button(markup, label)).toContain('disabled=""');
+    }
   });
 });
 
 it.each([0n, 1_000_000_000n])("preserves active-vault actions at wallet balance %s", async (balance) => {
   const markup = await render("active", balance);
   expect(markup).not.toContain(finishedMessage);
-  expect(button(markup, balance === 0n ? "Get 1,000 testUSDC" : "Fund 1,000")).not.toContain("disabled");
-  expect(button(markup, "Withdraw all")).not.toContain("disabled");
-
+  expect(markup).not.toContain('id="setup-title"');
+  expect(markup).toContain("Run the test cases");
+  expect(button(await render("active", balance, "input", "localnet", "#/vault"), "Withdraw all")).not.toContain("disabled");
   const agent = await render("active", balance, "input", "localnet", "#/agent");
   for (const label of ["Run normal trade", "Inject malicious news", "Hacker redirect"]) {
     expect(button(agent, label)).not.toContain("disabled");
   }
   expect(agent).not.toContain("Pick a scenario above.");
+  const empty = await render("active", balance, "empty");
+  expect(button(empty, balance === 0n ? "Get 1,000 testUSDC" : "Fund 1,000")).not.toContain("disabled");
 });

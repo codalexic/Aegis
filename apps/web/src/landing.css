@@ -39,7 +39,7 @@ html:has(.landing), body:has(.landing) { background: #000; color-scheme: dark; }
 /* ---------- Buttons ----------
    Primary: pink gradient with a lit top edge and a soft drop (no glow).
    Secondary: dark with a gradient hairline edge. Icons nudge on hover.
-   The wallet buttons come from OwnerApp wrapped in .wallet-control. */
+   The hero wallet buttons come from OwnerApp wrapped in .wallet-control; the header is shared (SiteHeader). */
 .landing .wallet-control { display: contents; }
 .lp-btn { --h: 42px; position: relative; isolation: isolate; display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: var(--h); padding: 0 18px; border-radius: 999px; border: 1px solid transparent; cursor: pointer; font-weight: 600; font-size: 14px; letter-spacing: -0.005em; white-space: nowrap; overflow: hidden;
   transition: transform .15s ease, filter .15s ease, background-color .15s ease, box-shadow .15s ease; }
@@ -59,30 +59,15 @@ html:has(.landing), body:has(.landing) { background: #000; color-scheme: dark; }
 .lp-btn-pink:disabled { filter: saturate(.6) brightness(.8); cursor: default; }
 .lp-btn-pink svg { color: #fff; }
 
-.lp-btn-glass, .lp-btn-wallet { color: var(--ae-text);
+.lp-btn-glass { color: var(--ae-text);
   background: linear-gradient(180deg, #1A1A1D, #0E0E10) padding-box,
               linear-gradient(180deg, rgba(255, 255, 255, .22), rgba(255, 255, 255, .05)) border-box;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .06), 0 2px 6px rgba(0, 0, 0, .5); }
-.lp-btn-glass:hover, .lp-btn-wallet:hover { background: linear-gradient(180deg, #222225, #131315) padding-box, linear-gradient(180deg, rgba(255, 255, 255, .3), rgba(255, 255, 255, .08)) border-box; }
+.lp-btn-glass:hover { background: linear-gradient(180deg, #222225, #131315) padding-box, linear-gradient(180deg, rgba(255, 255, 255, .3), rgba(255, 255, 255, .08)) border-box; }
 .lp-btn-glass svg { color: var(--ae-text-muted); }
 .lp-btn:hover .lp-i-right { transform: translateX(2px); }
 .lp-btn:hover .lp-i-down { transform: translateY(2px); }
 .lp-btn:hover .lp-i-out { transform: translate(2px, -2px); }
-
-/* ---------- Nav ---------- */
-.lp-nav { position: fixed; inset: 14px 0 auto; z-index: 50; padding: 0 16px; pointer-events: none; }
-/* Floating frosted capsule: heavy blur + saturation on what scrolls beneath, a lit top edge and a deep shadow. */
-.lp-nav-in { pointer-events: auto; position: relative; display: flex; align-items: center; gap: 28px; max-width: 1132px; height: 60px; margin: 0 auto; padding: 0 9px 0 22px; border-radius: 999px;
-  background: linear-gradient(180deg, rgba(30, 28, 34, .8), rgba(12, 11, 14, .76));
-  backdrop-filter: blur(72px) saturate(180%); -webkit-backdrop-filter: blur(72px) saturate(180%);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .09), inset 0 1px 0 rgba(255, 255, 255, .12), 0 18px 50px -18px rgba(0, 0, 0, .9);
-  transition: background .3s, box-shadow .3s; }
-.lp-nav.is-scrolled .lp-nav-in { background: linear-gradient(180deg, rgba(32, 30, 36, .86), rgba(12, 11, 14, .82));
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), inset 0 1px 0 rgba(255, 255, 255, .14), 0 22px 60px -16px rgba(0, 0, 0, .95); }
-.lp-nav-logo { display: flex; color: var(--ae-text); }
-.lp-nav-links { display: flex; gap: 2px; margin-left: auto; }
-.lp-nav-links a { padding: 8px 14px; border-radius: 999px; color: var(--ae-text-muted); font-size: 14px; font-weight: 500; transition: color .15s, background-color .15s; }
-.lp-nav-links a:hover { color: var(--ae-text); background: rgba(255, 255, 255, .07); }
 
 /* ---------- 1. Hero ---------- */
 .lp-hero { min-height: 100svh; display: grid; place-items: center; padding: 120px 0 96px; overflow: hidden; text-align: center; }
@@ -259,7 +244,7 @@ html:has(.landing) { scroll-snap-type: y proximity; }
 @keyframes lp-comet { 0% { left: -80px; opacity: 0; } 20% { opacity: 1; } 80% { opacity: 1; } 100% { left: 100%; opacity: 0; } }
 .lp-try-lane.is-busy .lp-t-comet { opacity: 0; }
 .lp-t-chip { position: absolute; z-index: 1; left: 0; top: 50%; transform: translateY(-50%); height: 30px; padding: 0 11px 0 4px; border-radius: 15px; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums;
-  background: linear-gradient(180deg, rgba(40, 38, 44, .92), rgba(16, 15, 18, .92)); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  background: linear-gradient(180deg, rgba(40, 38, 44, .92), rgba(16, 15, 18, .92)); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16), inset 0 1px 0 rgba(255, 255, 255, .12), 0 10px 24px -8px rgba(0, 0, 0, .9); opacity: 0; }
 /* motion trail behind the chip */
 .lp-t-chip::before { content: ""; position: absolute; right: 100%; top: 50%; width: 64px; height: 2px; margin-top: -1px; border-radius: 2px; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55)); }
@@ -294,16 +279,10 @@ html:has(.landing) { scroll-snap-type: y proximity; }
 .lp-foot-in > svg { color: var(--ae-text); }
 
 /* ---------- Responsive ---------- */
-@media (max-width: 860px) {
-  .lp-nav-links { display: none; }
-  .lp-nav-in { justify-content: space-between; padding-left: 18px; }
-}
 @media (max-width: 600px) {
   .lp-wrap { padding: 0 16px; }
   .lp-ctas .lp-btn { flex: 1 1 100%; }
   .lp-hero-mark { width: 104px; height: 104px; margin-bottom: 32px; }
-  /* Nav wallet button collapses to its icon; the label is a text node, so hide it via font-size. */
-  .lp-btn-wallet { width: 42px; padding: 0; font-size: 0; gap: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   .landing *, .landing *::before, .landing *::after { animation: none !important; transition: none !important; }

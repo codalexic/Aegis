@@ -2,10 +2,6 @@
    (landing.css) always win over these bare element rules (button, input, h1…), whatever their
    specificity. Inside the layer, order and specificity work exactly as before. */
 @layer dashboard {
-/* ==========================================================================
-   Aegis dashboard — the landing page's language carried past "Connect wallet":
-   pure black, crisp hairline cards, pink only where Aegis acts.
-   ========================================================================== */
 :root {
   --bg: #000000;
   --card: #0E0D10;
@@ -20,9 +16,8 @@
   --warn: #FFB547; --warn-soft: rgba(255, 181, 71, .12);
   --bad: #FF5A4E; --bad-soft: rgba(255, 90, 78, .12);
   --focus: var(--pink);
-  --r-md: 14px; --r-lg: 18px; --r-xl: 24px;
+  --r-lg: 18px; --r-xl: 24px;
   --edge: inset 0 0 0 1px var(--line);
-  --lift: 0 24px 48px -28px rgba(0, 0, 0, .95);
   --chart-ink: #3DDC97; --chart-bad: #FF2E7E; --chart-line: rgba(255, 255, 255, .14); --chart-muted: #85828C;
   --chart-band: rgba(61, 220, 151, .05); --chart-cap: rgba(255, 255, 255, .45);
   --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -44,14 +39,10 @@ a { color: inherit; }
 button:focus-visible, input:focus-visible, a:focus-visible, summary:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
 .icon-button:focus-visible { outline-offset: 1px; }
 
-/* --------------------------------------------------------------------------
-   Notices and toasts (also shown on the landing page)
-   -------------------------------------------------------------------------- */
 .notice { display: flex; flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 10px; min-width: 0; padding: 12px 16px; border-radius: 14px; background: var(--card-2); box-shadow: var(--edge); color: var(--ink); font-size: 14px; overflow-wrap: anywhere; animation: rise-in 220ms ease-out both; }
 .notice > svg { flex-shrink: 0; color: var(--ink-2); }
 .notice-content { flex: 1; min-width: 0; }
 .notice-content a { color: var(--blush); }
-.notice-code { display: block; font-size: 11px; color: var(--ink-2); }
 .notice.success > svg { color: var(--good); }
 .notice.error { background: #1A0F10; box-shadow: inset 0 0 0 1px rgba(255, 90, 78, .3); }
 .notice.error > svg { color: var(--bad); }
@@ -68,7 +59,6 @@ button:focus-visible, input:focus-visible, a:focus-visible, summary:focus-visibl
   pointer-events: none;
 }
 .toast-stack:empty { display: none; }
-/* Toasts: a compact glass card, the icon in a tinted circle, pink only where Aegis acts. */
 .toast-stack > .toast {
   pointer-events: auto; width: 100%; gap: 12px; padding: 10px 10px 10px 12px; border-radius: 16px;
   font-size: 14px; line-height: 1.4; color: var(--ink);
@@ -87,9 +77,6 @@ button:focus-visible, input:focus-visible, a:focus-visible, summary:focus-visibl
 .canonical-site-notice { font-size: 13px; color: var(--ink-2); }
 .canonical-site-notice a { color: var(--ink); text-decoration: underline; }
 
-/* --------------------------------------------------------------------------
-   Buttons: dark glass by default, the landing's pink gradient for the one next step.
-   -------------------------------------------------------------------------- */
 button { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 0 18px; border: 0; border-radius: 999px; cursor: pointer; white-space: nowrap; font-size: 14px; font-weight: 600; letter-spacing: -0.005em; color: var(--ink);
   background: linear-gradient(180deg, #1C1B1F, #111013);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12), inset 0 1px 0 rgba(255, 255, 255, .07), 0 2px 6px rgba(0, 0, 0, .5);
@@ -107,23 +94,17 @@ button.small { min-height: 32px; padding: 0 14px; border-radius: 999px; font-siz
 button.icon-button { width: 34px; min-height: 34px; padding: 0; border-radius: 999px; color: var(--ink-2); background: transparent; box-shadow: none; }
 button.icon-button:hover:not(:disabled) { background: rgba(255, 255, 255, .08); box-shadow: none; color: var(--ink); }
 button:disabled { cursor: not-allowed; opacity: .42; }
-/* in-place busy state on the pressed action button (ProgressButton sets data-busy + aria-busy) */
 button[data-busy] { opacity: 1; color: var(--ink-2); }
 button.primary[data-busy] { color: rgba(255, 255, 255, .85); background: linear-gradient(180deg, #C93A72, #A8255A); }
 button[data-busy] > svg { display: none; }
 .progress-spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin 700ms linear infinite; flex-shrink: 0; }
 .progress-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
-
-/* --------------------------------------------------------------------------
-   Frame: the landing's floating frosted capsule, carried over as the app header
-   -------------------------------------------------------------------------- */
 .db { display: flex; flex-direction: column; min-height: 100vh; min-height: 100svh; background: var(--bg); color: var(--ink); overflow-x: clip; }
 .db::before { content: ""; position: absolute; inset: 0 0 auto; height: 560px; pointer-events: none;
   background: radial-gradient(45% 70% at 50% -20%, rgba(255, 46, 126, .14), transparent 70%); }
 .db-main--center { position: relative; flex: 1; display: grid; place-items: center; padding: 24px; }
 
-/* Wallet logo (tinted pink on dark grey): click copies the owner address. */
 .account-chip { position: relative; display: flex; }
 .account-chip .account-chip-button { width: 36px; min-height: 36px; height: 36px; padding: 0; border-radius: 999px; background: #1C1B1F; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1); }
 .account-chip .account-chip-button:hover:not(:disabled) { background: #232227; box-shadow: inset 0 0 0 1px rgba(255, 46, 126, .45); }
@@ -134,10 +115,6 @@ button[data-busy] > svg { display: none; }
 .account-copied:empty { padding: 0; box-shadow: none; }
 .account-copied.is-visible { opacity: 1; transform: translate(-50%, 0); }
 
-/* --------------------------------------------------------------------------
-   Loader: one moment between Connect and the dashboard. The connect screen and the
-   first vault read share it; `is-resumed` skips the draw-in so the hand-off is seamless.
-   -------------------------------------------------------------------------- */
 .connecting { display: grid; justify-items: center; gap: 8px; padding: 24px; text-align: center; animation: fade-in 200ms ease-out both; }
 .connecting.is-resumed { animation: none; }
 .connecting--error { width: min(520px, 100%); }
@@ -160,12 +137,8 @@ button[data-busy] > svg { display: none; }
 .connecting-title { font-size: 20px; font-weight: 600; letter-spacing: -0.03em; }
 .connecting-sub { font-size: 14px; color: var(--ink-2); }
 
-/* --------------------------------------------------------------------------
-   Dashboard pages, in the Vercel/Stripe mould, under the shared site header
-   -------------------------------------------------------------------------- */
 .content { position: relative; display: grid; align-content: start; gap: 20px; width: 100%; max-width: 1180px; margin: 0 auto; padding: 100px 24px 72px; animation: rise-in 280ms ease-out both; }
 .content > .notice { margin: 0; }
-.muted { color: var(--ink-2); }
 .small { font-size: 13px; }
 .pink { color: var(--pink); }
 .text-link { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--ink-2); text-decoration: none; }
@@ -189,17 +162,12 @@ button[data-busy] > svg { display: none; }
 .banner > button { margin-left: auto; flex: none; }
 
 .status { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--ink-2); background: rgba(255, 255, 255, .06); white-space: nowrap; }
-.status .small-dot, .small-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.small-dot.ok { background: var(--good); }
-.status.active { color: var(--good); background: var(--good-soft); }
-.status.revoked, .status.expired { color: var(--pink); background: var(--pink-soft); }
 .badge { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 500; white-space: nowrap; color: var(--ink-2); background: rgba(255, 255, 255, .06); }
 .badge .progress-spinner { width: 10px; height: 10px; border-width: 1.5px; }
 .badge.ok { color: var(--good); background: var(--good-soft); }
 .badge.bad { color: var(--pink); background: var(--pink-soft); }
 .badge.warn { color: var(--warn); background: var(--warn-soft); }
 
-/* ---- Overview ---- */
 .setup-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 18px 32px; padding: 24px;
   background: radial-gradient(60% 140% at 0% 0%, rgba(255, 46, 126, .12), transparent 60%), linear-gradient(180deg, #17131A 0%, #0B0A0D 100%); box-shadow: inset 0 0 0 1px rgba(255, 46, 126, .28); }
 .setup-card::before { background: linear-gradient(90deg, transparent, rgba(255, 46, 126, .7), transparent); }
@@ -242,7 +210,6 @@ button[data-busy] > svg { display: none; }
 .rows dt { color: var(--ink-2); }
 .rows dd { margin: 0; font-weight: 500; text-align: right; font-variant-numeric: tabular-nums; }
 
-/* ---- Tables ---- */
 .table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .table th { padding: 10px 20px; font-size: 12px; font-weight: 500; text-align: left; color: var(--ink-3); background: rgba(255, 255, 255, .02); box-shadow: inset 0 1px 0 var(--line), inset 0 -1px 0 var(--line); }
 .table td { padding: 12px 20px; vertical-align: middle; box-shadow: inset 0 -1px 0 var(--line); }
@@ -263,7 +230,6 @@ button[data-busy] > svg { display: none; }
 .feed-link { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 999px; color: var(--ink-3); }
 .feed-link:hover { color: var(--ink); background: rgba(255, 255, 255, .06); }
 
-/* ---- Vault page ---- */
 .settings > .setting { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 16px 0; box-shadow: inset 0 1px 0 var(--line); }
 .settings > .setting:first-child { padding-top: 0; box-shadow: none; }
 .settings > .setting:last-child { padding-bottom: 0; }
@@ -277,7 +243,6 @@ button[data-busy] > svg { display: none; }
 .key-row code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
 .key-row .icon-button { width: 28px; min-height: 28px; height: 28px; }
 
-/* ---- Analytics ---- */
 .chart-legend { display: flex; gap: 14px; font-size: 12px; color: var(--ink-3); white-space: nowrap; }
 .chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
 .chart-legend i { width: 8px; height: 8px; border-radius: 2px; background: var(--chart-ink); }
@@ -299,7 +264,6 @@ button[data-busy] > svg { display: none; }
 .reasons i { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, .06); overflow: hidden; }
 .reasons em { display: block; height: 100%; border-radius: inherit; background: var(--pink); transition: width 600ms cubic-bezier(.22, 1, .36, 1); }
 
-/* ---- AI agent page: three cases side by side, one result panel below ---- */
 .agent-console { display: grid; gap: 16px; }
 .agent-model { font-size: 13px; }
 .cases-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -328,7 +292,6 @@ button[data-busy] > svg { display: none; }
 .result-hint b { font-weight: 600; color: var(--ink-2); }
 .agent-error-raw code { display: block; padding: 10px 12px; border-radius: 8px; font-size: 12px; color: var(--ink-2); background: rgba(255, 255, 255, .04); overflow-wrap: anywhere; }
 
-/* The request's path, left to right, with a dot travelling while it runs */
 .flow { display: grid; grid-template-columns: minmax(0, 1fr) 44px minmax(0, 1fr) 44px minmax(0, 1fr); align-items: stretch; }
 .flow-node { position: relative; display: grid; gap: 6px; padding: 14px 16px; border-radius: 14px; background: linear-gradient(180deg, #18171A 0%, #0D0D0F 100%); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08), 0 16px 32px -24px rgba(0, 0, 0, .9); transition: box-shadow 300ms ease-out; }
 .flow-node::before { content: ""; position: absolute; top: 0; left: 16px; right: 16px; height: 1px; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .18), transparent); }
@@ -337,7 +300,6 @@ button[data-busy] > svg { display: none; }
 .flow-v { font-size: 22px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .flow-v small { margin-left: 6px; font-size: 12px; font-weight: 500; letter-spacing: 0; color: var(--ink-3); }
 .flow-note { font-size: 12px; color: var(--ink-2); }
-.flow-note:empty { display: none; }
 .flow-gate { background: linear-gradient(180deg, #1C1519 0%, #0E0C0D 100%); box-shadow: inset 0 0 0 1px rgba(255, 46, 126, .28), 0 16px 32px -24px rgba(0, 0, 0, .9); }
 .flow-gate::before { background: linear-gradient(90deg, transparent, rgba(255, 46, 126, .7), transparent); }
 .flow-gate .flow-k svg { color: var(--pink); }
@@ -363,7 +325,6 @@ button[data-busy] > svg { display: none; }
 .v-check.pass { color: var(--good); }
 .v-check.fail { color: var(--pink); font-weight: 600; }
 
-/* Latest run: source, progress, plain-language verdict */
 .agent-result-area { display: grid; gap: 10px; margin-top: 14px; }
 .agent-source { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-2); }
 .agent-running { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 10px; background: rgba(255, 255, 255, .03); box-shadow: var(--edge); color: var(--ink-2); }
@@ -375,20 +336,18 @@ button[data-busy] > svg { display: none; }
 .agent-outcome .outcome-icon svg { width: 16px; height: 16px; }
 .agent-outcome strong { font-size: 14px; font-weight: 600; }
 .agent-outcome p { margin-top: 2px; font-size: 13px; color: var(--ink-2); }
-.agent-outcome .buttons { margin-left: auto; }
+.agent-outcome .buttons { margin-left: auto; align-self: center; }
 .agent-outcome.executed { box-shadow: inset 0 0 0 1px rgba(61, 220, 151, .28); }
 .agent-outcome.executed .outcome-icon { color: var(--good); background: var(--good-soft); }
 .agent-outcome.blocked { box-shadow: inset 0 0 0 1px rgba(255, 46, 126, .32); }
 .agent-outcome.blocked .outcome-icon { color: var(--pink); background: var(--pink-soft); }
 .agent-outcome.failed { background: linear-gradient(180deg, rgba(255, 181, 71, .08), rgba(255, 181, 71, .02)); box-shadow: inset 0 0 0 1px rgba(255, 181, 71, .3); }
 .agent-outcome.failed .outcome-icon { color: var(--warn); background: var(--warn-soft); }
-.agent-outcome .buttons { align-self: center; }
 .agent-resisted { display: grid; justify-items: start; gap: 8px; padding: 12px 14px; border-radius: 10px; background: var(--warn-soft); box-shadow: inset 0 0 0 1px rgba(255, 181, 71, .3); }
 .agent-resisted strong { color: var(--warn); font-size: 14px; }
 .agent-resisted p { font-size: 13px; color: var(--ink-2); }
 .agent-result-area .empty { padding: 14px; }
 
-/* Collapsible "under the hood" details */
 .agent-details { margin-top: 12px; border-radius: 10px; box-shadow: var(--edge); }
 .agent-details summary { cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 10px; list-style: none; font-size: 13px; font-weight: 500; color: var(--ink-2); }
 .agent-details summary:hover { color: var(--ink); }
@@ -412,9 +371,6 @@ button[data-busy] > svg { display: none; }
 .tok-number { color: #FBBF24; }
 .tok-literal { color: #FF8FB6; }
 
-/* --------------------------------------------------------------------------
-   Motion
-   -------------------------------------------------------------------------- */
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes fade-in { from { opacity: 0; } }
 @keyframes rise-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
@@ -424,15 +380,11 @@ button[data-busy] > svg { display: none; }
 @keyframes bar-hold { 0%, 60%, 100% { transform: translateY(0); } 67% { transform: translateY(-2px); } 75% { transform: translateY(0); } }
 @keyframes draw { to { stroke-dashoffset: 0; } }
 @keyframes push { 0%, 55%, 100% { transform: translateY(0); } 66% { transform: translateY(-9px); } 74% { transform: translateY(1px); } 80% { transform: translateY(0); } }
-@keyframes blink { 50% { box-shadow: 0 0 0 5px rgba(61, 220, 151, 0); } }
 @keyframes pulse-dot { 0%, 100% { background: rgba(255, 255, 255, .2); } 50% { background: rgba(255, 255, 255, .8); } }
 @keyframes travel { 0% { left: 0; opacity: 0; } 15% { opacity: 1; } 85% { left: 100%; opacity: 1; } 100% { left: 100%; opacity: 0; } }
 @keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
 @keyframes trade-bar-grow { from { transform: scaleY(.06); opacity: .4; } to { transform: scaleY(1); opacity: 1; } }
 
-/* --------------------------------------------------------------------------
-   Responsive
-   -------------------------------------------------------------------------- */
 @media (max-width: 1100px) {
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .grid-2 { grid-template-columns: minmax(0, 1fr); }
@@ -462,10 +414,7 @@ button[data-busy] > svg { display: none; }
 }
 }
 
-/* ==========================================================================
-   Shared site header: the landing's floating capsule, identical on every screen.
-   Unlayered on purpose, so the landing page's element resets can't restyle it.
-   ========================================================================== */
+/* Shared site header. Unlayered on purpose, so the landing page's element resets can't restyle it. */
 .site-header { position: fixed; inset: 14px 0 auto; z-index: 50; padding: 0 16px; pointer-events: none; }
 .site-header-in { pointer-events: auto; position: relative; display: flex; align-items: center; gap: 20px; max-width: 1132px; height: 60px; margin: 0 auto; padding: 0 9px 0 22px; border-radius: 999px;
   background: linear-gradient(180deg, rgba(30, 28, 34, .8), rgba(12, 11, 14, .76));

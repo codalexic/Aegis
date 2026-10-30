@@ -1,15 +1,9 @@
-/* ==========================================================================
-   Aegis — landing page (ported from the brand kit's aegis-landing-2.html)
-   Premium + simple: pure black, crisp tiles, pink only where Aegis acts.
-   Every class is prefixed lp- and scoped to .landing so dashboard styles never
-   leak in; element resets use :where() so they never outrank a component class.
-   ========================================================================== */
+/* Every class is prefixed lp- and scoped to .landing so dashboard styles never leak in;
+   element resets use :where() so they never outrank a component class. */
 .landing {
-  --ae-pink: #FF2E7E; --ae-pink-hover: #FF4D92; --ae-pink-soft: rgba(255, 46, 126, .14); --ae-blush: #FFC7DF;
-  --ae-bg: #000000; --ae-surface: #121114; --ae-surface-2: #18171B; --ae-surface-3: #24222A;
-  --ae-border: #232127; --ae-border-strong: #36333C;
+  --ae-pink: #FF2E7E;
   --ae-text: #FAFAFA; --ae-text-muted: #A8A5AE; --ae-text-faint: #85828C;
-  --ae-success: #3DDC97; --ae-warning: #FFB547; --ae-danger: #FF5A4E;
+  --ae-success: #3DDC97; --ae-warning: #FFB547;
   --ae-font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --ae-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   min-height: 100vh; background: #000; color: var(--ae-text);
@@ -36,10 +30,7 @@ html:has(.landing), body:has(.landing) { background: #000; color-scheme: dark; }
      past it. Pad the paint area and cancel it with a negative margin so layout is unchanged. */
   padding: 0 .12em .14em 0; margin-right: -.12em; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 
-/* ---------- Buttons ----------
-   Primary: pink gradient with a lit top edge and a soft drop (no glow).
-   Secondary: dark with a gradient hairline edge. Icons nudge on hover.
-   The hero wallet buttons come from OwnerApp wrapped in .wallet-control; the header is shared (SiteHeader). */
+/* The hero wallet buttons come from OwnerApp wrapped in .wallet-control. */
 .landing .wallet-control { display: contents; }
 .lp-btn { --h: 42px; position: relative; isolation: isolate; display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: var(--h); padding: 0 18px; border-radius: 999px; border: 1px solid transparent; cursor: pointer; font-weight: 600; font-size: 14px; letter-spacing: -0.005em; white-space: nowrap; overflow: hidden;
   transition: transform .15s ease, filter .15s ease, background-color .15s ease, box-shadow .15s ease; }
@@ -69,7 +60,6 @@ html:has(.landing), body:has(.landing) { background: #000; color-scheme: dark; }
 .lp-btn:hover .lp-i-down { transform: translateY(2px); }
 .lp-btn:hover .lp-i-out { transform: translate(2px, -2px); }
 
-/* ---------- 1. Hero ---------- */
 .lp-hero { min-height: 100svh; display: grid; place-items: center; padding: 120px 0 96px; overflow: hidden; text-align: center; }
 .lp-hero-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .lp-hero-aura { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(45% 35% at 50% 64%, rgba(255, 46, 126, .12), transparent 70%); }
@@ -96,8 +86,6 @@ html:has(.landing), body:has(.landing) { background: #000; color-scheme: dark; }
 @keyframes lp-push { 0%, 55%, 100% { transform: translateY(0); } 66% { transform: translateY(-9px); } 74% { transform: translateY(1px); } 80% { transform: translateY(0); } }
 @keyframes lp-bar-hold { 0%, 60%, 100% { transform: translateY(0); } 67% { transform: translateY(-2px); } 75% { transform: translateY(0); } }
 
-
-/* ---------- 2. Story: three compact, equal cards in a row ---------- */
 .lp-story { position: relative; height: 420vh; }
 /* One snap point in the middle of each step's scroll range ((420vh - 100vh) / 4 = 80vh per step), so a
    fast scroll stops on every step. Proximity snapping leaves the rest of the page scrolling freely. */
@@ -131,7 +119,6 @@ html:has(.landing) { scroll-snap-type: y proximity; }
 .lp-n-s { margin-top: 6px; font-size: 13px; color: var(--ae-text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lp-n-s.warn { color: var(--ae-warning); }
 
-/* middle card: Aegis */
 .lp-node.mid { background: linear-gradient(180deg, #1A1517 0%, #0E0C0D 100%); box-shadow: 0 0 0 1px rgba(255, 46, 126, .28) inset, 0 20px 40px -24px rgba(0, 0, 0, .9); }
 .lp-node.mid::before { background: linear-gradient(90deg, transparent, rgba(255, 46, 126, .7), transparent); }
 .lp-n-mark { width: 18px; height: 18px; flex: none; }
@@ -143,12 +130,10 @@ html:has(.landing) { scroll-snap-type: y proximity; }
 .lp-ck.fail { color: var(--ae-pink); background: rgba(255, 46, 126, .12); box-shadow: 0 0 0 1px rgba(255, 46, 126, .4) inset; }
 @keyframes lp-ckin { from { color: var(--ae-text-faint); background: rgba(255, 255, 255, .04); box-shadow: 0 0 0 1px rgba(255, 255, 255, .06) inset; } }
 
-/* result card */
 .lp-flow[data-state="ok"] .lp-node.res .lp-n-v { color: var(--ae-text); }
 .lp-flow[data-state="no"] .lp-node.res { box-shadow: 0 0 0 1px rgba(255, 255, 255, .06) inset; }
 .lp-flow[data-state="no"] .lp-node.res .lp-n-v { color: var(--ae-text-muted); }
 
-/* connectors + travelling dot (shared cycle) */
 .lp-conn { position: relative; width: 56px; height: 1px; background-image: linear-gradient(90deg, rgba(255, 255, 255, .3) 50%, transparent 0); background-size: 8px 1px; }
 .lp-conn i { position: absolute; top: 50%; left: 0; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: #fff; opacity: 0; }
 .lp-flow.run .c1 i { animation: lp-t1 var(--cycle) ease-in-out infinite; }
@@ -186,7 +171,6 @@ html:has(.landing) { scroll-snap-type: y proximity; }
   .lp-dots i.is-on { height: 4px; width: 18px; }
 }
 
-/* ---------- 3. Try it: wide, compact two-column widget ---------- */
 .lp-try { padding: 140px 0 40px; }
 .lp-try-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px 32px; max-width: 1000px; margin: 0 auto; }
 .lp-try-head .lp-sub { margin: 0 !important; font-size: 17px; }
@@ -215,7 +199,6 @@ html:has(.landing) { scroll-snap-type: y proximity; }
 .lp-t-presets button:hover { background: rgba(255, 255, 255, .08); color: var(--ae-text); }
 .lp-t-presets button[aria-pressed="true"] { color: var(--ae-text); background: rgba(255, 255, 255, .1); }
 .lp-try-lane { display: grid; grid-template-columns: 76px minmax(0, 1fr) 76px; align-items: start; gap: 10px; align-self: center; }
-/* Each end of the lane is a glass orb with its name and a live status line underneath. */
 .lp-t-stop { display: grid; justify-items: center; gap: 12px; text-align: center; }
 .lp-t-stop p { display: grid; gap: 2px; }
 .lp-t-stop b { font-size: 13px; font-weight: 600; letter-spacing: -0.01em; color: var(--ae-text); }
@@ -226,7 +209,6 @@ html:has(.landing) { scroll-snap-type: y proximity; }
   background: radial-gradient(circle at 32% 24%, rgba(255, 255, 255, .2), rgba(255, 255, 255, .03) 56%), #0E0E10;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .11), inset 0 -12px 22px rgba(0, 0, 0, .55), 0 18px 36px -18px rgba(0, 0, 0, .95); transition: box-shadow .25s; }
 .lp-t-orb svg { width: 24px; height: 24px; color: #fff; }
-/* Aegis: lit from within with a steady glow; a shockwave marks the verdict. */
 .lp-t-orb.is-gate { background: radial-gradient(circle at 50% 16%, rgba(255, 46, 126, .5), rgba(255, 46, 126, .07) 60%), #120C0F;
   box-shadow: inset 0 0 0 1px rgba(255, 46, 126, .4), inset 0 -12px 22px rgba(0, 0, 0, .5), 0 16px 40px -14px rgba(255, 46, 126, .55); }
 .lp-t-orb.is-gate svg { width: 30px; height: 30px; filter: drop-shadow(0 0 8px rgba(255, 46, 126, .65)); }
@@ -237,7 +219,6 @@ html:has(.landing) { scroll-snap-type: y proximity; }
 .lp-t-orb.no::before { animation: lp-ripple .8s ease-out; }
 @keyframes lp-ripple { from { transform: scale(1); opacity: .9; } to { transform: scale(2); opacity: 0; } }
 @keyframes lp-shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
-/* The wire: a glowing line warming toward Aegis, with a light pulse running along it while idle. */
 .lp-t-track { position: relative; height: 2px; margin-top: 31px; border-radius: 2px; background: linear-gradient(90deg, rgba(255, 255, 255, .07), rgba(255, 46, 126, .4)); }
 .lp-t-comet { position: absolute; inset: -2px 0; overflow: hidden; border-radius: 4px; transition: opacity .3s; }
 .lp-t-comet::before { content: ""; position: absolute; top: 1px; left: -80px; width: 80px; height: 4px; border-radius: 4px; background: linear-gradient(90deg, transparent, rgba(255, 199, 223, .95)); filter: blur(.6px); animation: lp-comet 2.6s cubic-bezier(.45, 0, .55, 1) infinite; }
@@ -246,7 +227,6 @@ html:has(.landing) { scroll-snap-type: y proximity; }
 .lp-t-chip { position: absolute; z-index: 1; left: 0; top: 50%; transform: translateY(-50%); height: 30px; padding: 0 11px 0 4px; border-radius: 15px; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; white-space: nowrap; font-variant-numeric: tabular-nums;
   background: linear-gradient(180deg, rgba(40, 38, 44, .92), rgba(16, 15, 18, .92)); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16), inset 0 1px 0 rgba(255, 255, 255, .12), 0 10px 24px -8px rgba(0, 0, 0, .9); opacity: 0; }
-/* motion trail behind the chip */
 .lp-t-chip::before { content: ""; position: absolute; right: 100%; top: 50%; width: 64px; height: 2px; margin-top: -1px; border-radius: 2px; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55)); }
 .lp-t-chip.ok::before { background: linear-gradient(90deg, transparent, rgba(61, 220, 151, .8)); }
 .lp-t-chip.no::before { background: linear-gradient(90deg, transparent, rgba(255, 46, 126, .85)); }
@@ -267,7 +247,6 @@ html:has(.landing) { scroll-snap-type: y proximity; }
   .lp-t-amount { font-size: 42px; }
 }
 
-/* ---------- 4. Final ---------- */
 .lp-final { padding: 200px 0 180px; text-align: center; overflow: hidden; }
 .lp-final-glow { position: absolute; left: 50%; top: 50%; width: 700px; height: 380px; transform: translate(-50%, -50%); background: radial-gradient(ellipse, rgba(255, 46, 126, .16), transparent 65%); }
 .lp-final-in { position: relative; }
@@ -278,7 +257,6 @@ html:has(.landing) { scroll-snap-type: y proximity; }
 .lp-foot-in { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; padding-bottom: 24px; box-shadow: 0 1px 0 rgba(255, 255, 255, .06); font-size: 13px; color: var(--ae-text-faint); }
 .lp-foot-in > svg { color: var(--ae-text); }
 
-/* ---------- Responsive ---------- */
 @media (max-width: 600px) {
   .lp-wrap { padding: 0 16px; }
   .lp-ctas .lp-btn { flex: 1 1 100%; }

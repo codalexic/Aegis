@@ -40,10 +40,10 @@ it("does not turn a confirmed funding result into a failure when balance refresh
   await expect(withWalletBalanceRefresh(async () => { throw original; }, async () => { throw new Error("network timeout"); })).rejects.toBe(original);
 });
 
-describe("Step 2 funding action", () => {
-  function render(balance: bigint | null, options: { hasFaucet?: boolean; hasVault?: boolean; locked?: boolean } = {}) {
+describe("funding action", () => {
+  function render(balance: bigint | null, options: { hasFaucet?: boolean; locked?: boolean } = {}) {
     return renderToStaticMarkup(createElement(FundingStep, {
-      state: "next", text: "Test money only.", balance, hasFaucet: true, hasVault: true, locked: false,
+      text: "Test money only.", balance, hasFaucet: true, locked: false,
       finished: false, busy: null, onFaucet: vi.fn(), onFund: vi.fn(), onNewDemo: vi.fn(), ...options,
     }));
   }
@@ -61,8 +61,7 @@ describe("Step 2 funding action", () => {
     expect(render(balance)).toContain(`Wallet: ${label} testUSDC`);
   });
 
-  it.each([0n, DEMO_FUND_RAW, null])("waits for a vault and locks during actions at balance %s", (balance) => {
-    expect(render(balance, { hasVault: false })).toContain('disabled=""');
+  it.each([0n, DEMO_FUND_RAW, null])("locks during actions at balance %s", (balance) => {
     expect(render(balance, { locked: true })).toContain('disabled=""');
   });
 

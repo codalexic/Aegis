@@ -1,23 +1,21 @@
 import { useLayoutEffect, useRef, type ButtonHTMLAttributes } from "react";
 
-/** Keep the idle button's width while its label and icon change. */
+/** Never narrower than the idle button while its label and icon change, but free to grow for a longer progress label. */
 export function ProgressButton({ busy = false, progress, children, style, ...props }:
   ButtonHTMLAttributes<HTMLButtonElement> & { busy?: boolean; progress: string }) {
   const button = useRef<HTMLButtonElement>(null);
   const width = useRef(0);
   useLayoutEffect(() => {
-    // offsetWidth stays in layout pixels even when the large-screen shell is zoomed.
     if (!busy && button.current) width.current = button.current.offsetWidth;
   });
   return <button {...props} ref={button} disabled={props.disabled || busy}
     data-busy={busy || undefined} aria-busy={busy || undefined}
     aria-label={busy ? progress : props["aria-label"]} title={busy ? progress : props.title}
-    style={{ ...style, ...(busy && width.current > 0 && { width: width.current, flexShrink: 0 }) }}>
+    style={{ ...style, ...(busy && width.current > 0 && { minWidth: width.current, flexShrink: 0 }) }}>
     {busy ? <><span className="progress-spinner" aria-hidden="true" /><span className="progress-label">{progress}</span></> : children}
   </button>;
 }
 
-/** The Aegis mark draws itself inside a turning ring while the dashboard connection resolves. */
 export function LoadingDashboard({ resume = false }: { resume?: boolean }) {
   // `resume` continues the connect screen's loader without replaying the draw-in.
   return <div className={`connecting${resume ? " is-resumed" : ""}`} role="status" aria-live="polite" aria-busy="true" data-testid="connecting-logo">

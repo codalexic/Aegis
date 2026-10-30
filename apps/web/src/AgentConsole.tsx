@@ -5,9 +5,8 @@ import type { Step } from "../../../scripts/agent/run";
 import { Icon, type IconName } from "./icons";
 import { describeError, PROGRAM_ERROR_MESSAGES } from "./errors";
 import { ProgressButton } from "./Progress";
+import { useCopy } from "./use-copy";
 import type { Scenario } from "./client";
-
-export type { Scenario };
 
 const decimal = (value: string) => {
   const [whole, fraction] = value.split(".");
@@ -36,8 +35,7 @@ export function blockedTitle(error: string): string {
   }
 }
 
-// Plain-language framing for each scenario. Button labels stay as they were
-// because server copy refers to them (e.g. "Use Scripted to retry without AI.").
+// Plain-language framing for each scenario. Keep the button labels stable: server error copy refers to them.
 const SCENARIOS: { id: Scenario; icon: IconName; tone: string; title: string; story: string; text: string; outcome: string; button: string }[] = [
   { id: "normal", icon: "swap", tone: "", title: "Within the rules", story: "Your AI makes an ordinary trade. Aegis checks it and lets it through.",
     text: "Swaps 20 testUSDC.", outcome: "Allowed: within the rules.", button: "Run normal trade" },
@@ -52,7 +50,6 @@ function News({ step }: { step: Extract<Step, { type: "news" }> }) {
   return <p className="agent-news">{at < 0 ? step.text : <>{step.text.slice(0, at)}<mark>{step.injection}</mark>{step.text.slice(at + step.injection!.length)}</>}</p>;
 }
 
-/** Light JSON highlighting: keys, strings, numbers and literals get their own colour. */
 export function highlightJson(json: string): (string | JSX.Element)[] {
   const out: (string | JSX.Element)[] = [];
   const token = /("(?:\\.|[^"\\])*")(\s*:)?|\b(-?\d+(?:\.\d+)?)\b|\b(true|false|null)\b/g;
@@ -72,9 +69,7 @@ export function highlightJson(json: string): (string | JSX.Element)[] {
 function CodeBlock({ reply }: { reply: unknown }) {
   const isText = typeof reply === "string";
   const text = isText ? reply as string : JSON.stringify(reply, null, 2);
-  const [copied, setCopied] = useState(false);
-  useEffect(() => { if (!copied) return; const timer = window.setTimeout(() => setCopied(false), 1500); return () => window.clearTimeout(timer); }, [copied]);
-  const copy = () => { void navigator.clipboard?.writeText(text).then(() => setCopied(true)).catch(() => {}); };
+  const [copied, copy] = useCopy(text);
   return <div className="code-block">
     <div className="code-block-head">
       <span>{isText ? "text" : "json"}</span>
@@ -86,7 +81,7 @@ function CodeBlock({ reply }: { reply: unknown }) {
 
 type Check = "" | "pass" | "fail" | "wait";
 const CHECKS = ["Trade size", "Budget", "Destination"];
-const AGENT_LABEL: Record<Scenario, [string, string]> = { normal: ["AI agent", "Trade"], injected: ["AI agent", "Fake news"], attacker: ["Hacked tool", "Redirect"] };
+const REQUESTER: Record<Scenario, string> = { normal: "AI agent", injected: "AI agent", attacker: "Hacked tool" };
 
 /** Which of the three rules the request cleared, in the order the program checks them. */
 function checksFor(result: TxResult | undefined, busy: boolean): [Check, Check, Check] {
@@ -102,7 +97,7 @@ function checksFor(result: TxResult | undefined, busy: boolean): [Check, Check, 
   }
 }
 
-/** Server-side agent failures, in words a demo audience understands. The raw message stays under technical details. */
+/** Server-side agent failures in plain words; the raw message stays under technical details. */
 export function friendlyAgentError(message: string): string {
   if (/\.keys\/|devnet:deploy|agent key/i.test(message)) return "The demo AI agent isn’t set up on this server yet, so it can’t send trades.";
   if (/rate|429|limit reached/i.test(message)) return "Too many demo requests right now. Wait a minute, then try again.";
@@ -110,17 +105,18 @@ export function friendlyAgentError(message: string): string {
   return message;
 }
 
-/** The request's path for one case: who asked for what, which rules it cleared, and what reached the vault. */
 function Flow({ id, steps, busy, failed }: { id: Scenario; steps: Step[]; busy: boolean; failed: boolean }) {
   const result = steps.find((step) => step.type === "result")?.result;
   const amountUsdc = steps.find((step) => step.type === "request")?.amountUsdc;
   const checks = checksFor(result, busy);
-  const [who] = AGENT_LABEL[id];
+  // The demo exchange pays 1 testSOL per 100 testUSDC.
   const sol = amountUsdc && result?.ok ? String(Number(amountUsdc) / 100) : null;
+  const note = busy ? null : result ? (result.ok ? `+${sol} testSOL received` : result.origin === "program" ? "Nothing moved" : "Not confirmed")
+    : failed ? "The request never reached Aegis" : null;
   const idle = failed ? "Not sent" : busy ? "Sending the request…" : "Waiting for a request";
   return <div className="flow" data-state={busy ? "run" : result ? (result.ok ? "ok" : "no") : failed ? "error" : "idle"} aria-hidden="true">
     <div className="flow-node">
-      <span className="flow-k"><Icon name={id === "attacker" ? "redirect" : "robot"} size={14} />{who} asks for</span>
+      <span className="flow-k"><Icon name={id === "attacker" ? "redirect" : "robot"} size={14} />{REQUESTER[id]} asks for</span>
       {amountUsdc && !busy ? <span className="flow-v">{decimal(amountUsdc)}<small>testUSDC</small></span>
         : <span className="flow-idle">{idle}</span>}
     </div>
@@ -136,8 +132,7 @@ function Flow({ id, steps, busy, failed }: { id: Scenario; steps: Step[]; busy: 
       <span className="flow-k"><Icon name="vault" size={14} />Your vault</span>
       {result && !busy ? <span className="flow-v">{result.ok ? "Allowed" : result.origin === "program" ? "Blocked" : "Failed"}</span>
         : <span className="flow-idle">{busy ? "Waiting for Solana…" : "Untouched"}</span>}
-      {failed && !result && !busy && <span className="flow-note">The request never reached Aegis</span>}
-      <span className="flow-note">{!result || busy ? "" : result.ok ? `+${sol} testSOL received` : result.origin === "program" ? "Nothing moved" : "Not confirmed"}</span>
+      {note && <span className="flow-note">{note}</span>}
     </div>
   </div>;
 }
@@ -159,7 +154,6 @@ export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, en
   const [progress, setProgress] = useState("");
   // Each case keeps its last run, so the list can show all three outcomes.
   const [lanes, setLanes] = useState<Partial<Record<Scenario, Step[]>>>({});
-  // The case shown in the result panel: the last one run, or the one the owner clicked.
   const [selected, setSelected] = useState<Scenario>("normal");
   useEffect(() => {
     if (runScenario) return;
@@ -231,7 +225,7 @@ export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, en
       <p className="card-sub">{!vault ? "Set up and fund your vault first."
         : finished ? "This vault is finished. Start a new demo vault to try again."
         : "Run a normal trade, then try both attacks."}</p>
-      {model && <span className="badge"><span className="small-dot ok" aria-hidden="true" />Live AI · {model}</span>}
+      {model && <span className="badge">Live AI · {model}</span>}
     </div>
     {live && !model && <p className="muted agent-model">No AI key is set up on this server. Switch back to Scripted to run the scenarios.</p>}
     <ul className="scenario-list">
@@ -253,7 +247,7 @@ export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, en
       })}
     </ul>
 
-    <section className="card result-panel" aria-labelledby="result-title">
+    <section className="card" aria-labelledby="result-title">
       <div className="card-head"><div><h2 id="result-title">{current.title}</h2><p className="card-sub">{current.story}</p></div></div>
       <Flow id={selected} steps={shown} busy={selectedBusy} failed={!!failure} />
       <div className="agent-result-area" aria-busy={selectedBusy}>

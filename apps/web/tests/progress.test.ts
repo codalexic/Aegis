@@ -84,7 +84,7 @@ it("keeps a wallet action busy through real prepare, approve, confirm and refres
   expect(action.disabled).toBe(true);
   expect(action.getAttribute("aria-busy")).toBe("true");
   expect(action.querySelector(".progress-spinner")).not.toBeNull();
-  expect(action.style.width).toBe("160px");
+  expect(action.style.minWidth).toBe("160px");
   expect(container.textContent).toContain("Preparing…");
   expect(f.sign).not.toHaveBeenCalled();
   for (const label of ["New demo vault", "Withdraw all"]) expect(button(label).disabled, label).toBe(true);
@@ -98,7 +98,7 @@ it("keeps a wallet action busy through real prepare, approve, confirm and refres
   const signed = VersionedTransaction.deserialize(f.sign.mock.calls[0][0].serialize()); signed.sign([owner]);
   await flush(() => f.signature.resolve(signed));
   expect(container.textContent).toContain("Confirming on Solana…");
-  expect(action.style.width).toBe("160px");
+  expect(action.style.minWidth).toBe("160px");
   expect(action.getAttribute("aria-busy")).toBe("true");
   const refresh = Promise.withResolvers<VaultState>();
   f.reads.mockReturnValueOnce(refresh.promise);

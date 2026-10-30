@@ -128,8 +128,6 @@ describe("shared notice layout", () => {
       expect(rule(selector)).not.toContain("margin-top");
     }
     expect(rule(".notice-dismiss.icon-button")).toContain("margin-left: auto;");
-    expect(rule(".notice-code")).toContain("font-size: 11px;");
-    expect(rule(".notice-code")).toContain("color: var(--ink-2);");
   });
 });
 

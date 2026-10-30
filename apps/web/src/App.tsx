@@ -21,6 +21,7 @@ import { DevnetSolHint } from "./DevnetSolHint";
 import { needsFaucet, newFundedDemo, withWalletBalanceRefresh } from "./funding";
 import { isWalletDisconnected, isWalletNotReady, WALLET_CHANGED, walletRequestError } from "./wallet-lifecycle";
 import { CanonicalSiteNotice } from "./CanonicalSiteNotice";
+import { useCopy } from "./use-copy";
 import { isMobileBrowser, phantomBrowseUrl, PHANTOM_INSTALL_MESSAGE, PHANTOM_MOBILE_MESSAGE } from "./phantom-availability";
 
 const nowUnix = () => BigInt(Math.floor(Date.now() / 1000));
@@ -44,10 +45,6 @@ function timeLabel(unix?: bigint): string {
   return unix === undefined ? "—" : new Date(Number(unix * 1000n)).toLocaleTimeString([], { hour12: false });
 }
 
-
-/* --------------------------------------------------------------------------
-   Frame: the shared site header over the page, the same capsule as on the landing page.
-   -------------------------------------------------------------------------- */
 function replaceSessionRoute(connected: boolean) {
   const hash = connected ? "#/overview" : "";
   if (window.location.hash !== hash) {
@@ -71,7 +68,6 @@ const PAGES = [
 ] as const;
 type PageId = (typeof PAGES)[number]["id"];
 
-/** The dashboard's page links, shown in the header from the connecting loader onward. */
 function pageLinks(current?: PageId) {
   return PAGES.map((item) => <a key={item.id} href={`#/${item.id}`} aria-current={item.id === current ? "page" : undefined}>
     {item.label}
@@ -233,7 +229,7 @@ function OwnerApp({ environment, walletMode, wallet, changed, walletNotReady, is
       </Landing>;
     }
     return <Frame actions={headerWallet} links={pageLinks()}>
-      <main className="db-main db-main--center">
+      <main className="db-main--center">
         {siteNotice}
         {toasts}
         {walletStatus}
@@ -244,15 +240,11 @@ function OwnerApp({ environment, walletMode, wallet, changed, walletNotReady, is
     </Frame>;
   }
   return <Dashboard key={`${environment}:${connection.owner.toBase58()}`} connection={connection} isCurrent={isCurrent} onBusyChange={setActionsBusy} siteNotice={siteNotice} toolbar={headerWallet}
-    walletName={wallet.wallet?.adapter.name} walletIcon={wallet.wallet?.adapter.icon} />;
+    walletIcon={wallet.wallet?.adapter.icon} />;
 }
 
-/* --------------------------------------------------------------------------
-   Small presentational pieces
-   -------------------------------------------------------------------------- */
-export function FundingStep({ text, balance, hasFaucet, hasVault, finished, locked, busy, onFaucet, onFund, onNewDemo }: {
-  text: string; balance: bigint | null; hasFaucet: boolean;
-  hasVault: boolean; finished: boolean; locked: boolean; busy: string | null; onFaucet(): void; onFund(): void; onNewDemo(): void;
+export function FundingStep({ text, balance, hasFaucet, finished, locked, busy, onFaucet, onFund, onNewDemo }: {
+  text: string; balance: bigint | null; hasFaucet: boolean; finished: boolean; locked: boolean; busy: string | null; onFaucet(): void; onFund(): void; onNewDemo(): void;
 }) {
   if (finished) return <div className="next-action is-centered">
     <ProgressButton className="primary" disabled={locked} busy={busy === "New demo vault"} progress="Setting up…"
@@ -262,13 +254,12 @@ export function FundingStep({ text, balance, hasFaucet, hasVault, finished, lock
   const isBusy = busy === (getTokens ? "Get testUSDC" : "Fund vault");
   return <div className="next-action">
     <p className="next-hint">{text}<br />Wallet: {balance === null ? "—" : amount(balance)} testUSDC</p>
-    <ProgressButton className="primary" disabled={!hasVault || locked}
+    <ProgressButton className="primary" disabled={locked}
       busy={isBusy} progress={getTokens ? "Getting tokens…" : "Funding…"}
       onClick={getTokens ? onFaucet : onFund}>{getTokens ? "Get 1,000 testUSDC" : "Fund 1,000"}</ProgressButton>
   </div>;
 }
 
-/** Plain-language line for one transaction in the activity feed. */
 function feedEntry(item: Activity, detail: ActionDetail | undefined, vault: VaultState | null): { icon: IconName; tone: "ok" | "bad" | "neutral"; title: string; sub?: string } {
   const what = detail ? groupThousands(detail.amount) : "";
   switch (detail?.label) {
@@ -285,10 +276,7 @@ function feedEntry(item: Activity, detail: ActionDetail | undefined, vault: Vaul
 }
 
 const SVG_ICON = "data:image/svg+xml;base64,";
-/**
- * Redraws a wallet's SVG logo in Aegis colours: the background tile dark grey, the mark pink.
- * Any other icon format is returned unchanged.
- */
+/** Recolours an SVG wallet logo: first fill (the tile) dark grey, the rest pink. Other formats pass through. */
 export function tintWalletIcon(icon: string): string {
   if (!icon.startsWith(SVG_ICON)) return icon;
   let svg: string;
@@ -303,11 +291,8 @@ export function tintWalletIcon(icon: string): string {
   try { return SVG_ICON + btoa(svg); } catch { return icon; }
 }
 
-/** Connected owner account: the wallet logo; clicking it copies the owner address. */
-export function AccountChip({ address, walletIcon }: { address: string; walletName?: string; walletIcon?: string }) {
-  const [copied, setCopied] = useState(false);
-  useEffect(() => { if (!copied) return; const timer = window.setTimeout(() => setCopied(false), 1500); return () => window.clearTimeout(timer); }, [copied]);
-  const copy = () => { void navigator.clipboard?.writeText(address).then(() => setCopied(true)).catch(() => {}); };
+export function AccountChip({ address, walletIcon }: { address: string; walletIcon?: string }) {
+  const [copied, copy] = useCopy(address);
   return <div className="account-chip">
     <button type="button" className="account-chip-button" aria-label={`Owner ${address}`} onClick={copy}>
       {walletIcon ? <img src={tintWalletIcon(walletIcon)} alt="" width={28} height={28} /> : <Icon name="wallet" size={16} />}
@@ -316,7 +301,7 @@ export function AccountChip({ address, walletIcon }: { address: string; walletNa
   </div>;
 }
 
-/** Counts smoothly from the previous value to the new one; the final number is always rendered for tests and screen readers. */
+/** Counts smoothly from the previous value to the new one; screen readers get the final number straight away. */
 function CountUp({ value }: { value: number }) {
   const [shown, setShown] = useState(value);
   const from = useRef(value);
@@ -338,9 +323,7 @@ function CountUp({ value }: { value: number }) {
 }
 
 function KeyRow({ label, value, note }: { label: string; value: string; note?: string }) {
-  const [copied, setCopied] = useState(false);
-  useEffect(() => { if (!copied) return; const timer = window.setTimeout(() => setCopied(false), 1500); return () => window.clearTimeout(timer); }, [copied]);
-  const copy = () => { void navigator.clipboard?.writeText(value).then(() => setCopied(true)).catch(() => {}); };
+  const [copied, copy] = useCopy(value);
   return <div className="key-row">
     <span className="label">{label}{note && <small> · {note}</small>}</span>
     <code title={value} aria-label={value}>{shorten(value)}</code>
@@ -348,13 +331,10 @@ function KeyRow({ label, value, note }: { label: string; value: string; note?: s
   </div>;
 }
 
-/* --------------------------------------------------------------------------
-   Dashboard
-   -------------------------------------------------------------------------- */
 const alwaysCurrent = () => true;
-export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBusyChange, siteNotice, walletName, walletIcon }: {
+export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBusyChange, siteNotice, walletIcon }: {
   connection: DashboardConnection; toolbar: ReactNode; isCurrent?(): boolean; onBusyChange?(busy: boolean): void;
-  siteNotice?: ReactNode; walletName?: string; walletIcon?: string;
+  siteNotice?: ReactNode; walletIcon?: string;
 }) {
   const mounted = useRef(true);
   useEffect(() => {
@@ -556,7 +536,6 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
     return steps;
   } : undefined;
 
-  /* ---- derived state ---- */
   const remaining = vault ? vault.budgetRaw - vault.spentRaw : 0n;
   const remainingBasisPoints = vault ? remaining * 10_000n / vault.budgetRaw : 0n;
   const spentPercent = vault ? Number(vault.spentRaw * 100n / vault.budgetRaw) : 0;
@@ -604,7 +583,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       return <tr key={item.signature}>
         <td><div className="event"><span className={`event-icon ${entry.tone}`} aria-hidden="true"><Icon name={entry.icon} size={14} /></span>
           <div><strong>{entry.title}</strong>{entry.sub && <span>{entry.sub}</span>}</div></div></td>
-        <td className="hide-sm num-cell">{detail && detail.amount !== "0" ? groupThousands(detail.amount) : "—"}</td>
+        <td className="hide-sm num-cell">{detail ? groupThousands(detail.amount) : "0"}</td>
         <td><span className={`badge ${item.ok ? "ok" : detail?.label === "Agent swap" ? "bad" : "warn"}`}>{item.ok ? "Succeeded" : detail?.label === "Agent swap" ? "Blocked" : "Failed"}</span></td>
         <td className="num muted"><time>{timeLabel(item.blockTime)}</time></td>
         <td className="link-cell">{environment !== "mock" && <a className="feed-link" title={environment === "localnet" ? "Explorer uses your local chain. Allow local network access if prompted." : "View on Solana Explorer (devnet)"}
@@ -616,7 +595,6 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
     : !vault || activity.length === 0 ? <div className="empty"><strong>No activity yet</strong><span>Every trade and every blocked attempt will show up here.</span></div>
     : activityRows(limit ? activity.slice(0, limit) : activity);
 
-  // Stripe-style onboarding: the steps, with the one action that's next.
   const checklist = blocker && <section className="card setup-card" aria-labelledby="setup-title">
     <div className="card-head"><div>
       <h2 id="setup-title">{blocker === "create" ? "Set up your demo vault" : blocker === "fund" ? (hasFunded ? "Top up your vault" : "Add test money") : "This vault is closed"}</h2>
@@ -633,7 +611,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       <ProgressButton className="primary" disabled={locked} busy={busy === "New demo vault"} progress="Setting up…"
         onClick={() => void newDemo()}>Create my vault</ProgressButton>
       {connection.walletMode && <p className="next-hint">Phantom will ask you to approve.</p>}
-    </div> : <FundingStep balance={walletBalance} hasFaucet={!!connection.faucet} hasVault finished={blocker === "closed"} locked={locked} busy={busy}
+    </div> : <FundingStep balance={walletBalance} hasFaucet={!!connection.faucet} finished={blocker === "closed"} locked={locked} busy={busy}
       text={fundingText} onFaucet={() => void run("Get testUSDC", connection.faucet!)} onFund={() => void fund()} onNewDemo={() => void newDemo()} />}
   </section>;
 
@@ -745,8 +723,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
         ? <Toast tone="success" message={notice.text} />
         : <Toast tone="error" message={notice.text} onDismiss={() => setNotice(null)} />)}
   </ToastStack>;
-  // The wallet pill from OwnerApp; without a wallet (mock or server mode) just the owner's chip.
-  const account = toolbar || <AccountChip address={owner.toBase58()} walletName={walletName} walletIcon={walletIcon} />;
+  const account = toolbar || <AccountChip address={owner.toBase58()} walletIcon={walletIcon} />;
 
   // The connect screen's loader carries on (without restarting) until the first vault read lands.
   if (!ready) return <Frame actions={account} links={pageLinks(page)}>{toasts}<main className="db-main--center">{siteNotice}<LoadingDashboard resume /></main></Frame>;

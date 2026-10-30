@@ -4,13 +4,11 @@
 import { useEffect, useRef, useState, type JSX } from "react";
 import { PROGRAM_ERROR_MESSAGES } from "./errors";
 
-/** One agent swap request: how much it asked for and whether the program let it through. */
 export type TradeBar = { id?: string; amount: number; ok: boolean; error?: string; time?: string };
 
 const H = 154, PAD_TOP = 30, BASE = 146, MAX_BARS = 12, MIN_GAP = 8, MAX_GAP = 36, COL = 18, PLOT = BASE - PAD_TOP;
 const DOMAIN_X = 2;
 
-/** Hover copy for one bar: which kind of request it was and why Aegis allowed or blocked it. */
 export function barInfo(t: TradeBar, unit: string): { kind: string; reason: string; meta: string } {
   const meta = `${t.amount.toLocaleString()} ${unit}${t.time ? ` · ${t.time}` : ""}`;
   if (t.ok) return { kind: "Allowed · Normal trade", reason: "Within the per-trade cap and total budget.", meta };
@@ -20,7 +18,7 @@ export function barInfo(t: TradeBar, unit: string): { kind: string; reason: stri
   return { kind, reason: (t.error && PROGRAM_ERROR_MESSAGES[t.error]) || "The program rejected this request.", meta };
 }
 
-export function roundedTopBar(x: number, y: number, w: number, h: number, r: number): string {
+function roundedTopBar(x: number, y: number, w: number, h: number, r: number): string {
   const rr = Math.min(r, h / 2, w / 2);
   return `M${x},${y + rr} A${rr},${rr} 0 0 1 ${x + rr},${y} H${x + w - rr} A${rr},${rr} 0 0 1 ${x + w},${y + rr} V${y + h} H${x} Z`;
 }

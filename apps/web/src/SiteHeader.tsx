@@ -1,10 +1,7 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { BrandLogo } from "./BrandLogo";
 
-/**
- * The one header on every screen: landing page, connecting loader and dashboard.
- * Only its links change (landing sections, or the dashboard's pages); the capsule stays put.
- */
+/** Shared by the landing page, the connecting loader and the dashboard; only the links change. */
 export function SiteHeader({ home = "/", links, collapseLinks = false, actions }: {
   home?: string; links?: ReactNode; collapseLinks?: boolean; actions?: ReactNode;
 }) {

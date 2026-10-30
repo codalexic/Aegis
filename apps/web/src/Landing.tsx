@@ -8,10 +8,6 @@ const CAP = 50; // per-trade cap used by the "Try it" demo (matches the demo vau
 const prefersReducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/* --------------------------------------------------------------------------
-   Landing: the page shown before a wallet is connected (brand kit design).
-   Pure presentation; the wallet buttons, status line and notices come from OwnerApp.
-   -------------------------------------------------------------------------- */
 export function Landing({ walletButton, status, children }: {
   walletButton(className: string): ReactNode; status?: ReactNode; children?: ReactNode;
 }) {
@@ -54,9 +50,6 @@ const Mark = ({ className }: { className?: string }) => <svg className={classNam
   <path d="M20 86 L41 50 Q50 35 59 50 L80 86" fill="none" stroke="#FF2E7E" strokeWidth="14" strokeLinejoin="round" strokeLinecap="round" />
 </svg>;
 
-/* --------------------------------------------------------------------------
-   1. Hero: orbiting particles around the animated mark + cursor parallax
-   -------------------------------------------------------------------------- */
 function Hero({ walletButton, status, children }: { walletButton(className: string): ReactNode; status?: ReactNode; children?: ReactNode }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const orbRef = useRef<HTMLDivElement>(null);
@@ -135,10 +128,6 @@ function Hero({ walletButton, status, children }: { walletButton(className: stri
   </section>;
 }
 
-/* --------------------------------------------------------------------------
-   2. Scroll story: four scenes, picked by scroll position.
-   Card content lives in SCENES; motion is CSS on one shared cycle.
-   -------------------------------------------------------------------------- */
 const ICONS = {
   wallet: <svg {...STROKE}><rect x="3" y="6" width="18" height="13" rx="3" /><path d="M3 10h18" /></svg>,
   ai: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11 2.5c.6 4.6 2.6 7.1 7.5 7.75-4.9.65-6.9 3.15-7.5 7.75-.6-4.6-2.6-7.1-7.5-7.75C8.4 9.6 10.4 7.1 11 2.5z" /><path d="M18.5 14.5c.25 1.8 1 2.75 2.75 3-1.75.25-2.5 1.2-2.75 3-.25-1.8-1-2.75-2.75-3 1.75-.25 2.5-1.2 2.75-3z" /></svg>,
@@ -240,9 +229,6 @@ function Story() {
   </section>;
 }
 
-/* --------------------------------------------------------------------------
-   3. Try it: pick a trade size, send it into the gate
-   -------------------------------------------------------------------------- */
 /** Terminal-style readout: whole units bright, cents dimmed ("120.00"). Built from a number only. */
 function readout(amount: number) {
   const [whole, cents] = amount.toFixed(2).split(".");
@@ -258,7 +244,6 @@ function TryIt() {
   const shownAmount = useRef<number | null>(null), mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
 
-  // Count from the amount on screen to the new one, cents included (ease-out, ~0.45s).
   useEffect(() => {
     const el = amount.current;
     if (!el) return;
@@ -275,7 +260,6 @@ function TryIt() {
   }, [value]);
 
   const over = value > CAP;
-  /** Send the trade along the wire; on arrival it flows into Aegis (approved) or bounces off (blocked). */
   const fire = async () => {
     const c = chip.current, g = gate.current, track = c?.parentElement;
     if (!c || !g || !track) return;
@@ -289,7 +273,6 @@ function TryIt() {
     await c.animate([at(0, { opacity: 0 }), at(end * .15, { offset: .2 }), at(end)],
       { duration: ms(900), easing: "cubic-bezier(.3,.7,.3,1)", fill: "forwards" }).finished.catch(() => undefined);
     if (!mounted.current) return;
-    // The verdict lands the moment the trade reaches Aegis.
     g.classList.add(ok ? "ok" : "no"); c.classList.add(ok ? "ok" : "no");
     setGateStatus(ok ? { text: "Approved", tone: "ok" } : { text: "Blocked", tone: "no" });
     setResult({ text: ok ? "Goes through" : `Blocked · over the ${CAP} cap`, tone: ok ? "ok" : "no", shown: true });

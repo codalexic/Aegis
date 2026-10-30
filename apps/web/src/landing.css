@@ -275,28 +275,7 @@ html:has(.landing), body:has(.landing) { background: #000; color-scheme: dark; }
   .lp-t-amount { font-size: 42px; }
 }
 
-/* ---------- 4. Roadmap: segmented progress ---------- */
-.lp-road-sec { padding: 160px 0 0; }
-/* Edge fades follow the scroll position (Roadmap sets --fade-l / --fade-r): a left fade appears once
-   scrolled, the right fade disappears at the end. Registered so the change animates. */
-@property --fade-l { syntax: "<length>"; inherits: false; initial-value: 0px; }
-@property --fade-r { syntax: "<length>"; inherits: false; initial-value: 160px; }
-.lp-road-scroll { --fade-l: 0px; --fade-r: 160px; overflow-x: auto; scrollbar-width: none; margin-top: 48px; cursor: grab; transition: --fade-l .25s ease, --fade-r .25s ease;
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 var(--fade-l), #000 calc(100% - var(--fade-r)), transparent 100%);
-  mask-image: linear-gradient(90deg, transparent 0, #000 var(--fade-l), #000 calc(100% - var(--fade-r)), transparent 100%); }
-.lp-road-scroll::-webkit-scrollbar { display: none; }
-.lp-road { list-style: none; margin: 0; display: grid; grid-auto-flow: column; grid-auto-columns: 240px; gap: 6px; width: max-content; padding: 4px 120px 12px max(24px, calc((100vw - 1180px) / 2 + 24px)); }
-.lp-road li { padding-right: 16px; }
-.lp-seg { position: relative; display: block; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .1); margin-bottom: 22px; overflow: hidden; }
-.lp-road .is-now .lp-seg { background: var(--ae-pink); }
-.lp-road .is-next .lp-seg::after { content: ""; position: absolute; inset: 0 auto 0 0; width: 40%; border-radius: 2px; background: var(--ae-pink); animation: lp-grow 2.6s cubic-bezier(.4, 0, .2, 1) infinite; }
-@keyframes lp-grow { 0% { width: 0; } 70%, 100% { width: 40%; } }
-.lp-r-k { font-size: 12px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--ae-text-faint); }
-.lp-road .is-now .lp-r-k, .lp-road .is-next .lp-r-k { color: var(--ae-pink); }
-.lp-road h3 { margin-top: 8px; font-size: 20px; letter-spacing: -0.02em; }
-.lp-road p { margin-top: 8px; max-width: 210px; font-size: 14px; line-height: 1.45; color: var(--ae-text-muted); }
-
-/* ---------- 5. Final ---------- */
+/* ---------- 4. Final ---------- */
 .lp-final { padding: 200px 0 180px; text-align: center; overflow: hidden; }
 .lp-final-glow { position: absolute; left: 50%; top: 50%; width: 700px; height: 380px; transform: translate(-50%, -50%); background: radial-gradient(ellipse, rgba(255, 46, 126, .16), transparent 65%); }
 .lp-final-in { position: relative; }
@@ -319,7 +298,6 @@ html:has(.landing), body:has(.landing) { background: #000; color-scheme: dark; }
   .lp-dots i.is-on { height: 6px; width: 22px; }
   /* Nav wallet button collapses to its icon; the label is a text node, so hide it via font-size. */
   .lp-btn-wallet { width: 42px; padding: 0; font-size: 0; gap: 0; }
-  .lp-road { grid-auto-columns: 200px; padding-left: 16px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .landing *, .landing *::before, .landing *::after { animation: none !important; transition: none !important; }

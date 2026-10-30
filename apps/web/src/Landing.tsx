@@ -28,7 +28,6 @@ export function Landing({ walletButton, status, children }: {
         <nav className="lp-nav-links" aria-label="Main">
           <a href="#story">How it works</a>
           <a href="#try">Try it</a>
-          <a href="#roadmap">Roadmap</a>
           <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer">GitHub</a>
         </nav>
         {walletButton("lp-btn lp-btn-wallet")}
@@ -39,7 +38,6 @@ export function Landing({ walletButton, status, children }: {
       <Hero walletButton={walletButton} status={status}>{children}</Hero>
       <Story />
       <TryIt />
-      <Roadmap />
 
       <section className="lp-final">
         <div className="lp-final-glow" aria-hidden="true" />
@@ -357,55 +355,6 @@ function TryIt() {
           </div>
         </div>
       </div>
-    </div>
-  </section>;
-}
-
-/* --------------------------------------------------------------------------
-   4. Roadmap: segmented progress, drag to scroll on desktop
-   -------------------------------------------------------------------------- */
-const ROADMAP: { key: string; title: string; note: string; state?: "is-now" | "is-next" }[] = [
-  { key: "Today", title: "Working program", note: "Caps, budgets, expiry and a kill switch, live on devnet.", state: "is-now" },
-  { key: "Phase 1", title: "Private limits", note: "Keep your limits secret with zero-knowledge proofs.", state: "is-next" },
-  { key: "Phase 2", title: "Hardened core", note: "Stress-test every rule so it can’t be bent." },
-  { key: "Phase 3", title: "Real markets", note: "Trade real tokens at live prices (Jupiter, Pyth)." },
-  { key: "Phase 4", title: "Smarter policies", note: "Daily budgets, cooldowns and a pause button." },
-  { key: "Phase 5", title: "Audits", note: "Independent security reviews and a bug bounty." },
-  { key: "Phase 6", title: "SDK & plug-ins", note: "Add Aegis to any AI agent in a few lines of code." },
-  { key: "Phase 7", title: "Mainnet", note: "Launch with real money, once audits are done." },
-];
-
-function Roadmap() {
-  const scroller = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = scroller.current;
-    if (!el) return;
-    let down = false, x0 = 0, s0 = 0;
-    const onDown = (event: PointerEvent) => { if (event.pointerType !== "mouse") return; down = true; x0 = event.clientX; s0 = el.scrollLeft; el.style.cursor = "grabbing"; };
-    const onMove = (event: PointerEvent) => { if (down) el.scrollLeft = s0 - (event.clientX - x0); };
-    const onUp = () => { down = false; el.style.cursor = ""; };
-    const fade = () => {
-      el.style.setProperty("--fade-l", el.scrollLeft > 4 ? "120px" : "0px");
-      el.style.setProperty("--fade-r", el.scrollLeft + el.clientWidth >= el.scrollWidth - 4 ? "0px" : "160px");
-    };
-    el.addEventListener("scroll", fade, { passive: true }); window.addEventListener("resize", fade); fade();
-    el.addEventListener("pointerdown", onDown);
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-    return () => {
-      el.removeEventListener("scroll", fade); window.removeEventListener("resize", fade);
-      el.removeEventListener("pointerdown", onDown); window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp);
-    };
-  }, []);
-  return <section className="lp-road-sec" id="roadmap">
-    <div className="lp-wrap"><h2>Roadmap</h2></div>
-    <div className="lp-road-scroll" ref={scroller}>
-      <ol className="lp-road">
-        {ROADMAP.map((step) => <li key={step.key} className={step.state}>
-          <span className="lp-seg" /><span className="lp-r-k">{step.key}</span>
-          <h3>{step.title}</h3><p>{step.note}</p>
-        </li>)}
-      </ol>
     </div>
   </section>;
 }

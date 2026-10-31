@@ -100,9 +100,11 @@ button[data-busy] > svg { display: none; }
 .progress-spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin 700ms linear infinite; flex-shrink: 0; }
 .progress-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
-.db { display: flex; flex-direction: column; min-height: 100vh; min-height: 100svh; background: var(--bg); color: var(--ink); overflow-x: clip; }
-.db::before { content: ""; position: absolute; inset: 0 0 auto; height: 560px; pointer-events: none;
-  background: radial-gradient(45% 70% at 50% -20%, rgba(255, 46, 126, .14), transparent 70%); }
+.db { display: flex; flex-direction: column; min-height: 100vh; min-height: 100svh; background: var(--bg); color: var(--ink); overflow-x: clip; isolation: isolate; }
+.db::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .035 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+    radial-gradient(130% 90% at 50% 0%, rgba(255, 46, 126, .07), rgba(255, 46, 126, .025) 50%, transparent 85%); }
+.particles { position: fixed; inset: 0; z-index: -1; width: 100%; height: 100%; pointer-events: none; }
 .db-main--center { position: relative; flex: 1; display: grid; place-items: center; padding: 24px; }
 
 .account-chip { position: relative; display: flex; }
@@ -144,7 +146,7 @@ button[data-busy] > svg { display: none; }
 .text-link { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--ink-2); text-decoration: none; }
 .text-link:hover { color: var(--ink); }
 
-.card, .stat { position: relative; border-radius: 16px; background: linear-gradient(180deg, #141316 0%, #0A0A0C 100%); box-shadow: var(--edge), 0 20px 40px -28px rgba(0, 0, 0, .9); }
+.card, .stat { position: relative; border-radius: 16px; background: linear-gradient(180deg, rgba(20, 19, 22, .72) 0%, rgba(10, 10, 12, .6) 100%); box-shadow: var(--edge), 0 20px 40px -28px rgba(0, 0, 0, .9); }
 .card { padding: 20px; }
 .card::before, .stat::before { content: ""; position: absolute; top: 0; left: 18px; right: 18px; height: 1px; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .2), transparent); }
 .card.flush { padding: 0; overflow: hidden; }
@@ -157,9 +159,20 @@ button[data-busy] > svg { display: none; }
 .empty { display: grid; justify-items: center; gap: 4px; padding: 36px 20px; text-align: center; font-size: 13px; color: var(--ink-3); }
 .empty strong { font-size: 14px; font-weight: 600; color: var(--ink); }
 .empty .text-link { margin-top: 8px; }
-.banner { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 12px; font-size: 14px; color: var(--ink-2); background: rgba(255, 46, 126, .06); box-shadow: inset 0 0 0 1px rgba(255, 46, 126, .22); }
-.banner svg { color: var(--pink); flex: none; }
+.banner, .setup-card { background: radial-gradient(50% 160% at 0% 40%, rgba(255, 46, 126, .1), transparent 70%), linear-gradient(180deg, rgba(23, 19, 26, .72) 0%, rgba(11, 10, 13, .6) 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 46, 126, .22), 0 20px 40px -28px rgba(0, 0, 0, .9); }
+.banner { position: relative; display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: 16px; }
+.banner::before { content: ""; position: absolute; top: 0; left: 18px; right: 18px; height: 1px; }
+.banner::before, .setup-card::before { background: linear-gradient(90deg, transparent, rgba(255, 46, 126, .55), transparent); }
+.banner-icon { display: grid; place-items: center; width: 36px; height: 36px; flex: none; border-radius: 50%; color: var(--pink); background: rgba(255, 46, 126, .12); box-shadow: inset 0 0 0 1px rgba(255, 46, 126, .25); }
+.banner-text { display: grid; gap: 2px; min-width: 0; }
+.banner-text strong { font-size: 14px; font-weight: 600; color: var(--ink); }
+.banner-text span { font-size: 13px; color: var(--ink-2); }
 .banner > button { margin-left: auto; flex: none; }
+@media (max-width: 600px) {
+  .banner { flex-wrap: wrap; }
+  .banner > button { margin-left: 50px; }
+}
 
 .status { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--ink-2); background: rgba(255, 255, 255, .06); white-space: nowrap; }
 .badge { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border-radius: 6px; font-size: 12px; font-weight: 500; white-space: nowrap; color: var(--ink-2); background: rgba(255, 255, 255, .06); }
@@ -168,20 +181,25 @@ button[data-busy] > svg { display: none; }
 .badge.bad { color: var(--pink); background: var(--pink-soft); }
 .badge.warn { color: var(--warn); background: var(--warn-soft); }
 
-.setup-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 18px 32px; padding: 24px;
-  background: radial-gradient(60% 140% at 0% 0%, rgba(255, 46, 126, .12), transparent 60%), linear-gradient(180deg, #17131A 0%, #0B0A0D 100%); box-shadow: inset 0 0 0 1px rgba(255, 46, 126, .28); }
-.setup-card::before { background: linear-gradient(90deg, transparent, rgba(255, 46, 126, .7), transparent); }
+.setup-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 18px 32px; padding: 24px; }
 .setup-card .card-head { margin: 0; }
+.setup-head { justify-content: flex-start; align-items: center; gap: 14px; }
 .setup-card h2 { font-size: 18px; }
-.setup-card .checklist { grid-column: 1; }
+.setup-card .checklist { grid-column: 1; padding-left: 50px; }
 .setup-card .next-action { grid-column: 2; grid-row: 1 / span 2; }
-.checklist { display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: 13px; color: var(--ink-3); }
-.checklist li { display: flex; align-items: center; gap: 8px; }
+.checklist { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; max-width: 640px; font-size: 13px; color: var(--ink-3); }
+.checklist li { display: grid; gap: 10px; }
+.step-bar { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .08); }
+.step-label { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; }
+.step-label small { flex-basis: 100%; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+.step-label svg { color: var(--good); }
 .checklist li.done { color: var(--ink-2); }
+.checklist li.done .step-bar { background: var(--good); }
 .checklist li.next { color: var(--ink); font-weight: 500; }
-.check-dot { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; font-size: 11px; font-weight: 600; box-shadow: inset 0 0 0 1px var(--line-2); }
-.done .check-dot { color: #04140C; background: var(--good); box-shadow: none; }
-.next .check-dot { color: #fff; background: var(--pink); box-shadow: none; }
+.checklist li.next .step-bar { background: var(--pink); box-shadow: 0 0 12px rgba(255, 46, 126, .55); }
+.checklist li.next small { color: var(--pink); }
+.checklist li.skipped { opacity: .55; }
+.checklist li.skipped .step-bar { background: repeating-linear-gradient(90deg, rgba(255, 255, 255, .14) 0 6px, transparent 6px 10px); }
 .next-action { display: grid; justify-items: end; gap: 8px; text-align: right; }
 .next-action.is-centered { align-self: center; }
 .next-hint { font-size: 12px; color: var(--ink-3); }
@@ -269,6 +287,7 @@ button[data-busy] > svg { display: none; }
 .agent-model { font-size: 13px; }
 .cases-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .cases-bar .card-sub { margin: 0; }
+.cases-bar .badge { margin-left: auto; }
 .scenario-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .scenario { position: relative; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 22px 18px 18px; text-align: center; border-radius: 16px; cursor: pointer;
   background: linear-gradient(180deg, #141316 0%, #0A0A0C 100%); box-shadow: var(--edge), 0 20px 40px -28px rgba(0, 0, 0, .9); transition: box-shadow 160ms ease-out, background 160ms ease-out; }
@@ -397,6 +416,7 @@ button[data-busy] > svg { display: none; }
   .flow-wire i { left: 50%; top: 0; animation-name: travel-down !important; }
   .content { padding: 96px 16px 56px; }
   .setup-card { grid-template-columns: minmax(0, 1fr); }
+  .setup-card .checklist { padding-left: 0; }
   .setup-card .next-action { grid-column: 1; grid-row: auto; justify-items: start; text-align: left; }
   .callout { grid-template-columns: 40px minmax(0, 1fr); }
   .callout > button { grid-column: 1 / -1; }

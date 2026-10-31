@@ -13,6 +13,7 @@ import { explorerTransactionUrl } from "../../../packages/sdk/src/explorer";
 import { Icon, type IconName } from "./icons";
 import { SiteHeader } from "./SiteHeader";
 import { Landing } from "./Landing";
+import { ParticleField } from "./ParticleField";
 import { Notice } from "./Notice";
 import { Toast, ToastStack } from "./Toast";
 import { ProgressButton, LoadingDashboard } from "./Progress";
@@ -54,6 +55,7 @@ function replaceSessionRoute(connected: boolean) {
 
 function Frame({ actions, links, children }: { actions?: ReactNode; links?: ReactNode; children: ReactNode }) {
   return <div className="db">
+    <ParticleField quiet />
     <SiteHeader home={links ? "#/overview" : "/"} links={links} actions={actions} />
     {children}
   </div>;
@@ -596,16 +598,23 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
     : activityRows(limit ? activity.slice(0, limit) : activity);
 
   const checklist = blocker && <section className="card setup-card" aria-labelledby="setup-title">
-    <div className="card-head"><div>
+    <div className="card-head setup-head">
+      <span className="banner-icon"><Icon name={blocker === "create" ? "vault" : blocker === "fund" ? "coins" : "lock"} size={16} /></span>
+      <div>
       <h2 id="setup-title">{blocker === "create" ? "Set up your demo vault" : blocker === "fund" ? (hasFunded ? "Top up your vault" : "Add test money") : "This vault is closed"}</h2>
       <p className="card-sub">{blocker === "create" ? "A vault is a safe box for your AI’s trading money. One click opens it with safe limits and adds 1,000 test USDC."
         : blocker === "fund" ? "Your vault is open. Give the AI something to trade with."
         : vault!.revoked ? "You stopped the AI, so it can’t trade from this vault anymore." : "The one-hour trading window ended, so the AI can’t trade anymore."}</p>
     </div></div>
     <ol className="checklist">
-      <li className={vault ? "done" : "next"}><span className="check-dot" aria-hidden="true">{vault ? <Icon name="check" size={12} /> : 1}</span>Create your vault</li>
-      <li className={hasFunded ? "done" : vault && !finished ? "next" : ""}><span className="check-dot" aria-hidden="true">{hasFunded ? <Icon name="check" size={12} /> : 2}</span>Add test money</li>
-      <li className={swaps.length ? "done" : ""}><span className="check-dot" aria-hidden="true">{swaps.length ? <Icon name="check" size={12} /> : 3}</span>Try to trick the AI</li>
+      {([
+        ["Create your vault", vault ? "done" : "next"],
+        ["Add test money", hasFunded ? "done" : finished ? "skipped" : vault ? "next" : ""],
+        ["Try to trick the AI", swaps.length ? "done" : finished ? "skipped" : ""],
+      ] as const).map(([label, state], index) => <li key={label} className={state}>
+        <span className="step-bar" aria-hidden="true" />
+        <span className="step-label"><small>Step {index + 1}</small>{state === "done" && <Icon name="check" size={12} />}{label}</span>
+      </li>)}
     </ol>
     {blocker === "create" ? <div className="next-action">
       <ProgressButton className="primary" disabled={locked} busy={busy === "New demo vault"} progress="Setting up…"
@@ -666,7 +675,12 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       {rulesCard}
     </div>
   </> : page === "agent" ? <>
-    {blocker && <div className="banner"><Icon name="info" size={16} /><span>{blocker === "closed" ? "This vault is closed. Open a new demo vault to run the cases again." : "Set up and fund your vault before running the cases."}</span>{blocker === "closed"
+    {blocker && <div className="banner">
+      <span className="banner-icon"><Icon name={blocker === "closed" ? "lock" : "info"} size={16} /></span>
+      <div className="banner-text">{blocker === "closed"
+        ? <><strong>This vault is closed</strong><span>Open a new demo vault to run the cases again.</span></>
+        : <><strong>Your vault isn’t ready</strong><span>Set up and fund your vault before running the cases.</span></>}</div>
+      {blocker === "closed"
       ? <ProgressButton className="primary small" disabled={locked} busy={busy === "New demo vault"} progress="Setting up…" onClick={() => void newDemo()}>New demo vault</ProgressButton>
       : <button type="button" className="primary small" onClick={() => go("overview")}>Go to setup<Icon name="arrow" size={14} /></button>}</div>}
     <AgentConsole environment={environment} walletMode={connection.walletMode} key={address.current?.toBase58()} vault={vault} finished={finished}

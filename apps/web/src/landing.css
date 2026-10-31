@@ -1,20 +1,16 @@
-/* Every class is prefixed lp- and scoped to .landing so dashboard styles never leak in;
-   element resets use :where() so they never outrank a component class. */
 .landing {
   --ae-pink: #FF2E7E;
   --ae-text: #FAFAFA; --ae-text-muted: #A8A5AE; --ae-text-faint: #85828C;
   --ae-success: #3DDC97; --ae-warning: #FFB547;
   --ae-font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --ae-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  min-height: 100vh; background: #000; color: var(--ae-text);
+  min-height: 100vh; background: #000; color: var(--ae-text); isolation: isolate;
   font: 400 16px/1.5 var(--ae-font-sans); letter-spacing: normal; -webkit-font-smoothing: antialiased; overflow-x: clip;
 }
-/* Overscroll / rubber-band areas paint the root background, so make the whole canvas black. */
 html:has(.landing), body:has(.landing) { background: #000; color-scheme: dark; }
 :where(.landing) :where(img, svg) { display: block; max-width: 100%; }
 :where(.landing) a { color: inherit; text-decoration: none; }
 :where(.landing) :where(button, input, output) { font: inherit; color: inherit; }
-/* Clear the dashboard's bare button/input styling (min-height, padding, border, white fill). */
 :where(.landing) :where(button, input) { min-height: 0; min-width: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
 :where(.landing) section { position: relative; }
 :where(.landing) p { margin: 0; }
@@ -26,11 +22,8 @@ html:has(.landing), body:has(.landing) { background: #000; color-scheme: dark; }
 .lp-sub { margin: 16px 0 0 !important; font-size: 18px; color: var(--ae-text-muted); }
 .lp-pink { color: var(--ae-pink); }
 .lp-grad { background: linear-gradient(92deg, #FF2E7E 0%, #FF6FAE 55%, #FFC7DF 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
-  /* background-clip: text only paints inside the box; tight tracking pushes the last glyph (and descenders)
-     past it. Pad the paint area and cancel it with a negative margin so layout is unchanged. */
-  padding: 0 .12em .14em 0; margin-right: -.12em; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+    padding: 0 .12em .14em 0; margin-right: -.12em; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 
-/* The hero wallet buttons come from OwnerApp wrapped in .wallet-control. */
 .landing .wallet-control { display: contents; }
 .lp-btn { --h: 42px; position: relative; isolation: isolate; display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: var(--h); padding: 0 18px; border-radius: 999px; border: 1px solid transparent; cursor: pointer; font-weight: 600; font-size: 14px; letter-spacing: -0.005em; white-space: nowrap; overflow: hidden;
   transition: transform .15s ease, filter .15s ease, background-color .15s ease, box-shadow .15s ease; }
@@ -61,11 +54,10 @@ html:has(.landing), body:has(.landing) { background: #000; color-scheme: dark; }
 .lp-btn:hover .lp-i-out { transform: translate(2px, -2px); }
 
 .lp-hero { min-height: 100svh; display: grid; place-items: center; padding: 120px 0 96px; overflow: hidden; text-align: center; }
-.lp-hero-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.lp-particles { position: fixed; inset: 0; z-index: -1; width: 100%; height: 100%; pointer-events: none; }
 .lp-hero-aura { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(45% 35% at 50% 64%, rgba(255, 46, 126, .12), transparent 70%); }
 .lp-hero-in { position: relative; z-index: 1; display: grid; justify-items: center; }
 .lp-hero h1 { font-size: clamp(40px, 8vw, 104px); line-height: .98; letter-spacing: -0.055em; }
-/* One line from tablet up: the size tracks the viewport so the whole sentence always fits. */
 @media (min-width: 700px) { .lp-hero h1 { font-size: min(5.6vw, 104px); white-space: nowrap; } }
 .lp-ctas { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 40px; }
 .lp-status { max-width: 520px; margin-top: 18px; font-size: 14px; color: var(--ae-text-muted); }
@@ -73,12 +65,10 @@ html:has(.landing), body:has(.landing) { background: #000; color-scheme: dark; }
 .landing .connecting-hint { font-family: var(--ae-font-sans); color: var(--ae-text-muted); }
 .landing .canonical-site-notice { color: var(--ae-text-muted); }
 
-.lp-hero-mark { width: 132px; height: 132px; margin-bottom: 40px; transition: transform .25s ease-out; }
+.lp-hero-mark { width: 132px; height: 132px; margin-bottom: 40px; }
 .lp-hero-mark svg { width: 100%; height: 100%; overflow: visible; }
 .lp-hm-bar, .lp-hm-peak { transform-box: fill-box; transform-origin: 50% 50%; }
 .lp-hm-bar { animation: lp-bar-in .7s cubic-bezier(.2, .8, .2, 1) .15s both, lp-bar-hold 4.2s ease-in-out 1.8s infinite; }
-/* The gap (110) is longer than the stroke (pathLength 100) and the start offset is past it, so no
-   zero-length dash — which round caps would paint as dots at both ends — exists before the draw. */
 .lp-hm-peak path { stroke-dasharray: 100 110; stroke-dashoffset: 101; animation: lp-draw .9s cubic-bezier(.6, 0, .2, 1) .55s both; }
 .lp-hm-peak { animation: lp-push 4.2s ease-in-out 1.8s infinite; }
 @keyframes lp-bar-in { from { transform: scaleX(0); opacity: 0; } to { transform: none; opacity: 1; } }
@@ -86,15 +76,10 @@ html:has(.landing), body:has(.landing) { background: #000; color-scheme: dark; }
 @keyframes lp-push { 0%, 55%, 100% { transform: translateY(0); } 66% { transform: translateY(-9px); } 74% { transform: translateY(1px); } 80% { transform: translateY(0); } }
 @keyframes lp-bar-hold { 0%, 60%, 100% { transform: translateY(0); } 67% { transform: translateY(-2px); } 75% { transform: translateY(0); } }
 
-.lp-story { position: relative; height: 420vh; }
-/* One snap point in the middle of each step's scroll range ((420vh - 100vh) / 4 = 80vh per step), so a
-   fast scroll stops on every step. Proximity snapping leaves the rest of the page scrolling freely. */
+.lp-story { height: 420vh; }
 html:has(.landing) { scroll-snap-type: y proximity; }
 .lp-story-snap { position: absolute; left: 0; top: calc((var(--i) + .5) * 80vh); width: 1px; height: 1px; pointer-events: none; scroll-snap-align: start; scroll-snap-stop: always; }
 .lp-story-sticky { position: sticky; top: 0; height: 100vh; height: 100svh; display: grid; grid-template-rows: auto auto; align-content: center; justify-items: center; gap: 56px; padding: 96px 24px 48px; overflow: hidden; }
-.lp-story-sticky::before { content: ""; position: absolute; inset: 0; pointer-events: none;
-  background-image: radial-gradient(rgba(255, 255, 255, .07) 1px, transparent 1.2px); background-size: 22px 22px;
-  -webkit-mask-image: radial-gradient(50% 45% at 50% 58%, #000 20%, transparent 80%); mask-image: radial-gradient(50% 45% at 50% 58%, #000 20%, transparent 80%); }
 .lp-captions { position: relative; z-index: 1; width: 100%; height: 128px; text-align: center; }
 .lp-cap { position: absolute; inset: 0; opacity: 0; transform: translateY(12px); transition: opacity .45s, transform .45s; pointer-events: none; }
 .lp-cap.is-on { opacity: 1; transform: none; }
@@ -168,9 +153,8 @@ html:has(.landing) { scroll-snap-type: y proximity; }
 .lp-steps { display: contents; }
 .lp-steps-hint { display: none; }
 
-/* Phones (portrait or landscape): a step pill under the cards — the dots and a nudge to keep scrolling. */
 @media (max-width: 800px), (max-height: 560px) {
-  .lp-steps { display: inline-flex; align-items: center; gap: 12px; height: 36px; padding: 0 14px; border-radius: 18px; background: rgba(255, 255, 255, .05); box-shadow: 0 0 0 1px rgba(255, 255, 255, .08) inset; }
+  .lp-steps { display: inline-flex; align-items: center; gap: 12px; height: 36px; padding: 0 14px; border-radius: 18px; background: #0D0D0E; box-shadow: 0 0 0 1px rgba(255, 255, 255, .08) inset; }
   .lp-dots { position: static; transform: none; grid-auto-flow: column; justify-content: center; gap: 6px; }
   .lp-dots i { width: 6px; height: 6px; border-radius: 3px; }
   .lp-dots i.is-on { height: 6px; width: 20px; }
@@ -182,7 +166,7 @@ html:has(.landing) { scroll-snap-type: y proximity; }
 .lp-try { padding: 140px 0 40px; }
 .lp-try-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px 32px; max-width: 1000px; margin: 0 auto; }
 .lp-try-head .lp-sub { margin: 0 !important; font-size: 17px; }
-.lp-glass { position: relative; border-radius: 24px; background: linear-gradient(180deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, .015)); box-shadow: 0 0 0 1px rgba(255, 255, 255, .08) inset; overflow: hidden; }
+.lp-glass { position: relative; border-radius: 24px; background: linear-gradient(180deg, rgba(255, 255, 255, .045), rgba(255, 255, 255, .015)), #050506; box-shadow: 0 0 0 1px rgba(255, 255, 255, .08) inset; overflow: hidden; }
 .lp-glass::before { content: ""; position: absolute; inset: 0 0 auto; height: 1px; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .24), transparent); }
 .lp-try-card { max-width: 1000px; margin: 32px auto 0; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
 .lp-tc-col { padding: 24px 28px; display: grid; align-content: start; gap: 16px; }
@@ -203,7 +187,7 @@ html:has(.landing) { scroll-snap-type: y proximity; }
 .lp-t-range input:focus-visible { outline: 2px solid var(--ae-pink); outline-offset: 8px; }
 .lp-t-cap { position: absolute; top: 50%; width: 2px; height: 16px; margin: -8px 0 0 -1px; border-radius: 1px; background: rgba(255, 255, 255, .7); pointer-events: none; }
 .lp-t-presets { display: flex; gap: 6px; }
-.lp-t-presets button { flex: 1 1 0; height: 32px; border: 0; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--ae-text-muted); background: rgba(255, 255, 255, .05); box-shadow: 0 0 0 1px rgba(255, 255, 255, .06) inset; font-variant-numeric: tabular-nums; transition: background .15s, color .15s; }
+.lp-t-presets button { flex: 1 1 0; height: 32px; border-radius: 10px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--ae-text-muted); background: rgba(255, 255, 255, .05); box-shadow: 0 0 0 1px rgba(255, 255, 255, .06) inset; font-variant-numeric: tabular-nums; transition: background .15s, color .15s; }
 .lp-t-presets button:hover { background: rgba(255, 255, 255, .08); color: var(--ae-text); }
 .lp-t-presets button[aria-pressed="true"] { color: var(--ae-text); background: rgba(255, 255, 255, .1); }
 .lp-try-lane { display: grid; grid-template-columns: 76px minmax(0, 1fr) 76px; align-items: start; gap: 10px; align-self: center; }
@@ -261,7 +245,6 @@ html:has(.landing) { scroll-snap-type: y proximity; }
 .lp-final h2 { font-size: clamp(40px, 6.4vw, 84px); }
 
 .lp-foot { padding: 28px 0 40px; }
-/* The hairline sits under the footer row, not above it. */
 .lp-foot-in { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; padding-bottom: 24px; box-shadow: 0 1px 0 rgba(255, 255, 255, .06); font-size: 13px; color: var(--ae-text-faint); }
 .lp-foot-in > svg { color: var(--ae-text); }
 

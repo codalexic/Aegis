@@ -4,7 +4,7 @@ import { SiteHeader } from "./SiteHeader";
 import "./landing.css";
 
 const GITHUB_URL = "https://github.com/codalexic/Aegis";
-const CAP = 50; // per-trade cap used by the "Try it" demo (matches the demo vault)
+const CAP = 50;
 const prefersReducedMotion = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -12,6 +12,7 @@ export function Landing({ walletButton, status, children }: {
   walletButton(className: string): ReactNode; status?: ReactNode; children?: ReactNode;
 }) {
   return <div className="landing">
+    <ParticleField />
     <SiteHeader actions={walletButton("site-wallet")} links={<>
       <a href="#story">How it works</a>
       <a href="#try">Try it</a>
@@ -50,68 +51,80 @@ const Mark = ({ className }: { className?: string }) => <svg className={classNam
   <path d="M20 86 L41 50 Q50 35 59 50 L80 86" fill="none" stroke="#FF2E7E" strokeWidth="14" strokeLinejoin="round" strokeLinecap="round" />
 </svg>;
 
-function Hero({ walletButton, status, children }: { walletButton(className: string): ReactNode; status?: ReactNode; children?: ReactNode }) {
+function ParticleField() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const orbRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const canvas = canvasRef.current, orb = orbRef.current, ctx = canvas?.getContext?.("2d");
-    if (!canvas || !orb || !ctx) return;
+    const canvas = canvasRef.current, ctx = canvas?.getContext?.("2d");
+    if (!canvas || !ctx) return;
     const reduced = prefersReducedMotion();
-    let width = 0, height = 0, cx = 0, cy = 0, mx = 0, my = 0, frame = 0, visible = true;
-    const particles = Array.from({ length: 70 }, () => ({
-      a: Math.random() * Math.PI * 2,
-      r: 140 + Math.random() * 520,
-      s: (0.0006 + Math.random() * 0.0016) * (Math.random() < .5 ? 1 : -1),
+    let width = 0, height = 0, count = 0, px = -1e4, py = -1e4, frame = 0, last = 0;
+    const RADIUS = 130, MAX = 160;
+    const particles = Array.from({ length: MAX }, () => ({
+      u: Math.random(), v: Math.random(),
+      s: 0.000004 + Math.random() * 0.000008,
       z: Math.random(),
-      pink: Math.random() < .55,
+      pink: Math.random() < .5,
+      ox: 0, oy: 0, vx: 0, vy: 0,
     }));
     const size = () => {
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       width = canvas.clientWidth; height = canvas.clientHeight;
       canvas.width = width * dpr; canvas.height = height * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const o = orb.getBoundingClientRect(), c = canvas.getBoundingClientRect();
-      cx = o.left - c.left + o.width / 2; cy = o.top - c.top + o.height / 2;
+      count = Math.min(MAX, Math.max(40, Math.round(width * height / 12000)));
     };
+    const wrap = (value: number, max: number) => ((value % max) + max) % max;
     const draw = (t: number) => {
+      const dt = last ? Math.min(t - last, 50) : 0;
+      last = t;
+      const step = dt / 16.67, damp = 0.88 ** step, scroll = window.scrollY;
       ctx.clearRect(0, 0, width, height);
-      for (const p of particles) {
-        if (!reduced) p.a += p.s * 16;
+      for (let i = 0; i < count; i++) {
+        const p = particles[i];
+        if (!reduced) p.u += p.s * dt;
         const k = 0.35 + p.z * 0.65;
-        const x = cx + Math.cos(p.a) * p.r + mx * 30 * p.z;
-        const y = cy + Math.sin(p.a) * p.r * 0.38 + my * 20 * p.z;
-        const twinkle = 0.6 + 0.4 * Math.sin(t / 700 + p.r);
+        const bx = wrap(p.u * width, width), by = wrap(p.v * height - scroll * (0.05 + p.z * 0.2), height);
+        if (!reduced) {
+          const dx = bx + p.ox - px, dy = by + p.oy - py, d = Math.hypot(dx, dy);
+          if (d < RADIUS && d > 0.01) {
+            const push = (1 - d / RADIUS) ** 2 * (0.6 + p.z) * 1.6 * step;
+            p.vx += (dx / d) * push; p.vy += (dy / d) * push;
+          }
+          p.vx = (p.vx - p.ox * 0.02 * step) * damp; p.vy = (p.vy - p.oy * 0.02 * step) * damp;
+          p.ox += p.vx * step; p.oy += p.vy * step;
+        }
+        const twinkle = 0.75 + 0.25 * Math.sin(t / 2400 + i * 7.3);
         ctx.beginPath();
-        ctx.arc(x, y, 0.6 + p.z * 1.6, 0, Math.PI * 2);
+        ctx.arc(bx + p.ox, by + p.oy, 0.6 + p.z * 1.6, 0, Math.PI * 2);
         ctx.fillStyle = p.pink ? `rgba(255,70,140,${0.5 * k * twinkle})` : `rgba(255,255,255,${0.35 * k * twinkle})`;
         ctx.fill();
       }
-      frame = !reduced && visible ? requestAnimationFrame(draw) : 0;
+      frame = reduced ? 0 : requestAnimationFrame(draw);
     };
-    const onPointer = (event: PointerEvent) => {
-      mx = event.clientX / window.innerWidth - .5; my = event.clientY / window.innerHeight - .5;
-      if (!reduced) orb.style.transform = `translate(${mx * 14}px, ${my * 10}px)`;
-    };
-    window.addEventListener("resize", size);
+    const onPointer = (event: PointerEvent) => { px = event.clientX; py = event.clientY; };
+    const onLeave = () => { px = py = -1e4; };
+    const redraw = () => { if (reduced) draw(performance.now()); };
+    const onResize = () => { size(); redraw(); };
+    window.addEventListener("resize", onResize);
     window.addEventListener("pointermove", onPointer, { passive: true });
-    const io = new IntersectionObserver(([entry]) => {
-      visible = entry.isIntersecting;
-      if (visible && !frame && !reduced) frame = requestAnimationFrame(draw);
-    });
-    io.observe(canvas);
+    if (reduced) window.addEventListener("scroll", redraw, { passive: true });
+    document.documentElement.addEventListener("pointerleave", onLeave);
     size(); frame = requestAnimationFrame(draw);
     return () => {
-      cancelAnimationFrame(frame); io.disconnect();
-      window.removeEventListener("resize", size); window.removeEventListener("pointermove", onPointer);
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", onResize); window.removeEventListener("pointermove", onPointer);
+      window.removeEventListener("scroll", redraw);
+      document.documentElement.removeEventListener("pointerleave", onLeave);
     };
   }, []);
+  return <canvas className="lp-particles" ref={canvasRef} aria-hidden="true" />;
+}
 
+function Hero({ walletButton, status, children }: { walletButton(className: string): ReactNode; status?: ReactNode; children?: ReactNode }) {
   return <section className="lp-hero">
     <div className="lp-hero-aura" aria-hidden="true" />
-    <canvas className="lp-hero-canvas" ref={canvasRef} aria-hidden="true" />
     <div className="lp-hero-in lp-wrap">
       {children}
-      {/* Animated mark: the bar draws, the peak draws, then keeps pushing against the bar */}
-      <div className="lp-hero-mark" ref={orbRef} aria-hidden="true">
+      <div className="lp-hero-mark" aria-hidden="true">
         <svg viewBox="0 0 100 100">
           <g className="lp-hm-bar"><rect x="14" y="12" width="72" height="12" rx="6" fill="#FAFAFA" /></g>
           <g className="lp-hm-peak"><path d="M20 86 L41 50 Q50 35 59 50 L80 86" fill="none" stroke="#FF2E7E" strokeWidth="14" strokeLinejoin="round" strokeLinecap="round" pathLength={100} /></g>
@@ -176,8 +189,8 @@ function Card({ spec, className = "" }: { spec: CardSpec; className?: string }) 
 
 function Story() {
   const story = useRef<HTMLElement>(null), flow = useRef<HTMLDivElement>(null);
-  const [scene, setScene] = useState(0);     // follows scroll immediately (captions, dots)
-  const [painted, setPainted] = useState(0); // the cards follow after a short fade
+  const [scene, setScene] = useState(0);
+  const [painted, setPainted] = useState(0);
   useEffect(() => {
     const update = () => {
       const el = story.current;
@@ -195,7 +208,6 @@ function Story() {
     const timer = window.setTimeout(() => setPainted(scene), 200);
     return () => window.clearTimeout(timer);
   }, [scene, painted]);
-  // Restart the shared CSS cycle whenever new cards are painted.
   useLayoutEffect(() => {
     const el = flow.current;
     if (!el || prefersReducedMotion()) return;
@@ -232,7 +244,6 @@ function Story() {
   </section>;
 }
 
-/** Terminal-style readout: whole units bright, cents dimmed ("120.00"). Built from a number only. */
 function readout(amount: number) {
   const [whole, cents] = amount.toFixed(2).split(".");
   return `${whole}<span class="dec">.${cents}</span><small>USDC</small>`;

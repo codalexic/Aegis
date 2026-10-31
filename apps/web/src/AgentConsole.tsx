@@ -222,9 +222,7 @@ export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, en
     <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">{busy ? progress : ""}</span>
     <section id="agent" className="agent-console" aria-label="Test cases" aria-busy={busy}>
     <div className="cases-bar">
-      <p className="card-sub">{!vault ? "Set up and fund your vault first."
-        : finished ? "This vault is finished. Start a new demo vault to try again."
-        : "Run a normal trade, then try both attacks."}</p>
+      {!finished && <p className="card-sub">{!vault ? "Set up and fund your vault first." : "Run a normal trade, then try both attacks."}</p>}
       {model && <span className="badge">Live AI · {model}</span>}
     </div>
     {live && !model && <p className="muted agent-model">No AI key is set up on this server. Switch back to Scripted to run the scenarios.</p>}

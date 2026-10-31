@@ -166,13 +166,11 @@ html:has(.landing) { scroll-snap-type: y proximity; }
   @keyframes lp-d2 { 0%, 52% { top: 0; opacity: 0; } 56% { opacity: 1; } 70% { top: 100%; opacity: 1; } 73%, 100% { top: 100%; opacity: 0; } }
 }
 .lp-steps { display: contents; }
-.lp-steps-n, .lp-steps-hint { display: none; }
+.lp-steps-hint { display: none; }
 
-/* Phones (portrait or landscape): a step pill under the cards — "2/4", the dots, and a nudge to keep scrolling. */
+/* Phones (portrait or landscape): a step pill under the cards — the dots and a nudge to keep scrolling. */
 @media (max-width: 800px), (max-height: 560px) {
   .lp-steps { display: inline-flex; align-items: center; gap: 12px; height: 36px; padding: 0 14px; border-radius: 18px; background: rgba(255, 255, 255, .05); box-shadow: 0 0 0 1px rgba(255, 255, 255, .08) inset; }
-  .lp-steps-n { display: block; font-size: 13px; font-weight: 600; color: var(--ae-text); font-variant-numeric: tabular-nums; }
-  .lp-steps-n small { font-size: inherit; color: var(--ae-text-faint); }
   .lp-dots { position: static; transform: none; grid-auto-flow: column; justify-content: center; gap: 6px; }
   .lp-dots i { width: 6px; height: 6px; border-radius: 3px; }
   .lp-dots i.is-on { height: 6px; width: 20px; }

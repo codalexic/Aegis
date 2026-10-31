@@ -224,7 +224,6 @@ function Story() {
         <Card spec={s.right} className="res" />
       </div>
       <div className="lp-steps" aria-hidden="true">
-        <span className="lp-steps-n">{scene + 1}<small>/{SCENES.length}</small></span>
         <div className="lp-dots">{SCENES.map((_, i) => <i key={i} className={i === scene ? "is-on" : undefined} />)}</div>
         <span className="lp-steps-hint">Scroll<svg {...STROKE} strokeWidth={2.5}><path d="M6 9l6 6 6-6" /></svg></span>
       </div>

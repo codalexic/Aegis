@@ -239,7 +239,8 @@ button[data-busy] > svg { display: none; }
 .key-row { display: grid; grid-template-columns: 70px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 0; font-size: 13px; box-shadow: inset 0 -1px 0 var(--line); }
 .key-row:last-child { box-shadow: none; }
 .key-row .label { color: var(--ink-3); white-space: nowrap; }
-.key-row .label small { color: var(--pink); font-size: 11px; }
+.key-value { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.key-note { flex: none; margin-left: auto; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--pink); background: rgba(255, 46, 126, .12); }
 .key-row code { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
 .key-row .icon-button { width: 28px; min-height: 28px; height: 28px; }
 
@@ -430,8 +431,7 @@ button[data-busy] > svg { display: none; }
   font: 500 14px/1.2 "Inter", ui-sans-serif, system-ui, sans-serif; color: #A8A5AE; transition: color .15s, background-color .15s; }
 .site-links a:hover { color: #FAFAFA; background: rgba(255, 255, 255, .07); }
 .site-links a[aria-current="page"] { color: #FAFAFA; background: rgba(255, 255, 255, .1); }
-.site-links a:focus-visible, .site-logo:focus-visible, .site-wallet:focus-visible { outline: 2px solid #FF2E7E; outline-offset: 2px; }
-.site-actions { display: flex; align-items: center; gap: 8px; flex: none; margin-left: auto; }
+.site-links a:focus-visible, .site-logo:focus-visible, .site-wallet:focus-visible, .site-actions { display: flex; align-items: center; gap: 8px; flex: none; margin-left: auto; }
 .site-links ~ .site-actions { margin-left: 4px; }
 .site-header .wallet-control { display: flex; }
 .site-wallet { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 42px; min-height: 42px; padding: 0 18px; border: 1px solid transparent; border-radius: 999px; cursor: pointer; white-space: nowrap; text-decoration: none;
@@ -454,13 +454,30 @@ button[data-busy] > svg { display: none; }
 .wallet-pill .account-chip .account-chip-button { width: 32px; height: 32px; min-height: 32px; padding: 0; border-radius: 50%; background: #1C1B1F; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08); }
 .wallet-pill .account-chip .account-chip-button:hover { box-shadow: inset 0 0 0 1px rgba(255, 46, 126, .5); }
 .wallet-pill .account-chip .account-chip-button img { width: 22px; height: 22px; border-radius: 50%; }
+.site-menu { display: none; flex: none; align-items: center; justify-content: center; width: 42px; height: 42px; padding: 0; border: 0; border-radius: 50%; cursor: pointer; color: #FAFAFA;
+  background: rgba(255, 255, 255, .06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1); transition: background .15s; }
+.site-menu:hover { background: rgba(255, 255, 255, .1); }
+.site-menu svg { width: 20px; height: 20px; }
+/* Narrow screens: links drop into a panel under the bar; logo, wallet and menu button stay in it. */
 @media (max-width: 860px) {
-  .site-links.is-collapsible { display: none; }
-  .site-header-in { gap: 10px; padding-left: 18px; }
-  .site-links a { padding: 8px 10px; }
+  .site-header-in { gap: 8px; padding-left: 18px; }
+  .site-menu { display: inline-flex; }
+  .site-links { position: absolute; top: calc(100% + 8px); left: 0; right: 0; display: none; flex-direction: column; gap: 2px; padding: 8px; border-radius: 24px;
+    background: rgba(18, 17, 21, .97); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .1), 0 22px 60px -16px rgba(0, 0, 0, .95); }
+  .site-header-in.is-open .site-links { display: flex; }
+  .site-links a { padding: 14px 16px; border-radius: 16px; font-size: 16px; }
+  .site-links ~ .site-actions { margin-left: auto; }
 }
 @media (max-width: 600px) {
-  .site-wallet, .wallet-pill { min-width: 152px; }
-  .site-wallet { padding: 0 14px; }
+  .site-header { inset: 10px 0 auto; padding: 0 12px; }
+  .site-header-in { height: 56px; padding: 0 7px 0 16px; }
+  .site-wallet, .wallet-pill { min-width: 0; }
+  .site-wallet { height: 40px; min-height: 40px; padding: 0 14px; font-size: 13px; }
+  .wallet-pill { height: 40px; }
+  .wallet-pill .site-wallet { padding: 0 12px 0 6px; }
+  .site-menu { width: 40px; height: 40px; }
+}
+@media (max-width: 360px) {
+  .site-wallet > svg { display: none; }
 }
 

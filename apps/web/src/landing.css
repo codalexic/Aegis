@@ -165,11 +165,21 @@ html:has(.landing) { scroll-snap-type: y proximity; }
   @keyframes lp-d1 { 0%, 8% { top: 0; opacity: 0; } 12% { opacity: 1; } 26% { top: 100%; opacity: 1; } 29%, 100% { top: 100%; opacity: 0; } }
   @keyframes lp-d2 { 0%, 52% { top: 0; opacity: 0; } 56% { opacity: 1; } 70% { top: 100%; opacity: 1; } 73%, 100% { top: 100%; opacity: 0; } }
 }
-/* Phones (portrait or landscape): a horizontal step row right under the cards instead of an edge rail. */
+.lp-steps { display: contents; }
+.lp-steps-n, .lp-steps-hint { display: none; }
+
+/* Phones (portrait or landscape): a step pill under the cards — "2/4", the dots, and a nudge to keep scrolling. */
 @media (max-width: 800px), (max-height: 560px) {
-  .lp-dots { position: static; transform: none; grid-auto-flow: column; justify-content: center; }
-  .lp-dots i.is-on { height: 4px; width: 18px; }
+  .lp-steps { display: inline-flex; align-items: center; gap: 12px; height: 36px; padding: 0 14px; border-radius: 18px; background: rgba(255, 255, 255, .05); box-shadow: 0 0 0 1px rgba(255, 255, 255, .08) inset; }
+  .lp-steps-n { display: block; font-size: 13px; font-weight: 600; color: var(--ae-text); font-variant-numeric: tabular-nums; }
+  .lp-steps-n small { font-size: inherit; color: var(--ae-text-faint); }
+  .lp-dots { position: static; transform: none; grid-auto-flow: column; justify-content: center; gap: 6px; }
+  .lp-dots i { width: 6px; height: 6px; border-radius: 3px; }
+  .lp-dots i.is-on { height: 6px; width: 20px; }
+  .lp-steps-hint { display: inline-flex; align-items: center; gap: 4px; padding-left: 12px; box-shadow: -1px 0 0 rgba(255, 255, 255, .1); font-size: 13px; font-weight: 600; color: var(--ae-text-muted); }
+  .lp-steps-hint svg { width: 14px; height: 14px; animation: lp-nudge 1.6s ease-in-out infinite; }
 }
+@keyframes lp-nudge { 0%, 100% { transform: none; } 50% { transform: translateY(3px); } }
 
 .lp-try { padding: 140px 0 40px; }
 .lp-try-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px 32px; max-width: 1000px; margin: 0 auto; }

@@ -325,8 +325,8 @@ function CountUp({ value }: { value: number }) {
 function KeyRow({ label, value, note }: { label: string; value: string; note?: string }) {
   const [copied, copy] = useCopy(value);
   return <div className="key-row">
-    <span className="label">{label}{note && <small> · {note}</small>}</span>
-    <code title={value} aria-label={value}>{shorten(value)}</code>
+    <span className="label">{label}</span>
+    <span className="key-value"><code title={value} aria-label={value}>{shorten(value)}</code>{note && <small className="key-note">{note}</small>}</span>
     <button className="icon-button" type="button" onClick={copy} aria-label={copied ? `${label} address copied` : `Copy ${label} address`} title={copied ? "Copied" : "Copy"}><Icon name={copied ? "check" : "copy"} size={16} /></button>
   </div>;
 }

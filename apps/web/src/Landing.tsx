@@ -12,7 +12,7 @@ export function Landing({ walletButton, status, children }: {
   walletButton(className: string): ReactNode; status?: ReactNode; children?: ReactNode;
 }) {
   return <div className="landing">
-    <SiteHeader collapseLinks actions={walletButton("site-wallet")} links={<>
+    <SiteHeader actions={walletButton("site-wallet")} links={<>
       <a href="#story">How it works</a>
       <a href="#try">Try it</a>
       <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer">GitHub</a>
@@ -223,7 +223,11 @@ function Story() {
         <div className="lp-conn c2" aria-hidden="true"><i /></div>
         <Card spec={s.right} className="res" />
       </div>
-      <div className="lp-dots" aria-hidden="true">{SCENES.map((_, i) => <i key={i} className={i === scene ? "is-on" : undefined} />)}</div>
+      <div className="lp-steps" aria-hidden="true">
+        <span className="lp-steps-n">{scene + 1}<small>/{SCENES.length}</small></span>
+        <div className="lp-dots">{SCENES.map((_, i) => <i key={i} className={i === scene ? "is-on" : undefined} />)}</div>
+        <span className="lp-steps-hint">Scroll<svg {...STROKE} strokeWidth={2.5}><path d="M6 9l6 6 6-6" /></svg></span>
+      </div>
     </div>
     {SCENES.map((_, i) => <span key={i} className="lp-story-snap" style={{ "--i": i } as CSSProperties} aria-hidden="true" />)}
   </section>;

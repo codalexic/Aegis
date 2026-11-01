@@ -628,16 +628,16 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       <span className="banner-icon"><Icon name={blocker === "create" ? "vault" : blocker === "fund" ? "coins" : "lock"} size={20} /></span>
       <h2 id="setup-title">{blocker === "create" ? "Set up your demo vault" : blocker === "fund" ? (hasFunded ? "Top up your vault" : "Add test money") : "This vault is closed"}</h2>
     </div>
-    {!finished && <ol className="checklist" aria-label="Setup progress">
+    <ol className="checklist" aria-label="Setup progress">
       {([
         ["Create your vault", vault ? "done" : "next"],
-        ["Add test money", hasFunded ? "done" : vault ? "next" : ""],
+        ["Add test money", hasFunded ? "done" : vault && !finished ? "next" : ""],
         ["Try to trick the AI", swaps.length ? "done" : ""],
       ] as const).map(([label, state], index) => <li key={label} className={state} aria-current={state === "next" ? "step" : undefined}>
         <span className="step-marker" aria-hidden="true">{state === "done" ? <Icon name="check" size={12} /> : index + 1}</span>
         <span className="step-label">{label}{state === "done" && <span className="sr-only"> (done)</span>}</span>
       </li>)}
-    </ol>}
+    </ol>
     {blocker === "create" ? <div className="next-action">
       <ProgressButton className="primary" disabled={locked} busy={busy === "New demo vault"} progress="Setting up…"
         onClick={() => setSetupOpen(true)}>Create my vault</ProgressButton>

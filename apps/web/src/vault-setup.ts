@@ -10,6 +10,7 @@ export interface DemoVaultSettings {
 export const demoDefaults = (): DemoVaultSettings => ({
   maxTradeRaw: 50_000_000n, budgetRaw: 100_000_000n, durationSeconds: 3600n, withdrawAddresses: [],
 });
+export const UNTIL_MIN_MS = 300_000, UNTIL_MAX_MS = 30 * 86_400_000;
 export interface VaultSetupFields { cap: string; budget: string; until: string; addresses: string[] }
 
 export function localDateTime(milliseconds: number): string {
@@ -23,6 +24,7 @@ export const setupDefaults = (now = Date.now()): VaultSetupFields => ({
 export function addressErrors(addresses: string[], owner: PublicKey, agent: PublicKey): string[] {
   const seen = new Set<string>();
   return addresses.map((value, index) => {
+    if (!value.trim()) return "";
     if (index >= 3) return "You can add up to 3 addresses.";
     let key: PublicKey;
     try { key = new PublicKey(value.trim()); } catch { return "Enter a valid Solana address."; }
@@ -41,17 +43,17 @@ export function validateSetup(fields: VaultSetupFields, owner: PublicKey, agent:
   function parse(value: string, field: "cap" | "budget") {
     try {
       const raw = uiAmountToRaw(value, 6);
-      if (raw === 0n) errors[field] = "Enter an amount greater than zero.";
+      if (raw === 0n) errors[field] = "Must be more than 0.";
       return raw;
-    } catch { errors[field] = "Enter a positive amount with up to 6 decimal places."; return 0n; }
+    } catch { errors[field] = "Enter an amount."; return 0n; }
   }
   const maxTradeRaw = parse(fields.cap, "cap"), budgetRaw = parse(fields.budget, "budget");
-  if (!errors.cap && !errors.budget && maxTradeRaw > budgetRaw) errors.cap = "Max per trade cannot exceed the total budget.";
-  if (budgetRaw > 1_000_000_000n) errors.budget = "Total budget cannot exceed the 1,000 testUSDC demo deposit.";
+  if (!errors.cap && !errors.budget && maxTradeRaw > budgetRaw) errors.cap = "Cannot exceed total budget.";
+  if (budgetRaw > 1_000_000_000n) errors.budget = "Cannot exceed 1,000 testUSDC.";
   const milliseconds = new Date(fields.until).getTime() - now;
   const duration = Math.floor(milliseconds / 1000);
-  if (!Number.isFinite(duration) || milliseconds < 300_000 || milliseconds > 30 * 86_400_000) errors.until = "Choose a time at least 5 minutes and at most 30 days from now.";
+  if (!Number.isFinite(duration) || milliseconds < UNTIL_MIN_MS || milliseconds > UNTIL_MAX_MS) errors.until = "Choose 5 minutes to 30 days from now.";
   const valid = !errors.cap && !errors.budget && !errors.until && !errors.addresses.some(Boolean);
   return { errors, settings: valid ? { maxTradeRaw, budgetRaw, durationSeconds: BigInt(duration),
-    withdrawAddresses: fields.addresses.map((value) => new PublicKey(value.trim())) } satisfies DemoVaultSettings : null };
+    withdrawAddresses: fields.addresses.filter((value) => value.trim()).map((value) => new PublicKey(value.trim())) } satisfies DemoVaultSettings : null };
 }

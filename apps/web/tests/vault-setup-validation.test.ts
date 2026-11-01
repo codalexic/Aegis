@@ -25,10 +25,15 @@ it("rejects empty dates and dates that become too soon while setup is open", () 
 it.each([
   [["invalid"], "valid Solana"], [[owner.toBase58()], "already allowed"], [[agent.toBase58()], "demo agent"],
   [[extra, extra], "already in the list"], [[PublicKey.default.toBase58()], "system program"],
-  [[extra, extra, extra, extra], "up to 3"], [[""], "valid Solana"],
+  [[extra, extra, extra, extra], "up to 3"],
 ])("rejects invalid address list %s", (addresses, message) => {
   const result = validateSetup({ ...setupDefaults(now), addresses }, owner, agent, now);
   expect(result.settings).toBeNull(); expect(result.errors.addresses.join(" ")).toContain(message);
+});
+it("ignores blank address rows", () => {
+  const result = validateSetup({ ...setupDefaults(now), addresses: ["", "  "] }, owner, agent, now);
+  expect(result.errors.addresses).toEqual(["", ""]);
+  expect(result.settings?.withdrawAddresses).toEqual([]);
 });
 it("accepts up to three distinct addresses", () => {
   const addresses = [5, 6, 7].map((byte) => new PublicKey(new Uint8Array(32).fill(byte)).toBase58());

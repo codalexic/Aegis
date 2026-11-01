@@ -3,7 +3,7 @@ import type { JSX } from "react";
 export type IconName =
   | "vault" | "robot" | "activity" | "wallet" | "coins" | "shield"
   | "check" | "x" | "arrow" | "external" | "info" | "lock" | "copy" | "alert"
-  | "swap" | "news" | "redirect";
+  | "swap" | "news" | "redirect" | "calendar" | "chevron";
 
 // Every glyph is drawn on a 24x24 grid for a 1.75 stroke with round caps and joins.
 // The only solid parts are ~1-unit dots, so the set still reads as one stroke family.
@@ -75,6 +75,11 @@ const glyphs: Record<IconName, JSX.Element> = {
     <path d="M12.5 12v6.5" />
     <path d="M10 16.5 12.5 19 15 16.5" />
   </>),
+  calendar: (<>
+    <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+    <path d="M3.5 10h17M8 3v4M16 3v4" />
+  </>),
+  chevron: <path d="m6 9 6 6 6-6" />,
 };
 
 export function Icon({ name, size = 20, className }: { name: IconName; size?: number; className?: string }): JSX.Element {

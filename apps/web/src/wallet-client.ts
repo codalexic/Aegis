@@ -8,6 +8,8 @@ import { getAssociatedTokenAddressSync } from "./browser-token";
 import { readWalletBalance } from "./funding";
 import { isWalletDisconnected, walletRequestError } from "./wallet-lifecycle";
 
+import { demoDefaults, type DemoVaultSettings } from "./vault-setup";
+
 // Observe the existing send flow; building, simulation, validation, submission
 // and confirmation remain entirely in the SDK.
 class ProgressWalletClient extends WalletAegisClient {
@@ -70,13 +72,13 @@ export async function connectWalletDashboard(environment: "localnet" | "devnet",
     } finally { client.onProgress = undefined; client.onRetry = undefined; clearSigningFailure(); }
   };
   // Conservative estimates: creation includes vault + token-account rent.
-  const create = (onProgress?: ProgressCallback) => withSol(10_000_000n, async () => {
+  const create = (onProgress?: ProgressCallback, settings: DemoVaultSettings = demoDefaults()) => withSol(10_000_000n, async () => {
     const slot = await client.rpc<number>("getSlot", [{ commitment: "confirmed" }]);
     const time = await client.rpc<number | null>("getBlockTime", [slot]);
     signal?.throwIfAborted();
     if (time === null) throw new Error("Chain clock is unavailable.");
     const [vaultId] = crypto.getRandomValues(new BigUint64Array(1));
-    return client.createVault(progressWallet, { vaultId, agent, maxTradeRaw: 50_000_000n, budgetRaw: 100_000_000n, expiryUnix: BigInt(time) + 3600n });
+    return client.createVault(progressWallet, { vaultId, agent, ...settings, expiryUnix: BigInt(time) + settings.durationSeconds });
   }, onProgress);
   const fund = (vault: PublicKey, onProgress?: ProgressCallback) => withSol(100_000n, () => client.fundVault(progressWallet, vault, 1_000_000_000n), onProgress);
   return {
@@ -86,8 +88,8 @@ export async function connectWalletDashboard(environment: "localnet" | "devnet",
       ? import.meta.env.VITE_DEVNET_RPC_URL || deployment.rpcUrl : deployment.rpcUrl,
     getAssociatedTokenAddressSync(new PublicKey(deployment.inputMint), wallet.publicKey)),
     create,
-    newDemo: async (onProgress) => {
-      const created = await create((stage) => onProgress?.(`Creating vault · ${stage}`));
+    newDemo: async (onProgress, settings) => {
+      const created = await create((stage) => onProgress?.(`Creating vault · ${stage}`), settings);
       if (!created.ok || !created.vault) return created;
       const funding = await fund(created.vault, (stage) => onProgress?.(`Funding vault · ${stage}`));
       return { ...funding, vault: created.vault, createSignature: created.signature,
@@ -96,6 +98,7 @@ export async function connectWalletDashboard(environment: "localnet" | "devnet",
     fund,
     revoke: (vault, onProgress) => withSol(100_000n, () => client.revoke(progressWallet, vault), onProgress),
     withdraw: (vault, mint, amount, onProgress) => withSol(100_000n, () => client.withdraw(progressWallet, vault, mint, amount), onProgress),
+    withdrawTo: (vault, mint, recipient, amount, onProgress) => withSol(3_000_000n, () => client.withdrawTo(progressWallet, vault, mint, recipient, amount), onProgress),
     faucet: async () => {
       signal?.throwIfAborted();
       const response = await fetch("/api/faucet", { method: "POST", headers: { "content-type": "application/json", "x-aegis-faucet": environment }, body: JSON.stringify({ wallet: wallet.publicKey.toBase58() }), signal });

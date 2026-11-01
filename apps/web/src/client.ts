@@ -7,6 +7,8 @@ import { readWalletBalance } from "./funding";
 import { deriveSwapAccounts } from "../../../packages/sdk/src/addresses";
 import type { Step } from "../../../scripts/agent/run";
 
+import { demoDefaults, type DemoVaultSettings } from "./vault-setup";
+
 const MOCK_POLICY_ERRORS = new Set(["CapExceeded", "BudgetExceeded", "AccountMismatch", "Revoked", "Expired", "Unauthorized", "InvalidAmount"]);
 
 export type Scenario = "normal" | "injected" | "attacker";
@@ -19,15 +21,16 @@ export interface DashboardConnection {
   getWalletBalance?(): Promise<bigint | null>;
   getWalletSolBalance?(): Promise<bigint | null>;
   environment: AegisEnvironment;
-  client: Pick<AegisClient, "getVault" | "listActivity">;
+  client: Pick<AegisClient, "getVault" | "listActivity" | "getWithdrawPolicy">;
   owner: PublicKey;
   agent: PublicKey;
   initialVault: PublicKey | null;
   create(onProgress?: ProgressCallback): Promise<TxResult & { vault?: PublicKey }>;
-  newDemo(onProgress?: ProgressCallback): Promise<TxResult & { vault?: PublicKey; createSignature?: string }>;
+  newDemo(onProgress?: ProgressCallback, settings?: DemoVaultSettings): Promise<TxResult & { vault?: PublicKey; createSignature?: string }>;
   fund(vault: PublicKey, onProgress?: ProgressCallback): Promise<TxResult>;
   revoke(vault: PublicKey, onProgress?: ProgressCallback): Promise<TxResult>;
   withdraw(vault: PublicKey, mint: PublicKey, amount: bigint, onProgress?: ProgressCallback): Promise<TxResult>;
+  withdrawTo(vault: PublicKey, mint: PublicKey, recipient: PublicKey, amount: bigint, onProgress?: ProgressCallback): Promise<TxResult>;
   /** Mock only: run a demo scenario in-process, shaped like the agent API's steps. */
   scenario?(kind: Scenario, vault: PublicKey): Promise<Step[]>;
   readDetail?(signature: string, vault: VaultState): Promise<ActionDetail | undefined>;
@@ -61,14 +64,15 @@ export async function connectDashboard(environment: AegisEnvironment): Promise<D
       environment, client, owner: owner.publicKey, agent: agent.publicKey, initialVault: null,
       create: () => client.createVault(owner, { vaultId: 0n, agent: agent.publicKey, maxTradeRaw: 50_000_000n,
         budgetRaw: 100_000_000n, expiryUnix: BigInt(Math.floor(Date.now() / 1000)) + 3600n }),
-      newDemo: async () => {
-        const created = await client.createVault(owner, { vaultId: nextVaultId++, agent: agent.publicKey, maxTradeRaw: 50_000_000n,
-          budgetRaw: 100_000_000n, expiryUnix: BigInt(Math.floor(Date.now() / 1000)) + 3600n });
+      newDemo: async (_onProgress, settings = demoDefaults()) => {
+        const created = await client.createVault(owner, { vaultId: nextVaultId++, agent: agent.publicKey, ...settings,
+          expiryUnix: BigInt(Math.floor(Date.now() / 1000)) + settings.durationSeconds });
         if (!created.ok || !created.vault) return created;
         return { ...await client.fundVault(owner, created.vault, 1_000_000_000n), vault: created.vault, createSignature: created.signature };
       },
       fund: (vault) => client.fundVault(owner, vault, 1_000_000_000n), revoke: (vault) => client.revoke(owner, vault),
       withdraw: (vault, mint, amount) => client.withdraw(owner, vault, mint, amount),
+      withdrawTo: (vault, mint, recipient, amount) => client.withdrawTo(owner, vault, mint, recipient, amount),
       scenario: async (kind, vault) => {
         const amountUsdc = kind === "injected" ? "1000" : kind === "attacker" ? "30" : "20";
         const raw = BigInt(amountUsdc) * 1_000_000n;
@@ -103,12 +107,14 @@ export async function connectDashboard(environment: AegisEnvironment): Promise<D
       const result = await ownerAction("create");
       return { ...result, ...(result.vault ? { vault: new PublicKey(result.vault) } : { vault: undefined }) };
     },
-    newDemo: async () => {
-      const result = await ownerAction("new-demo");
+    newDemo: async (_onProgress, settings = demoDefaults()) => {
+      const result = await ownerAction("new-demo", { maxTradeRaw: settings.maxTradeRaw.toString(), budgetRaw: settings.budgetRaw.toString(),
+        durationSeconds: settings.durationSeconds.toString(), withdrawAddresses: settings.withdrawAddresses.map((key) => key.toBase58()) });
       return { ...result, vault: result.vault ? new PublicKey(result.vault) : undefined };
     },
     fund: () => ownerAction("fund"), revoke: () => ownerAction("revoke"),
     withdraw: (_vault, mint, amount) => ownerAction("withdraw", { mint: mint.toBase58(), amountRaw: amount.toString() }),
+    withdrawTo: (_vault, mint, recipient, amount) => ownerAction("withdraw", { mint: mint.toBase58(), amountRaw: amount.toString(), recipient: recipient.toBase58() }),
     readDetail: async (signature, vault) => {
       const transaction = await client.getTransaction(signature);
       return transaction ? actionDetail(transaction, vault) : undefined;

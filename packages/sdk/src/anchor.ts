@@ -11,13 +11,13 @@ import {
 import type { Aegis } from "../../../artifacts/idl/aegis";
 import aegisIdl from "../../../artifacts/idl/aegis.json";
 import localnet from "../../../deployments/localnet.json";
-import { AEGIS_PROGRAM_ID, DEMO_DEX_PROGRAM_ID, deriveSwapAccounts, deriveVaultAuthorityPda, deriveVaultPda } from "./addresses";
+import { AEGIS_PROGRAM_ID, DEMO_DEX_PROGRAM_ID, deriveSwapAccounts, deriveVaultAuthorityPda, deriveVaultPda, deriveWithdrawPolicy } from "./addresses";
 import { sendServerTransaction } from "./server-transaction";
 import { retryRpc } from "./retry";
 import { isU64 } from "./amounts";
 import { ClientError, failure, transactionErrorName } from "./errors";
 import { createDevnetConnection, DEVNET_RPC_URL, DEVNET_WS_URL } from "./devnet";
-import type { Activity, AegisClient, CreateVaultParams, SwapAccounts, TxResult, VaultState } from "./types";
+import type { Activity, AegisClient, CreateVaultParams, SwapAccounts, TxResult, VaultState, WithdrawPolicyState } from "./types";
 
 // Dashboard creation adds lastVault; a freshly seeded deployment has no vault yet.
 export type ChainDeployment = Omit<typeof localnet, "lastVault"> & { lastVault?: string; faucet?: string };
@@ -123,6 +123,18 @@ export class AnchorAegisClient implements AegisClient {
     };
   }
 
+  async getWithdrawPolicy(vault: PublicKey): Promise<WithdrawPolicyState | null> {
+    const [address, bump] = deriveWithdrawPolicy(vault);
+    const info = await this.connection.getAccountInfo(address, commitment);
+    if (!info) return null;
+    try {
+      if (!info.owner.equals(AEGIS_PROGRAM_ID) || info.executable || info.data.length !== this.program.account.withdrawPolicy.size) throw new Error();
+      const policy = this.program.coder.accounts.decode<IdlAccounts<Aegis>["withdrawPolicy"]>("withdrawPolicy", info.data);
+      if (!policy.vault.equals(vault) || policy.bump !== bump || policy.count < 1 || policy.count > 3) throw new Error();
+      return { address, vault, allowed: policy.allowed.slice(0, policy.count) };
+    } catch { throw new ClientError("AccountMismatch"); }
+  }
+
   async createVault(owner: Signer, p: CreateVaultParams): Promise<TxResult & { vault?: PublicKey }> {
     let vault: PublicKey | undefined;
     const result = await this.send(owner, async () => {
@@ -130,12 +142,15 @@ export class AnchorAegisClient implements AegisClient {
       if (typeof p.expiryUnix !== "bigint" || p.expiryUnix < -(1n << 63n) || p.expiryUnix >= 1n << 63n) throw new ClientError("InvalidAmount");
       [vault] = deriveVaultPda(owner.publicKey, p.vaultId);
       const accounts = deriveSwapAccounts(vault, this.inputMint, this.outputMint);
-      return [await this.program.methods.createVault(id, p.agent, u64(p.maxTradeRaw), u64(p.budgetRaw), new BN(p.expiryUnix.toString()))
+      const instructions = [await this.program.methods.createVault(id, p.agent, u64(p.maxTradeRaw), u64(p.budgetRaw), new BN(p.expiryUnix.toString()))
         .accountsStrict({
           owner: owner.publicKey, vault, vaultAuthority: accounts.vaultAuthority,
           inputMint: this.inputMint, outputMint: this.outputMint, inputVault: accounts.inputVault, outputVault: accounts.outputVault,
           tokenProgram: TOKEN_PROGRAM_ID, associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID, systemProgram: SystemProgram.programId,
         }).instruction()];
+      if (p.withdrawAddresses?.length) instructions.push(await this.program.methods.setWithdrawAddresses(p.withdrawAddresses)
+        .accountsStrict({ owner: owner.publicKey, vault, policy: deriveWithdrawPolicy(vault)[0], systemProgram: SystemProgram.programId }).instruction());
+      return instructions;
     });
     return result.ok ? { ...result, vault } : result;
   }
@@ -190,6 +205,28 @@ export class AnchorAegisClient implements AegisClient {
         createAssociatedTokenAccountIdempotentInstruction(owner.publicKey, destination, owner.publicKey, mint),
         await this.program.methods.withdraw(amount).accountsStrict({
           owner: owner.publicKey, vault, vaultAuthority: deriveVaultAuthorityPda(vault)[0], source, destination, tokenProgram: TOKEN_PROGRAM_ID,
+        }).instruction(),
+      ];
+    });
+  }
+
+  async setWithdrawAddresses(owner: Signer, vault: PublicKey, addresses: PublicKey[]): Promise<TxResult> {
+    return this.send(owner, async () => [await this.program.methods.setWithdrawAddresses(addresses)
+      .accountsStrict({ owner: owner.publicKey, vault, policy: deriveWithdrawPolicy(vault)[0], systemProgram: SystemProgram.programId }).instruction()]);
+  }
+
+  async withdrawTo(owner: Signer, vault: PublicKey, mint: PublicKey, recipient: PublicKey, amountRaw: bigint): Promise<TxResult> {
+    return this.send(owner, async () => {
+      const amount = u64(amountRaw);
+      const state = await this.readVault(vault);
+      const source = mint.equals(state.inputMint) ? state.inputVault : mint.equals(state.outputMint) ? state.outputVault : undefined;
+      if (!source) throw new ClientError("AccountMismatch");
+      const destination = getAssociatedTokenAddressSync(mint, recipient, true);
+      return [
+        createAssociatedTokenAccountIdempotentInstruction(owner.publicKey, destination, recipient, mint),
+        await this.program.methods.withdrawTo(amount).accountsStrict({
+          owner: owner.publicKey, vault, policy: deriveWithdrawPolicy(vault)[0],
+          vaultAuthority: deriveVaultAuthorityPda(vault)[0], source, destination, tokenProgram: TOKEN_PROGRAM_ID,
         }).instruction(),
       ];
     });

@@ -471,6 +471,94 @@ export type Aegis = {
       ]
     },
     {
+      "name": "setWithdrawAddresses",
+      "docs": [
+        "Set the vault's extra withdrawal recipients once; the owner is always allowed."
+      ],
+      "discriminator": [
+        82,
+        194,
+        42,
+        151,
+        33,
+        124,
+        9,
+        89
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.owner",
+                "account": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "vault.vaultId",
+                "account": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "policy",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "addresses",
+          "type": {
+            "vec": "pubkey"
+          }
+        }
+      ]
+    },
+    {
       "name": "withdraw",
       "discriminator": [
         183,
@@ -561,6 +649,123 @@ export type Aegis = {
           "type": "u64"
         }
       ]
+    },
+    {
+      "name": "withdrawTo",
+      "docs": [
+        "Withdraw to the owner or a fixed recipient, even after revocation or expiry."
+      ],
+      "discriminator": [
+        2,
+        147,
+        75,
+        241,
+        190,
+        56,
+        152,
+        93
+      ],
+      "accounts": [
+        {
+          "name": "owner",
+          "signer": true,
+          "relations": [
+            "vault"
+          ]
+        },
+        {
+          "name": "vault",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault.owner",
+                "account": "vault"
+              },
+              {
+                "kind": "account",
+                "path": "vault.vaultId",
+                "account": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "policy",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  108,
+                  105,
+                  99,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vaultAuthority",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  97,
+                  117,
+                  116,
+                  104,
+                  111,
+                  114,
+                  105,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "vault"
+              }
+            ]
+          }
+        },
+        {
+          "name": "source",
+          "writable": true
+        },
+        {
+          "name": "destination",
+          "writable": true
+        },
+        {
+          "name": "tokenProgram",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "amountRaw",
+          "type": "u64"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -575,6 +780,19 @@ export type Aegis = {
         152,
         117,
         119
+      ]
+    },
+    {
+      "name": "withdrawPolicy",
+      "discriminator": [
+        93,
+        152,
+        131,
+        201,
+        210,
+        26,
+        149,
+        63
       ]
     }
   ],
@@ -684,6 +902,38 @@ export type Aegis = {
           },
           {
             "name": "poolBump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "withdrawPolicy",
+      "docs": [
+        "Up to three immutable extra recipients, stored separately from the legacy vault."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "vault",
+            "type": "pubkey"
+          },
+          {
+            "name": "allowed",
+            "type": {
+              "array": [
+                "pubkey",
+                3
+              ]
+            }
+          },
+          {
+            "name": "count",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
             "type": "u8"
           }
         ]

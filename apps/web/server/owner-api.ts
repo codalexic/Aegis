@@ -7,6 +7,8 @@ import { AnchorAegisClient, deriveVaultPda, parseRawAmount, type LocalnetDeploym
 import { Keypair, PublicKey } from "@solana/web3.js";
 import type { Connect, Plugin } from "vite";
 
+import { addressErrors, demoDefaults } from "../src/vault-setup";
+
 import { ApiError, json, readBody } from "./http";
 export { ApiError, json, readBody } from "./http";
 
@@ -59,15 +61,29 @@ export function ownerApiMiddleware(root: string): Connect.NextHandleFunction {
             owner: ownerAddress.toBase58(), agent: agentAddress.toBase58(), lastVault: vault.toBase58() });
         }
         const body = await readBody(request);
-        const allowed = action === "withdraw" ? ["mint", "amountRaw"] : [];
+        const allowed = action === "withdraw" ? ["mint", "amountRaw", "recipient"]
+          : action === "new-demo" ? ["maxTradeRaw", "budgetRaw", "durationSeconds", "withdrawAddresses"] : [];
         if (Object.keys(body).some((key) => !allowed.includes(key))) throw new ApiError(400, "Unexpected request fields.");
         const owner = await loadOwner(root, deployment.owner);
         if (action === "create" || action === "new-demo") {
+          const settings = demoDefaults();
+          if (action === "new-demo" && Object.keys(body).length) {
+            try {
+              settings.maxTradeRaw = parseRawAmount(body.maxTradeRaw as string);
+              settings.budgetRaw = parseRawAmount(body.budgetRaw as string);
+              settings.durationSeconds = parseRawAmount(body.durationSeconds as string);
+              if (settings.maxTradeRaw === 0n || settings.maxTradeRaw > settings.budgetRaw || settings.budgetRaw > 1_000_000_000n ||
+                settings.durationSeconds < 300n || settings.durationSeconds > 2_592_000n || !Array.isArray(body.withdrawAddresses) ||
+                body.withdrawAddresses.some((value) => typeof value !== "string") ||
+                addressErrors(body.withdrawAddresses, ownerAddress, agentAddress).some(Boolean)) throw new Error();
+              settings.withdrawAddresses = body.withdrawAddresses.map((value: string) => new PublicKey(value.trim()));
+            } catch { throw new ApiError(400, "Invalid vault limits, trading duration, or withdrawal addresses."); }
+          }
           const chainTime = await client.connection.getBlockTime(await client.connection.getSlot("confirmed"));
           if (chainTime === null) throw new ApiError(503, "Localnet clock is unavailable.");
           const result = await client.createVault(owner, {
             vaultId: action === "new-demo" ? randomBytes(8).readBigUInt64LE() | 1n : 0n,
-            agent: agentAddress, maxTradeRaw: 50_000_000n, budgetRaw: 100_000_000n, expiryUnix: BigInt(chainTime) + 3600n,
+            agent: agentAddress, ...settings, expiryUnix: BigInt(chainTime) + settings.durationSeconds,
           });
           if (result.ok && result.vault) {
             const temporary = `${deploymentPath}.tmp`;
@@ -94,6 +110,12 @@ export function ownerApiMiddleware(root: string): Connect.NextHandleFunction {
           amount = parseRawAmount(body.amountRaw);
           if (amount === 0n) throw new Error();
         } catch { throw new ApiError(400, "Expected a mint and a positive raw decimal-string amount."); }
+        if (body.recipient !== undefined) {
+          let recipient: PublicKey;
+          try { if (typeof body.recipient !== "string") throw new Error(); recipient = new PublicKey(body.recipient); }
+          catch { throw new ApiError(400, "Expected a valid withdrawal address."); }
+          return json(response, 200, await client.withdrawTo(owner, vault, mint, recipient, amount));
+        }
         return json(response, 200, await client.withdraw(owner, vault, mint, amount));
       } finally { if (!read) busy = false; }
     })().catch((error: unknown) => {

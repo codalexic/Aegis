@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { PublicKey } from "@solana/web3.js";
-import type { AegisEnvironment, Activity, TxResult, VaultState } from "@aegis/sdk";
+import type { AegisEnvironment, Activity, TxResult, VaultState, WithdrawPolicyState } from "@aegis/sdk";
 import { rawAmountToUi } from "../../../packages/sdk/src/amounts";
 import { connectDashboard, type DashboardConnection, type Scenario } from "./client";
 import type { ActionDetail } from "./activity";
@@ -25,9 +25,12 @@ import { CanonicalSiteNotice } from "./CanonicalSiteNotice";
 import { useCopy } from "./use-copy";
 import { isMobileBrowser, phantomBrowseUrl, PHANTOM_INSTALL_MESSAGE, PHANTOM_MOBILE_MESSAGE } from "./phantom-availability";
 
+import { VaultSetup } from "./VaultSetup";
+import type { DemoVaultSettings } from "./vault-setup";
+
 const nowUnix = () => BigInt(Math.floor(Date.now() / 1000));
 const shorten = (value: string) => `${value.slice(0, 4)}…${value.slice(-4)}`;
-const VAULT_LIFETIME = 3600n; // seconds; the program sets expiry = creation + 1h
+const VAULT_LIFETIME = 3600n; // Scale the time meter to the final hour.
 
 function amount(raw: bigint, decimals = 6): string {
   const [whole, fraction] = rawAmountToUi(raw, decimals).split(".");
@@ -271,7 +274,7 @@ function feedEntry(item: Activity, detail: ActionDetail | undefined, vault: Vaul
         sub: vault ? rejectionReason(item.error ?? "Failed", vault, detail.amount.replace(/ testUSDC$/, "")) : `The AI asked for ${what}` };
     case "Fund vault": return { icon: "coins", tone: item.ok ? "neutral" : "bad", title: item.ok ? `Added ${what}` : "Funding failed" };
     case "Create vault": return { icon: "vault", tone: item.ok ? "neutral" : "bad", title: item.ok ? "Vault created" : "Vault setup failed" };
-    case "Withdraw": return { icon: "wallet", tone: item.ok ? "neutral" : "bad", title: item.ok ? `Withdrew ${what}` : "Withdrawal failed" };
+    case "Withdraw": return { icon: "wallet", tone: item.ok ? "neutral" : "bad", title: item.ok ? `Withdrew ${what} to ${detail.destination ?? "your wallet"}` : "Withdrawal failed" };
     case "Revoke agent": return { icon: "lock", tone: item.ok ? "neutral" : "bad", title: item.ok ? "AI agent stopped" : "Stopping the AI failed" };
     default: return { icon: "activity", tone: item.ok ? "neutral" : "bad", title: item.ok ? "Transaction" : "Transaction failed" };
   }
@@ -364,6 +367,11 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
   const [stage, setStage] = useState("");
   const [reloading, setReloading] = useState(false);
   const [page, go] = usePage();
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [withdrawPolicy, setWithdrawPolicy] = useState<WithdrawPolicyState | null>(null);
+  const policyCache = useRef<{ vault: string; policy: WithdrawPolicyState | null } | null>(null);
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [destination, setDestination] = useState(owner.toBase58());
   const loading = !ready || reloading;
   useEffect(() => { onBusyChange?.(!!busy || agentBusy || !ready); }, [busy, agentBusy, ready, onBusyChange]);
   const reportProgress = (text: string) => { if (current()) setStage(text); };
@@ -384,7 +392,10 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
     const selected = address.current;
     try {
       const state = await client.getVault(selected);
+      const policy = policyCache.current?.vault === selected.toBase58() ? policyCache.current.policy : await client.getWithdrawPolicy(selected);
       if (!current() || address.current !== selected) return;
+      policyCache.current = { vault: selected.toBase58(), policy };
+      setWithdrawPolicy(policy);
       currentState.current = state;
       setVault(state);
       setReady(true);
@@ -494,11 +505,16 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
     return "Added 1,000 testUSDC to your vault.";
   });
 
-  const newDemo = () => run("New demo vault", async () => {
-    const result = await newFundedDemo(connection, walletBalance, refreshWalletBalance, reportProgress);
+  const newDemo = (settings: DemoVaultSettings) => run("New demo vault", async () => {
+    const result = await newFundedDemo(connection, walletBalance, refreshWalletBalance, reportProgress, settings);
     if (!current()) return "";
     if (result.vault) {
       address.current = result.vault;
+      setSetupOpen(false);
+      setWithdrawOpen(false);
+      setDestination(owner.toBase58());
+      setWithdrawPolicy(null);
+      policyCache.current = null;
       details.current.clear();
       setVault(null);
       setActivity([]);
@@ -516,17 +532,23 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
     return "Agent revoked. You can still withdraw your funds.";
   });
 
-  const withdraw = () => run("Withdraw all", async () => {
+  const withdraw = (recipient = owner.toBase58()) => run("Withdraw all", async () => {
+    const toWallet = recipient === owner.toBase58();
+    const destinationLabel = toWallet ? "your wallet" : recipient;
     const state = await client.getVault(address.current!);
     for (const [mint, balance, decimals, symbol] of [
       [state.inputMint, state.inputBalanceRaw, 6, "testUSDC"],
       [state.outputMint, state.outputBalanceRaw, 9, "testSOL"],
     ] as const) {
-      if (balance > 0n) track(await connection.withdraw(state.address, mint, balance, (stage) => reportProgress(`${symbol} · ${stage}`)), {
-        label: "Withdraw", amount: `${amount(balance, decimals)} ${symbol}`,
-      });
+      if (balance > 0n) {
+        const progress = (stage: string) => reportProgress(`${symbol} · ${stage}`);
+        const result = toWallet ? await connection.withdraw(state.address, mint, balance, progress)
+          : await connection.withdrawTo(state.address, mint, new PublicKey(recipient), balance, progress);
+        track(result, { label: "Withdraw", amount: `${amount(balance, decimals)} ${symbol}`, destination: destinationLabel });
+      }
     }
-    return "Everything is back in your wallet.";
+    setWithdrawOpen(false);
+    return toWallet ? "Everything is back in your wallet." : `Funds withdrawn to ${recipient}.`;
   });
 
   // Mock mode runs the cases in-process; label the swap so the feed and analytics can read it.
@@ -602,9 +624,9 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       <span className="banner-icon"><Icon name={blocker === "create" ? "vault" : blocker === "fund" ? "coins" : "lock"} size={16} /></span>
       <div>
       <h2 id="setup-title">{blocker === "create" ? "Set up your demo vault" : blocker === "fund" ? (hasFunded ? "Top up your vault" : "Add test money") : "This vault is closed"}</h2>
-      <p className="card-sub">{blocker === "create" ? "A vault is a safe box for your AI’s trading money. One click opens it with safe limits and adds 1,000 test USDC."
+      <p className="card-sub">{blocker === "create" ? "A vault is a safe box for your AI’s trading money. Choose your limits and add 1,000 test USDC."
         : blocker === "fund" ? "Your vault is open. Give the AI something to trade with."
-        : vault!.revoked ? "You stopped the AI, so it can’t trade from this vault anymore." : "The one-hour trading window ended, so the AI can’t trade anymore."}</p>
+        : vault!.revoked ? "You stopped the AI, so it can’t trade from this vault anymore." : "The trading window ended, so the AI can’t trade anymore."}</p>
     </div></div>
     <ol className="checklist">
       {([
@@ -618,10 +640,10 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
     </ol>
     {blocker === "create" ? <div className="next-action">
       <ProgressButton className="primary" disabled={locked} busy={busy === "New demo vault"} progress="Setting up…"
-        onClick={() => void newDemo()}>Create my vault</ProgressButton>
+        onClick={() => setSetupOpen(true)}>Create my vault</ProgressButton>
       {connection.walletMode && <p className="next-hint">Phantom will ask you to approve.</p>}
     </div> : <FundingStep balance={walletBalance} hasFaucet={!!connection.faucet} finished={blocker === "closed"} locked={locked} busy={busy}
-      text={fundingText} onFaucet={() => void run("Get testUSDC", connection.faucet!)} onFund={() => void fund()} onNewDemo={() => void newDemo()} />}
+      text={fundingText} onFaucet={() => void run("Get testUSDC", connection.faucet!)} onFund={() => void fund()} onNewDemo={() => setSetupOpen(true)} />}
   </section>;
 
   const stats = <section className="stats" aria-label="Vault at a glance">
@@ -638,7 +660,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
     <div className="stat">
       <span className="stat-label">Time left</span>
       <strong className="stat-value"><span data-testid="expiry">{vault ? countdown(vault.expiryUnix, now) : "1 hour"}</span></strong>
-      <div className="meter neutral" role="img" aria-label={vault ? `${lifePercent}% of the hour remaining` : "Full hour"}><span style={{ width: `${vault ? lifePercent : 100}%` }} /></div>
+      <div className="meter neutral" role="img" aria-label={vault ? `${countdown(vault.expiryUnix, now)} remaining` : "Full hour"}><span style={{ width: `${vault ? lifePercent : 100}%` }} /></div>
     </div>
     <div className="stat">
       <span className="stat-label">Attacks blocked</span>
@@ -656,6 +678,13 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       <div><dt>Trading window</dt><dd>{vault ? (status === "Active" ? `${countdown(vault.expiryUnix, now)} left` : status) : "1 hour from creation"}</dd></div>
       <div><dt>Output goes to</dt><dd>This vault only</dd></div>
     </dl>
+    {vault && <div className="withdraw-policy">
+      <h3>Allowed withdrawal addresses</h3>
+      {withdrawPolicy ? <div className="keys">
+        <KeyRow label="Wallet" value={owner.toBase58()} />
+        {withdrawPolicy.allowed.map((key, index) => <KeyRow key={key.toBase58()} label={`Extra ${index + 1}`} value={key.toBase58()} />)}
+      </div> : <p>Only your wallet</p>}
+    </div>}
     <p className="card-foot">The AI can’t change these rules, even if it’s tricked.</p>
   </section>;
 
@@ -681,7 +710,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
         ? <><strong>This vault is closed</strong><span>Open a new demo vault to run the cases again.</span></>
         : <><strong>Your vault isn’t ready</strong><span>Set up and fund your vault before running the cases.</span></>}</div>
       {blocker === "closed"
-      ? <ProgressButton className="primary small" disabled={locked} busy={busy === "New demo vault"} progress="Setting up…" onClick={() => void newDemo()}>New demo vault</ProgressButton>
+      ? <ProgressButton className="primary small" disabled={locked} busy={busy === "New demo vault"} progress="Setting up…" onClick={() => setSetupOpen(true)}>New demo vault</ProgressButton>
       : <button type="button" className="primary small" onClick={() => go("overview")}>Go to setup<Icon name="arrow" size={14} /></button>}</div>}
     <AgentConsole environment={environment} walletMode={connection.walletMode} key={address.current?.toBase58()} vault={vault} finished={finished}
       disabled={!!busy || loading || !!blocker} onBusy={setAgentBusy} onComplete={refreshAfterAgent} runScenario={runScenario} />
@@ -715,10 +744,19 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       {vault ? <div className="settings">
         <div className="setting"><div><strong>Stop the AI</strong><p>{vault.revoked ? "Already stopped. The AI can’t trade from this vault." : "Instantly cut off the AI’s permission to trade."}</p></div>
           <ProgressButton className="danger" disabled={vault.revoked || locked} busy={busy === "Revoke agent"} progress="Revoking…" onClick={() => void revoke()}>Revoke agent</ProgressButton></div>
-        <div className="setting"><div><strong>Withdraw everything</strong><p>Send all testUSDC and testSOL in the vault back to your wallet.</p></div>
-          <ProgressButton disabled={!hasBalance || locked} busy={busy === "Withdraw all"} progress="Withdrawing…" onClick={() => void withdraw()}>Withdraw all</ProgressButton></div>
+        <div className="setting"><div><strong>Withdraw everything</strong><p>{withdrawPolicy ? "Send all testUSDC and testSOL to your wallet or an allowed address." : "Send all testUSDC and testSOL in the vault back to your wallet."}</p></div>
+          <ProgressButton disabled={!hasBalance || locked} busy={busy === "Withdraw all"} progress="Withdrawing…" onClick={() => { if (withdrawPolicy) { setDestination(owner.toBase58()); setWithdrawOpen(true); } else void withdraw(); }}>Withdraw all</ProgressButton></div>
+        {withdrawOpen && withdrawPolicy && <form className="withdraw-choice" onSubmit={(event) => { event.preventDefault(); void withdraw(destination); }}>
+          <label htmlFor="withdraw-destination">Withdrawal destination</label>
+          <select id="withdraw-destination" value={destination} disabled={locked} onChange={(event) => setDestination(event.target.value)}>
+            <option value={owner.toBase58()}>Your wallet</option>
+            {withdrawPolicy.allowed.map((key) => <option key={key.toBase58()} value={key.toBase58()}>{key.toBase58()}</option>)}
+          </select>
+          <div className="setup-buttons"><button type="button" disabled={locked} onClick={() => setWithdrawOpen(false)}>Cancel</button>
+            <ProgressButton type="submit" className="primary" disabled={locked} busy={busy === "Withdraw all"} progress="Withdrawing…">Confirm withdrawal</ProgressButton></div>
+        </form>}
         {!finished && <div className="setting"><div><strong>Start over</strong><p>Open a fresh vault with 1,000 test USDC.</p></div>
-          <ProgressButton disabled={locked} busy={busy === "New demo vault"} progress="Setting up…" onClick={() => void newDemo()}>New demo vault</ProgressButton></div>}
+          <ProgressButton disabled={locked} busy={busy === "New demo vault"} progress="Setting up…" onClick={() => setSetupOpen(true)}>New demo vault</ProgressButton></div>}
       </div> : <p className="empty">Create your vault on the Overview page first.</p>}
     </section>
     <section className="card" aria-labelledby="keys-title">
@@ -748,7 +786,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       <h1 className="sr-only">Your Aegis vault</h1>
       {siteNotice}
       {connection.getWalletSolBalance && <DevnetSolHint readBalance={connection.getWalletSolBalance} />}
-      {content}
+      {setupOpen ? <VaultSetup owner={owner} agent={agent} busy={locked} onCancel={() => setSetupOpen(false)} onCreate={(settings) => void newDemo(settings)} /> : content}
     </main>
   </Frame>;
 }

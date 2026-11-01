@@ -1,6 +1,8 @@
 import type { PublicKey } from "@solana/web3.js";
 import type { DashboardConnection, ProgressCallback } from "./client";
 
+import type { DemoVaultSettings } from "./vault-setup";
+
 export const DEMO_FUND_RAW = 1_000_000_000n;
 
 export function needsFaucet(balance: bigint | null, hasFaucet: boolean): boolean {
@@ -33,7 +35,7 @@ export async function readWalletBalance(rpcUrl: string, tokenAccount: PublicKey)
 
 export async function newFundedDemo(
   connection: DashboardConnection, balance: bigint | null, refreshWalletBalance: () => Promise<void>,
-  onProgress?: ProgressCallback,
+  onProgress?: ProgressCallback, settings?: DemoVaultSettings,
 ) {
   if (needsFaucet(balance, !!connection.faucet)) {
     onProgress?.("Getting testUSDC…");
@@ -41,5 +43,5 @@ export async function newFundedDemo(
     await refreshWalletBalance();
   }
   onProgress?.("Creating and funding vault…");
-  return connection.newDemo(onProgress);
+  return connection.newDemo(onProgress, settings);
 }

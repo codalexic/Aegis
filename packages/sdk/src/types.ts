@@ -8,6 +8,8 @@ export interface CreateVaultParams {
   maxTradeRaw: bigint;
   budgetRaw: bigint;
   expiryUnix: bigint;
+  /** Set extra withdrawal recipients atomically with creation. */
+  withdrawAddresses?: PublicKey[];
 }
 
 export interface AegisClient {
@@ -19,7 +21,18 @@ export interface AegisClient {
   revoke(owner: Signer, vault: PublicKey): Promise<TxResult>;
   rotateAgent(owner: Signer, vault: PublicKey, newAgent: PublicKey): Promise<TxResult>;
   withdraw(owner: Signer, vault: PublicKey, mint: PublicKey, amountRaw: bigint): Promise<TxResult>;
+  setWithdrawAddresses(owner: Signer, vault: PublicKey, addresses: PublicKey[]): Promise<TxResult>;
+  /** Withdraw to the recipient's associated token account, creating it if needed. */
+  withdrawTo(owner: Signer, vault: PublicKey, mint: PublicKey, recipient: PublicKey, amountRaw: bigint): Promise<TxResult>;
+  getWithdrawPolicy(vault: PublicKey): Promise<WithdrawPolicyState | null>;
   listActivity(vault: PublicKey): Promise<Activity[]>;
+}
+
+/** Only the configured extra recipients; the owner is always allowed implicitly. */
+export interface WithdrawPolicyState {
+  address: PublicKey;
+  vault: PublicKey;
+  allowed: PublicKey[];
 }
 
 export interface VaultState {

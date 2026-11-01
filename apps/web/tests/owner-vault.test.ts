@@ -7,7 +7,7 @@ import { ownerApiMiddleware } from "../server/owner-api";
 
 const client = vi.hoisted(() => ({
   connection: { getSlot: vi.fn(), getBlockTime: vi.fn() },
-  createVault: vi.fn(), fundVault: vi.fn(), revoke: vi.fn(), withdraw: vi.fn(),
+  createVault: vi.fn(), fundVault: vi.fn(), revoke: vi.fn(), withdraw: vi.fn(), withdrawTo: vi.fn(),
 }));
 vi.mock("node:fs/promises", () => ({ readFile: vi.fn(), writeFile: vi.fn(), rename: vi.fn() }));
 vi.mock("../../../packages/sdk/src/index", async (original) => ({
@@ -45,6 +45,7 @@ describe("fresh demo vault and selected owner actions", () => {
       vault: deriveVaultPda(owner.publicKey, params.vaultId)[0] }));
     client.fundVault.mockResolvedValue({ ok: true, signature: "fund-signature" });
     client.revoke.mockResolvedValue({ ok: true, signature: "revoke-signature" });
+    client.withdrawTo.mockResolvedValue({ ok: true, signature: "withdraw-to-signature" });
     client.withdraw.mockResolvedValue({ ok: true, signature: "withdraw-signature" });
     const middleware = ownerApiMiddleware("/fixture");
     server = createServer((request, response) => middleware(request, response, () => response.writeHead(404).end()));
@@ -94,6 +95,27 @@ describe("fresh demo vault and selected owner actions", () => {
     expect(client.fundVault).not.toHaveBeenCalled();
     expect(rename).not.toHaveBeenCalled();
     expect(deployment.lastVault).toBe(oldVault.toBase58());
+  });
+
+  it("passes selected limits, duration and recipients to atomic creation and supports directed withdrawal", async () => {
+    const recipient = new PublicKey(new Uint8Array(32).fill(23));
+    const result = await (await post("new-demo", { maxTradeRaw: "12345678", budgetRaw: "234567891", durationSeconds: "86400",
+      withdrawAddresses: [recipient.toBase58()] })).json();
+    expect(result.ok).toBe(true);
+    expect(client.createVault.mock.calls[0][1]).toMatchObject({ maxTradeRaw: 12_345_678n, budgetRaw: 234_567_891n,
+      expiryUnix: 1_800_086_400n, withdrawAddresses: [recipient] });
+    await post("withdraw", { mint: agent.toBase58(), amountRaw: "12345678", recipient: recipient.toBase58() });
+    expect(client.withdrawTo).toHaveBeenCalledWith(owner, new PublicKey(result.vault), agent, recipient, 12_345_678n);
+    expect(client.withdraw).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { maxTradeRaw: "100000001" }, { budgetRaw: "1000000001" }, { durationSeconds: "299" },
+    { durationSeconds: "2592001" }, { withdrawAddresses: [agent.toBase58()] }, { withdrawAddresses: [owner.publicKey.toBase58()] },
+    { withdrawAddresses: [oldVault.toBase58(), oldVault.toBase58()] }, { withdrawAddresses: ["invalid"] },
+  ])("rejects invalid setup %s before creation", async (override) => {
+    expect((await post("new-demo", { maxTradeRaw: "50000000", budgetRaw: "100000000", durationSeconds: "3600", withdrawAddresses: [], ...override })).status).toBe(400);
+    expect(client.createVault).not.toHaveBeenCalled();
   });
 
   it("rejects browser-selected vaults, amounts, or policy overrides", async () => {

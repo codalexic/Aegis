@@ -90,6 +90,7 @@ beforeEach(() => {
   Object.defineProperty(document, "hidden", { configurable: true, value: false });
   reads = vi.spyOn(WalletAegisClient.prototype, "getVault").mockImplementation(async (address) => vault(address.equals(vaultA) ? A : B));
   history = vi.spyOn(WalletAegisClient.prototype, "listActivity").mockResolvedValue([]);
+  vi.spyOn(WalletAegisClient.prototype, "getWithdrawPolicy").mockResolvedValue(null);
   vi.spyOn(WalletAegisClient.prototype, "rpc").mockResolvedValue({ value: 1_000_000_000 });
   latest = async (owner) => Response.json({ vault: owner === A.toBase58() ? vaultA.toBase58() : vaultB.toBase58() });
   balance = async () => Response.json({ result: { value: { amount: "1000000000" } } });

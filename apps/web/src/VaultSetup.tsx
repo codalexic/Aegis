@@ -4,6 +4,7 @@ import { localDateTime, setupDefaults, UNTIL_MAX_MS, UNTIL_MIN_MS, validateSetup
 import { DateTimePicker } from "./DateTimePicker";
 import { Icon } from "./icons";
 import { ProgressButton } from "./Progress";
+import { Usdc } from "./Usdc";
 
 const AMOUNT_INPUT = /^\d*\.?\d{0,6}$/;
 
@@ -49,7 +50,7 @@ export function VaultSetup({ owner, agent, busy, onCreate, onCancel }: {
             <div className="setup-amount">
               <input id={`setup-${field}`} inputMode="decimal" value={fields[field]} aria-invalid={!!errors[field]} aria-describedby={`setup-${field}-error`}
                 onChange={(event) => { if (AMOUNT_INPUT.test(event.target.value)) setFields({ ...fields, [field]: event.target.value }); }} />
-              <span aria-hidden="true">testUSDC</span>
+              <span className="setup-unit"><Usdc /></span>
             </div>
             <span className="field-error" id={`setup-${field}-error`}>{errors[field]}</span>
           </div>)}</div>

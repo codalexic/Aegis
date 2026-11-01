@@ -26,6 +26,7 @@ import { useCopy } from "./use-copy";
 import { isMobileBrowser, phantomBrowseUrl, PHANTOM_INSTALL_MESSAGE, PHANTOM_MOBILE_MESSAGE } from "./phantom-availability";
 
 import { VaultSetup } from "./VaultSetup";
+import { Usdc, withUsdc } from "./Usdc";
 import { Select } from "./Select";
 import type { DemoVaultSettings } from "./vault-setup";
 
@@ -262,10 +263,10 @@ export function FundingStep({ text, balance, hasFaucet, finished, locked, busy, 
   const getTokens = busy === "Get testUSDC" || (busy !== "Fund vault" && needsFaucet(balance, hasFaucet));
   const isBusy = busy === (getTokens ? "Get testUSDC" : "Fund vault");
   return <div className="next-action">
-    <p className="next-hint">{text}<br />Wallet: {balance === null ? "—" : amount(balance)} testUSDC</p>
+    <p className="next-hint">{withUsdc(text)}<br />Wallet: {balance === null ? "—" : amount(balance)} <Usdc /></p>
     <ProgressButton className="primary" disabled={locked}
       busy={isBusy} progress={getTokens ? "Getting tokens…" : "Funding…"}
-      onClick={getTokens ? onFaucet : onFund}>{getTokens ? "Get 1,000 testUSDC" : "Fund 1,000"}</ProgressButton>
+      onClick={getTokens ? onFaucet : onFund}>{getTokens ? <>Get 1,000 <Usdc /></> : "Fund 1,000"}</ProgressButton>
   </div>;
 }
 
@@ -609,8 +610,8 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       const entry = feedEntry(item, detail);
       return <tr key={item.signature}>
         <td><div className="event"><span className={`event-icon ${entry.tone}`} aria-hidden="true"><Icon name={entry.icon} size={14} /></span>
-          <strong title={entry.title}>{entry.title}</strong></div></td>
-        <td className="hide-sm num-cell">{detail ? groupThousands(detail.amount) : "0"}</td>
+          <strong title={entry.title}>{withUsdc(entry.title)}</strong></div></td>
+        <td className="hide-sm num-cell">{detail ? withUsdc(groupThousands(detail.amount)) : "0"}</td>
         <td><span className={`badge ${item.ok ? "ok" : detail?.label === "Agent swap" ? "bad" : "warn"}`}>{item.ok ? "Succeeded" : detail?.label === "Agent swap" ? "Blocked" : "Failed"}</span></td>
         <td className="num muted"><time>{timeLabel(item.blockTime)}</time></td>
         <td className="link-cell">{environment !== "mock" && <a className="feed-link" title={environment === "localnet" ? "Explorer uses your local chain. Allow local network access if prompted." : "View on Solana Explorer (devnet)"}
@@ -624,15 +625,18 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
 
   const checklist = blocker && <section className="card setup-card" aria-labelledby="setup-title">
     <div className="card-head setup-head">
-      <span className="banner-icon"><Icon name={blocker === "create" ? "vault" : blocker === "fund" ? "coins" : "lock"} size={16} /></span>
+      <span className="banner-icon"><Icon name={blocker === "create" ? "vault" : blocker === "fund" ? "coins" : "lock"} size={20} /></span>
       <h2 id="setup-title">{blocker === "create" ? "Set up your demo vault" : blocker === "fund" ? (hasFunded ? "Top up your vault" : "Add test money") : "This vault is closed"}</h2>
     </div>
-    {!finished && <ol className="checklist">
+    {!finished && <ol className="checklist" aria-label="Setup progress">
       {([
         ["Create your vault", vault ? "done" : "next"],
         ["Add test money", hasFunded ? "done" : vault ? "next" : ""],
         ["Try to trick the AI", swaps.length ? "done" : ""],
-      ] as const).map(([label, state]) => <li key={label} className={state}><span className="sr-only">{label}</span></li>)}
+      ] as const).map(([label, state], index) => <li key={label} className={state} aria-current={state === "next" ? "step" : undefined}>
+        <span className="step-marker" aria-hidden="true">{state === "done" ? <Icon name="check" size={12} /> : index + 1}</span>
+        <span className="step-label">{label}{state === "done" && <span className="sr-only"> (done)</span>}</span>
+      </li>)}
     </ol>}
     {blocker === "create" ? <div className="next-action">
       <ProgressButton className="primary" disabled={locked} busy={busy === "New demo vault"} progress="Setting up…"
@@ -644,18 +648,18 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
   const stats = <section className="stats" aria-label="Vault at a glance">
     <div className="stat">
       <span className="stat-label">Vault balance</span>
-      <strong className="stat-value"><span data-testid="input-balance">{vault ? amount(vault.inputBalanceRaw) : "0"}</span><small>testUSDC</small></strong>
+      <strong className="stat-value"><span data-testid="input-balance">{vault ? amount(vault.inputBalanceRaw) : "—"}</span>{vault && <small className="unit-icon"><Usdc /></small>}</strong>
       {vault && vault.outputBalanceRaw > 0n && <span className="stat-sub"><span data-testid="output-balance">+{amount(vault.outputBalanceRaw, 9)}</span> testSOL</span>}
     </div>
     <div className="stat">
       <span className="stat-label">Budget left</span>
-      <strong className="stat-value"><span data-testid="remaining-budget">{vault ? amount(remaining) : "100"}</span><small>of {vault ? amount(vault.budgetRaw) : "100"} testUSDC</small></strong>
-      <div className={`meter ${vault ? budgetLevel : "neutral"}`} role="img" aria-label={vault ? `${amount(remaining)} of ${amount(vault.budgetRaw)} testUSDC left, ${spentPercent}% spent` : "Full budget"}><span style={{ width: `${vault ? Number(remainingBasisPoints) / 100 : 100}%` }} /></div>
+      <strong className="stat-value"><span data-testid="remaining-budget">{vault ? amount(remaining) : "—"}</span>{vault && <small>of {amount(vault.budgetRaw)} <Usdc /></small>}</strong>
+      {vault && <div className={`meter ${budgetLevel}`} role="img" aria-label={`${amount(remaining)} of ${amount(vault.budgetRaw)} testUSDC left, ${spentPercent}% spent`}><span style={{ width: `${Number(remainingBasisPoints) / 100}%` }} /></div>}
     </div>
     <div className="stat">
       <span className="stat-label">Time left</span>
-      <strong className="stat-value is-time"><span data-testid="expiry">{!vault ? "1 hour" : vault.revoked ? "Closed" : countdown(vault.expiryUnix, now)}</span></strong>
-      <div className="meter neutral" role="img" aria-label={!vault ? "Full hour" : vault.revoked ? "Closed" : `${countdown(vault.expiryUnix, now)} remaining`}><span style={{ width: `${vault ? lifePercent : 100}%` }} /></div>
+      <strong className="stat-value is-time"><span data-testid="expiry">{!vault ? "—" : vault.revoked ? "Closed" : countdown(vault.expiryUnix, now)}</span></strong>
+      {vault && <div className="meter neutral" role="img" aria-label={vault.revoked ? "Closed" : `${countdown(vault.expiryUnix, now)} remaining`}><span style={{ width: `${lifePercent}%` }} /></div>}
     </div>
     <div className="stat">
       <span className="stat-label">Attacks blocked</span>
@@ -664,13 +668,13 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
   </section>;
 
   const rulesCard = <section className="card" aria-labelledby="rules-title">
-    <div className="card-head"><h2 id="rules-title">Your rules</h2><span className="badge"><Icon name="lock" size={12} />Enforced on-chain</span></div>
+    <div className="card-head"><h2 id="rules-title">Your rules</h2>{vault && <span className="badge"><Icon name="lock" size={12} />Enforced on-chain</span>}</div>
     <dl className="rows">
-      <div><dt>Per-trade cap</dt><dd>{vault ? amount(vault.maxTradeRaw) : "50"} testUSDC</dd></div>
-      <div><dt>Total budget</dt><dd>{vault ? amount(vault.budgetRaw) : "100"} testUSDC</dd></div>
-      <div><dt>Spent so far</dt><dd data-testid="spent">{vault ? amount(vault.spentRaw) : "0"} testUSDC</dd></div>
-      <div><dt>Trading window</dt><dd>{vault ? (status === "Active" ? `${countdown(vault.expiryUnix, now)} left` : status) : "1 hour from creation"}</dd></div>
-      <div><dt>Output goes to</dt><dd>This vault only</dd></div>
+      <div><dt>Per-trade cap</dt><dd>{vault ? <>{amount(vault.maxTradeRaw)} <Usdc /></> : "—"}</dd></div>
+      <div><dt>Total budget</dt><dd>{vault ? <>{amount(vault.budgetRaw)} <Usdc /></> : "—"}</dd></div>
+      <div><dt>Spent so far</dt><dd data-testid="spent">{vault ? <>{amount(vault.spentRaw)} <Usdc /></> : "—"}</dd></div>
+      <div><dt>Trading window</dt><dd>{vault ? (status === "Active" ? `${countdown(vault.expiryUnix, now)} left` : status) : "—"}</dd></div>
+      <div><dt>Output goes to</dt><dd>{vault ? "This vault only" : "—"}</dd></div>
     </dl>
     {vault && <div className="withdraw-policy">
       <h3>Allowed withdrawal addresses</h3>
@@ -712,7 +716,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       <div className="stat kpi"><span className="stat-label">Requests</span><strong className="stat-value"><CountUp value={swaps.length} /></strong></div>
       <div className="stat kpi is-ok"><span className="stat-label">Allowed</span><strong className="stat-value"><CountUp value={allowedSwaps} /></strong></div>
       <div className="stat kpi is-bad"><span className="stat-label">Blocked</span><strong className="stat-value"><CountUp value={blocked} /></strong></div>
-      <div className="stat kpi is-pink"><span className="stat-label">Money protected</span><strong className="stat-value"><CountUp value={protectedUsdc} /><small>testUSDC</small></strong></div>
+      <div className="stat kpi is-pink"><span className="stat-label">Money protected</span><strong className="stat-value"><CountUp value={protectedUsdc} /><small className="unit-icon"><Usdc /></small></strong></div>
     </section>
     <section className="card" aria-labelledby="chart-title">
       <div className="card-head"><div><h2 id="chart-title">Requests vs. your cap</h2></div>

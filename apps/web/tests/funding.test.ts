@@ -14,6 +14,8 @@ import localnet from "../../../deployments/localnet.json";
 import { WalletAegisClient } from "../../../packages/sdk/src/wallet";
 import { deriveVaultPda } from "../../../packages/sdk/src/addresses";
 
+const USDC = '<span class="usdc"><img src="/usdc.svg" alt=""/><span class="sr-only">testUSDC</span></span>';
+
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 it.each(["fund", "faucet", "withdraw", "partial failure"])("keeps %s pending until the immediate balance refresh completes", async (kind) => {
@@ -51,14 +53,14 @@ describe("funding action", () => {
   it.each([0n, DEMO_FUND_RAW - 1n, DEMO_FUND_RAW, 10_000_000_000n, null])("shows one action for wallet balance %s", (balance) => {
     const markup = render(balance);
     const low = balance !== null && balance < DEMO_FUND_RAW;
-    expect(markup).toContain(low ? ">Get 1,000 testUSDC</button>" : ">Fund 1,000</button>");
-    expect(markup).not.toContain(low ? ">Fund 1,000</button>" : ">Get 1,000 testUSDC</button>");
+    expect(markup).toContain(low ? `>Get 1,000 ${USDC}</button>` : ">Fund 1,000</button>");
+    expect(markup).not.toContain(low ? ">Fund 1,000</button>" : ">Get 1,000");
     expect(markup.match(/<button/g)).toHaveLength(1);
     expect(markup).not.toContain("disabled");
   });
 
   it.each([[0n, "0"], [999_999_999n, "999.999999"], [DEMO_FUND_RAW, "1,000"], [null, "—"]] as const)("displays wallet balance %s", (balance, label) => {
-    expect(render(balance)).toContain(`Wallet: ${label} testUSDC`);
+    expect(render(balance)).toContain(`Wallet: ${label} ${USDC}`);
   });
 
   it.each([0n, DEMO_FUND_RAW, null])("locks during actions at balance %s", (balance) => {
@@ -68,7 +70,7 @@ describe("funding action", () => {
   it.each([0n, 10_000_000_000n, null])("keeps Fund available without a configured faucet at balance %s", (balance) => {
     const markup = render(balance, { hasFaucet: false });
     expect(markup).toContain(">Fund 1,000</button>");
-    expect(markup).not.toContain("Get 1,000 testUSDC");
+    expect(markup).not.toContain("Get 1,000");
     expect(markup).not.toContain("disabled");
   });
 
@@ -87,7 +89,7 @@ describe("funding action", () => {
     const create = markup.match(/<button class="primary[^"]*"[^>]*>(?:(?!<\/button>).)*Create my vault<\/button>/)?.[0];
     expect(create).toBeDefined();
     expect(create).not.toContain("disabled");
-    expect(markup).not.toContain("Get 1,000 testUSDC");
+    expect(markup).not.toContain("Get 1,000");
   });
 });
 

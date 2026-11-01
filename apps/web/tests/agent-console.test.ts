@@ -37,9 +37,10 @@ describe("agent scenario and reply copy", () => {
   });
   it("explains what each scenario does", async () => {
     const markup = await render(false);
-    expect(markup).toContain("Swaps 20 testUSDC.</p>");
-    expect(markup).toContain("Hidden news tells the agent to spend 1,000.</p>");
-    expect(markup).toContain("Tries to send the output to an attacker.</p>");
+    expect(markup).toContain('Swaps 20 <span class="usdc">');
+    expect(markup).toContain('testUSDC</span></span></p>');
+    expect(markup).toContain('Hidden news tells the agent to spend 1,000 <span class="usdc">');
+    expect(markup).toContain("Tries to send the output to an attacker</p>");
     expect(markup).toContain("<strong>Hacker redirect</strong>");
     expect(markup).toMatch(/<button[^>]*>Hacker redirect<\/button>/);
     expect(markup).not.toContain("<strong>Wrong destination</strong>");

@@ -3,6 +3,8 @@ import { isNoDevnetSol } from "../../../packages/sdk/src/wallet-errors";
 import { WALLET_CANCELLED, WALLET_REQUEST_FAILED } from "./wallet-lifecycle";
 
 export const DEVNET_FAUCET_URL = "https://faucet.solana.com";
+/** Success toast that carries a warning, so it keeps the token name instead of the logo. */
+export const FAUCET_NEEDS_SOL = "Received 1,000 testUSDC. Your wallet also needs SOL on this cluster for transaction fees.";
 export const NO_DEVNET_SOL_MESSAGE = "Your wallet has no devnet SOL for fees. Get free devnet SOL, then try again.";
 
 // Shared with the agent console so policy failures have the same explanation.

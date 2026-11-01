@@ -64,7 +64,7 @@ describe.each(["revoked", "expired"] as const)("%s vault", (status) => {
     const markup = await render(status, balance);
     expect(markup).toContain(finishedMessage);
     expect(markup).not.toContain(">Fund 1,000</button>");
-    expect(markup).not.toContain(">Get 1,000 testUSDC</button>");
+    expect(markup).not.toContain(">Get 1,000");
     expect(button(markup, "New demo vault")).toContain('class="primary"');
     expect(button(markup, "New demo vault")).not.toContain("disabled");
 
@@ -100,5 +100,5 @@ it.each([0n, 1_000_000_000n])("preserves active-vault actions at wallet balance 
   }
   expect(agent).not.toContain("Pick a scenario above.");
   const empty = await render("active", balance, "empty");
-  expect(button(empty, balance === 0n ? "Get 1,000 testUSDC" : "Fund 1,000")).not.toContain("disabled");
+  expect(button(empty, balance === 0n ? 'Get 1,000 <span class="usdc">.*?</span></span>' : "Fund 1,000")).not.toContain("disabled");
 });

@@ -104,3 +104,16 @@ it("keeps the created vault and reports a friendly funding error only after boun
   expect(f.sign).toHaveBeenCalledTimes(2);
   expect(sends).toBe(5);
 });
+
+it("uses selected limits and chain time for duration, creating the policy before funding", async () => {
+  const f = await fixture();
+  const settings = { maxTradeRaw: 12_345_678n, budgetRaw: 234_567_891n, durationSeconds: 604800n,
+    withdrawAddresses: [f.inputMint] };
+  const result = await f.dashboard.newDemo(undefined, settings);
+  expect(result.ok).toBe(true);
+  const chainTime = await f.rpc("getBlockTime", [1]);
+  expect(await f.dashboard.client.getVault(result.vault!)).toMatchObject({ maxTradeRaw: settings.maxTradeRaw,
+    budgetRaw: settings.budgetRaw, expiryUnix: BigInt(chainTime) + settings.durationSeconds, inputBalanceRaw: 1_000_000_000n });
+  expect((await f.dashboard.client.getWithdrawPolicy(result.vault!))?.allowed).toEqual(settings.withdrawAddresses);
+  expect(f.sign).toHaveBeenCalledTimes(2); // Atomic create + policy, then existing funding transaction.
+});

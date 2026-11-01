@@ -20,6 +20,11 @@ export function deriveVaultAuthorityPda(vault: PublicKey, programId = AEGIS_PROG
   return PublicKey.findProgramAddressSync([encoder.encode("authority"), vault.toBytes()], programId);
 }
 
+/** Canonical address and bump for a vault's optional withdrawal policy. */
+export function deriveWithdrawPolicy(vault: PublicKey, programId = AEGIS_PROGRAM_ID): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync([encoder.encode("policy"), vault.toBytes()], programId);
+}
+
 export function derivePoolPda(inputMint: PublicKey, outputMint: PublicKey, programId = DEMO_DEX_PROGRAM_ID): [PublicKey, number] {
   return PublicKey.findProgramAddressSync([encoder.encode("pool"), inputMint.toBytes(), outputMint.toBytes()], programId);
 }

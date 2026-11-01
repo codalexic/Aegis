@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { PublicKey } from "@solana/web3.js";
 import type { Activity, VaultState } from "@aegis/sdk";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { Dashboard } from "../src/App";
@@ -10,6 +11,7 @@ let root: Root, container: HTMLDivElement, connection: DashboardConnection;
 
 beforeEach(async () => {
   vi.useFakeTimers();
+  vi.setSystemTime(1_800_000_000_000);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   window.location.hash = "#/overview";
   connection = await connectDashboard("mock");
@@ -58,11 +60,12 @@ async function loadedVault(overrides: Partial<VaultState> = {}, activity: Activi
   return vault;
 }
 
-it("creates and funds a vault in one click, then points to the test cases", async () => {
+it("creates and funds a vault after setup, then points to the test cases", async () => {
   await mount();
   expect(setupTitle()).toBe("Set up your demo vault");
   expect(setupAction()?.textContent).toBe("Create my vault");
   await click("Create my vault");
+  await click("Create vault");
   expect(setupTitle()).toBeNull();
   expect(container.querySelector('[data-testid="input-balance"]')?.textContent).toBe("1,000");
   await click("Run the test cases");
@@ -72,6 +75,7 @@ it("creates and funds a vault in one click, then points to the test cases", asyn
 it("runs all three cases in mock mode and keeps each result in the list", async () => {
   await mount();
   await click("Create my vault");
+  await click("Create vault");
   await openPage("agent");
   await click("Run normal trade");
   await click("Inject malicious news");
@@ -107,6 +111,7 @@ it.each([0n, 1_000_000_000n])("offers the right funding action at wallet balance
 it("asks for a top-up after fund → withdraw without any trades", async () => {
   await mount();
   await click("Create my vault");
+  await click("Create vault");
   await openPage("vault");
   await click("Withdraw all");
   await openPage("overview");
@@ -139,9 +144,10 @@ it("keeps a fresh vault unfunded despite a successful withdrawal or another vaul
   expect(setupTitle()).toBe("Add test money");
 });
 
-it.each(["revoked", "expired"] as const)("closes the vault after a trade → %s → withdraw, and starts over in one click", async (status) => {
+it.each(["revoked", "expired"] as const)("closes the vault after a trade → %s → withdraw, and starts over after setup", async (status) => {
   await mount();
   await click("Create my vault");
+  await click("Create vault");
   await openPage("agent");
   await click("Run normal trade");
   await openPage("analytics");
@@ -154,6 +160,7 @@ it.each(["revoked", "expired"] as const)("closes the vault after a trade → %s 
   expect(setupTitle()).toBe("This vault is closed");
   expect(container.querySelector(".next-hint")).toBeNull();
   await click("New demo vault");
+  await click("Create vault");
   expect(setupTitle()).toBe(null);
 });
 
@@ -175,4 +182,87 @@ it.each(["revoked", "expired"] as const)("keeps a blocked agent request in the r
   expect(kpi("is-pink")).toBe("1,000");
   await openPage("activity");
   expect(container.textContent).toContain("Blocked · Over the per-trade cap");
+});
+
+async function input(id: string, value: string) {
+  const element = container.querySelector<HTMLInputElement>(`#${id}`)!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(element, value);
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+const extra = new PublicKey(new Uint8Array(32).fill(11));
+
+it("opens setup without creating, validates accessibly, resets defaults, and cancels", async () => {
+  const create = vi.spyOn(connection, "newDemo");
+  await mount();
+  await click("Create my vault");
+  expect(create).not.toHaveBeenCalled();
+  await input("setup-cap", "101");
+  expect(container.querySelector('#setup-cap')?.getAttribute('aria-invalid')).toBe("true");
+  expect(container.querySelector('#setup-cap')?.getAttribute('aria-describedby')).toBe("setup-cap-error");
+  expect(container.querySelector('#setup-cap-error')?.textContent).toContain("cannot exceed");
+  expect([...container.querySelectorAll('button')].find((b) => b.textContent === "Create vault")?.disabled).toBe(true);
+  await click("1 week");
+  await click("+ Add address");
+  await input("setup-address-0", extra.toBase58());
+  await click("Use demo defaults");
+  expect(container.querySelector<HTMLInputElement>('#setup-cap')?.value).toBe("50");
+  expect(container.querySelector<HTMLInputElement>('#setup-budget')?.value).toBe("100");
+  expect(new Date(container.querySelector<HTMLInputElement>('#setup-until')!.value).getTime()).toBe(Date.now() + 3_600_000);
+  expect(container.querySelector('#setup-address-0')).toBeNull();
+  await click("Cancel");
+  expect(setupTitle()).toBe("Set up your demo vault");
+  expect(create).not.toHaveBeenCalled();
+});
+
+it.each([["1 hour", 3600], ["1 day", 86400], ["1 week", 604800]] as const)("applies the %s preset", async (label, seconds) => {
+  await mount(); await click("Create my vault"); await click(label);
+  expect(new Date(container.querySelector<HTMLInputElement>('#setup-until')!.value).getTime()).toBe(Date.now() + seconds * 1000);
+});
+
+it("passes chosen amounts, expiry and addresses to the mock and shows its policy with copy buttons", async () => {
+  const create = vi.spyOn(connection, "newDemo");
+  await mount(); await click("Create my vault");
+  await input("setup-cap", "12.345678"); await input("setup-budget", "234.567891"); await click("1 day");
+  await click("+ Add address"); await input("setup-address-0", extra.toBase58()); await click("Create vault");
+  expect(create).toHaveBeenCalledWith(expect.any(Function), { maxTradeRaw: 12_345_678n, budgetRaw: 234_567_891n,
+    durationSeconds: 86400n, withdrawAddresses: [extra] });
+  const created = await create.mock.results[0].value;
+  expect(await connection.client.getVault(created.vault)).toMatchObject({ maxTradeRaw: 12_345_678n, budgetRaw: 234_567_891n,
+    expiryUnix: BigInt(Math.floor(Date.now() / 1000)) + 86400n, inputBalanceRaw: 1_000_000_000n });
+  expect(container.querySelector(`.withdraw-policy code[title="${extra.toBase58()}"]`)).not.toBeNull();
+  expect(container.querySelectorAll('.withdraw-policy button')).toHaveLength(2);
+  await openPage("vault"); await click("New demo vault"); await click("Cancel");
+  expect(container.querySelector('#control-title')?.textContent).toBe("Controls");
+});
+
+it.each(["wallet", "extra"])("withdraws both tokens to %s using the correct method and labels activity", async (target) => {
+  const created = await connection.newDemo(undefined, { maxTradeRaw: 50_000_000n, budgetRaw: 100_000_000n,
+    durationSeconds: 3600n, withdrawAddresses: [extra] });
+  connection.initialVault = created.vault!;
+  await connection.scenario!("normal", created.vault!);
+  const legacy = vi.spyOn(connection, "withdraw"), to = vi.spyOn(connection, "withdrawTo");
+  await mount(); await openPage("vault"); await click("Withdraw all");
+  const select = container.querySelector<HTMLSelectElement>('#withdraw-destination')!;
+  expect(select.value).toBe(connection.owner.toBase58());
+  expect([...select.options].map((o) => o.value)).toEqual([connection.owner.toBase58(), extra.toBase58()]);
+  expect(legacy).not.toHaveBeenCalled(); expect(to).not.toHaveBeenCalled();
+  if (target === "extra") await act(async () => { select.value = extra.toBase58(); select.dispatchEvent(new Event("change", { bubbles: true })); });
+  await click("Confirm withdrawal");
+  expect(target === "wallet" ? legacy : to).toHaveBeenCalledTimes(2);
+  expect(target === "wallet" ? to : legacy).not.toHaveBeenCalled();
+  if (target === "extra") expect(to.mock.calls.every((call) => call[2].equals(extra))).toBe(true);
+  await openPage("activity");
+  expect(container.textContent).toContain(`to ${target === "wallet" ? "your wallet" : extra.toBase58()}`);
+});
+
+it("shows wallet-only policy and withdraws immediately without a chooser", async () => {
+  const created = await connection.newDemo(); connection.initialVault = created.vault!;
+  const withdraw = vi.spyOn(connection, "withdraw");
+  await mount(); await openPage("vault");
+  expect(container.querySelector('.withdraw-policy')?.textContent).toContain("Only your wallet");
+  await click("Withdraw all");
+  expect(withdraw).toHaveBeenCalledTimes(1);
+  expect(container.querySelector('#withdraw-destination')).toBeNull();
 });

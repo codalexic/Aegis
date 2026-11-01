@@ -8,7 +8,7 @@ import type { Idl } from "@coral-xyz/anchor";
 import BN from "bn.js";
 import { AccountLayout, getAssociatedTokenAddressSync, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import idl from "../../../artifacts/idl/aegis.json";
-import { AEGIS_PROGRAM_ID, deriveSwapAccounts, deriveVaultAuthorityPda, deriveVaultPda } from "./addresses";
+import { AEGIS_PROGRAM_ID, deriveSwapAccounts, deriveVaultAuthorityPda, deriveVaultPda, deriveWithdrawPolicy } from "./addresses";
 import { ChainReader } from "./chain-reader";
 import { isU64 } from "./amounts";
 import { ClientError, RpcError, RPC_RATE_LIMITED, WALLET_REJECTED, isRateLimited, isWalletRejected, isTransientRpcError, failure, transactionErrorName } from "./errors";
@@ -59,11 +59,15 @@ export class WalletAegisClient extends ChainReader {
       [vault] = deriveVaultPda(owner.publicKey, p.vaultId);
       const inputMint = new PublicKey(this.deployment.inputMint), outputMint = new PublicKey(this.deployment.outputMint);
       const accounts = deriveSwapAccounts(vault, inputMint, outputMint);
-      return [this.instruction("createVault", { vaultId, agent: p.agent, maxTradeRaw: u64(p.maxTradeRaw), budgetRaw: u64(p.budgetRaw), expiryUnix: new BN(p.expiryUnix.toString()) }, {
+      const instructions = [this.instruction("createVault", { vaultId, agent: p.agent, maxTradeRaw: u64(p.maxTradeRaw), budgetRaw: u64(p.budgetRaw), expiryUnix: new BN(p.expiryUnix.toString()) }, {
         owner: owner.publicKey, vault, vaultAuthority: accounts.vaultAuthority, inputMint, outputMint,
         inputVault: accounts.inputVault, outputVault: accounts.outputVault, tokenProgram: TOKEN_PROGRAM_ID,
         associatedTokenProgram, systemProgram: PublicKey.default,
       })];
+      if (p.withdrawAddresses?.length) instructions.push(this.instruction("setWithdrawAddresses", { addresses: p.withdrawAddresses }, {
+        owner: owner.publicKey, vault, policy: deriveWithdrawPolicy(vault)[0], systemProgram: PublicKey.default,
+      }));
+      return instructions;
     });
     return result.ok ? { ...result, vault } : result;
   }
@@ -115,6 +119,26 @@ export class WalletAegisClient extends ChainReader {
           key(owner.publicKey), key(mint), key(PublicKey.default), key(TOKEN_PROGRAM_ID)] },
         this.instruction("withdraw", { amountRaw }, { owner: owner.publicKey, vault, vaultAuthority: authority,
           source: getAssociatedTokenAddressSync(mint, authority, true), destination, tokenProgram: TOKEN_PROGRAM_ID }),
+      ];
+    });
+  }
+
+  setWithdrawAddresses(owner: WalletSigner, vault: PublicKey, addresses: PublicKey[]): Promise<TxResult> {
+    return this.send(owner, async () => [this.instruction("setWithdrawAddresses", { addresses }, {
+      owner: owner.publicKey, vault, policy: deriveWithdrawPolicy(vault)[0], systemProgram: PublicKey.default,
+    })]);
+  }
+
+  withdrawTo(owner: WalletSigner, vault: PublicKey, mint: PublicKey, recipient: PublicKey, amount: bigint): Promise<TxResult> {
+    return this.send(owner, async () => {
+      const amountRaw = u64(amount), state = await this.getVault(vault);
+      if (!mint.equals(state.inputMint) && !mint.equals(state.outputMint)) throw new ClientError("AccountMismatch");
+      const authority = deriveVaultAuthorityPda(vault)[0], destination = getAssociatedTokenAddressSync(mint, recipient, true);
+      return [
+        { programId: associatedTokenProgram, data: Buffer.from([1]), keys: [key(owner.publicKey, true, true), key(destination, true),
+          key(recipient), key(mint), key(PublicKey.default), key(TOKEN_PROGRAM_ID)] },
+        this.instruction("withdrawTo", { amountRaw }, { owner: owner.publicKey, vault, policy: deriveWithdrawPolicy(vault)[0],
+          vaultAuthority: authority, source: getAssociatedTokenAddressSync(mint, authority, true), destination, tokenProgram: TOKEN_PROGRAM_ID }),
       ];
     });
   }

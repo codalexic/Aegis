@@ -54,6 +54,7 @@ async function walletFixture() {
   const confirmation = Promise.withResolvers<unknown>();
   const sign = vi.fn(async (_transaction: VersionedTransaction) => signature.promise);
   const methods: string[] = [];
+  vi.spyOn(WalletAegisClient.prototype, "getWithdrawPolicy").mockResolvedValue(null);
   vi.spyOn(WalletAegisClient.prototype, "rpc").mockImplementation(async (method, params) => {
     methods.push(method);
     if (method === "getLatestBlockhash") return { value: { blockhash: PublicKey.default.toBase58(), lastValidBlockHeight: 100 } };

@@ -1,7 +1,7 @@
 import { PublicKey, type Signer } from "@solana/web3.js";
 import { isU64, U64_MAX } from "./amounts";
-import { deriveSwapAccounts, deriveVaultPda } from "./addresses";
-import type { Activity, AegisClient, CreateVaultParams, SwapAccounts, TxResult, VaultState } from "./types";
+import { deriveSwapAccounts, deriveVaultPda, deriveVaultAuthorityPda, deriveWithdrawPolicy } from "./addresses";
+import type { Activity, AegisClient, CreateVaultParams, SwapAccounts, TxResult, VaultState, WithdrawPolicyState } from "./types";
 
 // Public mock mint addresses only; no signing keys are generated or retained.
 export const MOCK_INPUT_MINT = new PublicKey(new Uint8Array(32).fill(1));
@@ -17,6 +17,7 @@ export interface MockClientOptions {
 export class MockAegisClient implements AegisClient {
   readonly environment = "mock" as const;
   private readonly vaults = new Map<string, VaultState>();
+  private readonly withdrawPolicies = new Map<string, WithdrawPolicyState>();
   private readonly activity = new Map<string, Activity[]>();
   private sequence = 0n;
   private readonly inputMint: PublicKey;
@@ -45,6 +46,11 @@ export class MockAegisClient implements AegisClient {
       return this.record(vault, "InvalidAmount");
     }
     if (this.vaults.has(vault.toBase58())) return this.record(vault, "VaultAlreadyExists");
+    const addresses = p.withdrawAddresses ?? [];
+    const excluded = [PublicKey.default, vault, deriveVaultAuthorityPda(vault)[0], p.agent, owner.publicKey];
+    if (addresses.length > 3 || addresses.some((address, index) => excluded.some((key) => key.equals(address)) ||
+      addresses.slice(0, index).some((key) => key.equals(address)))) return this.record(vault, "InvalidAmount");
+    if (addresses.length) this.withdrawPolicies.set(vault.toBase58(), { address: deriveWithdrawPolicy(vault)[0], vault, allowed: addresses.slice() });
     this.vaults.set(vault.toBase58(), {
       address: vault, owner: owner.publicKey, agent: p.agent,
       inputMint: this.inputMint, outputMint: this.outputMint,
@@ -129,6 +135,37 @@ export class MockAegisClient implements AegisClient {
     if (state[balance] < amountRaw) return this.record(vault, "InsufficientFunds");
     state[balance] -= amountRaw;
     return this.record(vault);
+  }
+
+  async getWithdrawPolicy(vault: PublicKey): Promise<WithdrawPolicyState | null> {
+    const policy = this.withdrawPolicies.get(vault.toBase58());
+    return policy ? { ...policy, allowed: policy.allowed.slice() } : null;
+  }
+
+  async setWithdrawAddresses(owner: Signer, vault: PublicKey, addresses: PublicKey[]): Promise<TxResult> {
+    const state = this.vaults.get(vault.toBase58());
+    if (!state) return this.record(vault, "VaultNotFound");
+    if (!owner.publicKey.equals(state.owner)) return this.record(vault, "Unauthorized");
+    if (this.withdrawPolicies.has(vault.toBase58())) return this.record(vault, "AccountAlreadyInUse");
+    const excluded = [PublicKey.default, vault, deriveVaultAuthorityPda(vault)[0], state.agent, state.owner];
+    if (addresses.length < 1 || addresses.length > 3 || addresses.some((address, index) =>
+      excluded.some((key) => key.equals(address)) || addresses.slice(0, index).some((key) => key.equals(address)))) {
+      return this.record(vault, "InvalidAmount");
+    }
+    this.withdrawPolicies.set(vault.toBase58(), { address: deriveWithdrawPolicy(vault)[0], vault, allowed: addresses.slice() });
+    return this.record(vault);
+  }
+
+  async withdrawTo(owner: Signer, vault: PublicKey, mint: PublicKey, recipient: PublicKey, amountRaw: bigint): Promise<TxResult> {
+    const state = this.vaults.get(vault.toBase58());
+    if (!state) return this.record(vault, "VaultNotFound");
+    if (!owner.publicKey.equals(state.owner)) return this.record(vault, "Unauthorized");
+    const policy = this.withdrawPolicies.get(vault.toBase58());
+    if (!policy) return this.record(vault, "AccountNotInitialized");
+    if (!recipient.equals(state.owner) && !policy.allowed.some((address) => address.equals(recipient))) {
+      return this.record(vault, "AccountMismatch");
+    }
+    return this.withdraw(owner, vault, mint, amountRaw);
   }
 
   async listActivity(vault: PublicKey): Promise<Activity[]> {

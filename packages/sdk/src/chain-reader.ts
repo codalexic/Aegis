@@ -8,9 +8,9 @@ import { AccountLayout, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import type { Idl, IdlAccounts } from "@coral-xyz/anchor";
 import type { Aegis } from "../../../artifacts/idl/aegis";
 import idl from "../../../artifacts/idl/aegis.json";
-import { AEGIS_PROGRAM_ID, DEMO_DEX_PROGRAM_ID, deriveSwapAccounts, deriveVaultPda } from "./addresses";
+import { AEGIS_PROGRAM_ID, DEMO_DEX_PROGRAM_ID, deriveSwapAccounts, deriveVaultPda, deriveWithdrawPolicy } from "./addresses";
 import { ClientError, ProgramError, RpcError, RPC_RATE_LIMITED, isRateLimited, isBlockhashNotFound, isTransientRpcError, programErrorName, transactionErrorName } from "./errors";
-import type { LocalnetDeployment, Activity, VaultState } from "./index";
+import type { LocalnetDeployment, Activity, VaultState, WithdrawPolicyState } from "./index";
 
 type Account = { owner: string; executable: boolean; data: [string, "base64"] };
 type Signature = { signature: string; slot: number; blockTime: number | null; err: unknown };
@@ -119,6 +119,19 @@ export class ChainReader {
         maxTradeRaw: BigInt(state.maxTradeRaw.toString()), budgetRaw: BigInt(state.budgetRaw.toString()), spentRaw: BigInt(state.spentRaw.toString()),
         expiryUnix: BigInt(state.expiryUnix.toString()), revoked: state.revoked, inputBalanceRaw, outputBalanceRaw };
     } catch (error) { if (error instanceof ClientError || error instanceof RpcError) throw error; throw new ClientError("AccountMismatch"); }
+  }
+
+  async getWithdrawPolicy(vault: PublicKey): Promise<WithdrawPolicyState | null> {
+    const [address, bump] = deriveWithdrawPolicy(vault);
+    const { value: info } = await this.rpc<{ value: Account | null }>("getAccountInfo", [address.toBase58(), { encoding: "base64", commitment: "confirmed" }]);
+    if (!info) return null;
+    try {
+      const data = Buffer.from(info.data[0], "base64");
+      if (info.data[1] !== "base64" || info.owner !== AEGIS_PROGRAM_ID.toBase58() || info.executable || data.length !== this.coder.size("withdrawPolicy")) throw new Error();
+      const policy = this.coder.decode<IdlAccounts<Aegis>["withdrawPolicy"]>("withdrawPolicy", data);
+      if (!policy.vault.equals(vault) || policy.bump !== bump || policy.count < 1 || policy.count > 3) throw new Error();
+      return { address, vault, allowed: policy.allowed.slice(0, policy.count) };
+    } catch { throw new ClientError("AccountMismatch"); }
   }
 
   getTransaction(signature: string): Promise<VersionedTransactionResponse | null> {

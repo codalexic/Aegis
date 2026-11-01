@@ -271,6 +271,61 @@ pub mod aegis {
             amount_raw,
         )
     }
+
+    /// Set the vault's extra withdrawal recipients once; the owner is always allowed.
+    pub fn set_withdraw_addresses(
+        ctx: Context<SetWithdrawAddresses>,
+        addresses: Vec<Pubkey>,
+    ) -> Result<()> {
+        require!((1..=3).contains(&addresses.len()), AegisError::InvalidAmount);
+        let vault = &ctx.accounts.vault;
+        let authority = Pubkey::create_program_address(
+            &[b"authority", vault.key().as_ref(), &[vault.authority_bump]],
+            &crate::ID,
+        )
+        .map_err(|_| error!(AegisError::AccountMismatch))?;
+        for (index, address) in addresses.iter().enumerate() {
+            require!(
+                *address != Pubkey::default()
+                    && *address != vault.key()
+                    && *address != authority
+                    && *address != vault.agent
+                    && *address != vault.owner
+                    && !addresses[..index].contains(address),
+                AegisError::InvalidAmount
+            );
+        }
+        let mut allowed = [Pubkey::default(); 3];
+        allowed[..addresses.len()].copy_from_slice(&addresses);
+        ctx.accounts.policy.set_inner(WithdrawPolicy {
+            vault: vault.key(),
+            allowed,
+            count: addresses.len() as u8,
+            bump: ctx.bumps.policy,
+        });
+        Ok(())
+    }
+
+    /// Withdraw to the owner or a fixed recipient, even after revocation or expiry.
+    pub fn withdraw_to(ctx: Context<WithdrawTo>, amount_raw: u64) -> Result<()> {
+        require!(amount_raw > 0, AegisError::InvalidAmount);
+
+        let vault_key = ctx.accounts.vault.key();
+        let authority_bump = [ctx.accounts.vault.authority_bump];
+        let seeds = &[b"authority".as_ref(), vault_key.as_ref(), &authority_bump];
+        token::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.key(),
+                Transfer {
+                    from: ctx.accounts.source.to_account_info(),
+                    to: ctx.accounts.destination.to_account_info(),
+                    authority: ctx.accounts.vault_authority.to_account_info(),
+                },
+                &[seeds],
+            ),
+            amount_raw,
+        )
+    }
 }
 
 fn checked_token_account<'info>(
@@ -410,6 +465,80 @@ pub struct Withdraw<'info> {
     )]
     pub destination: Account<'info, TokenAccount>,
     pub token_program: Program<'info, Token>,
+}
+
+/// Owner-authorized, one-time initialization of the withdrawal policy PDA.
+#[derive(Accounts)]
+pub struct SetWithdrawAddresses<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+    #[account(
+        seeds = [b"vault", vault.owner.as_ref(), &vault.vault_id.to_le_bytes()],
+        bump = vault.bump,
+        has_one = owner @ AegisError::Unauthorized
+    )]
+    pub vault: Account<'info, Vault>,
+    #[account(
+        init,
+        payer = owner,
+        space = 8 + WithdrawPolicy::INIT_SPACE,
+        seeds = [b"policy", vault.key().as_ref()],
+        bump
+    )]
+    pub policy: Account<'info, WithdrawPolicy>,
+    pub system_program: Program<'info, System>,
+}
+
+/// Owner-authorized withdrawal using the vault's immutable recipient policy.
+#[derive(Accounts)]
+pub struct WithdrawTo<'info> {
+    pub owner: Signer<'info>,
+    #[account(
+        seeds = [b"vault", vault.owner.as_ref(), &vault.vault_id.to_le_bytes()],
+        bump = vault.bump,
+        has_one = owner @ AegisError::Unauthorized
+    )]
+    pub vault: Account<'info, Vault>,
+    #[account(
+        seeds = [b"policy", vault.key().as_ref()],
+        bump = policy.bump,
+        constraint = policy.vault == vault.key() @ AegisError::AccountMismatch
+    )]
+    pub policy: Account<'info, WithdrawPolicy>,
+    /// CHECK: Only used as the transfer authority; seeds and stored bump are checked.
+    #[account(
+        seeds = [b"authority", vault.key().as_ref()],
+        bump = vault.authority_bump
+    )]
+    pub vault_authority: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        constraint = (source.key() == vault.input_vault && source.mint == vault.input_mint)
+            || (source.key() == vault.output_vault && source.mint == vault.output_mint)
+            @ AegisError::AccountMismatch,
+        constraint = source.owner == vault_authority.key() @ AegisError::AccountMismatch
+    )]
+    pub source: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        constraint = destination.owner == vault.owner
+            || policy.allowed.get(..usize::from(policy.count))
+                .is_some_and(|allowed| allowed.contains(&destination.owner))
+            @ AegisError::AccountMismatch,
+        constraint = destination.mint == source.mint @ AegisError::AccountMismatch
+    )]
+    pub destination: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+}
+
+/// Up to three immutable extra recipients, stored separately from the legacy vault.
+#[account]
+#[derive(InitSpace)]
+pub struct WithdrawPolicy {
+    pub vault: Pubkey,
+    pub allowed: [Pubkey; 3],
+    pub count: u8,
+    pub bump: u8,
 }
 
 #[account]

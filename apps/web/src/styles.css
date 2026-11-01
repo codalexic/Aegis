@@ -501,3 +501,21 @@ button[data-busy] > svg { display: none; }
   .site-wallet > svg { display: none; }
 }
 
+
+.vault-setup { max-width: 760px; width: 100%; margin-inline: auto; }
+.vault-setup form, .setup-field { display: grid; gap: 8px; min-width: 0; }
+.vault-setup form { gap: 24px; margin-top: 24px; }
+.vault-setup fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.vault-setup legend { font-weight: 600; margin-bottom: 12px; }
+.setup-limits { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.vault-setup input, .withdraw-choice select { width: 100%; min-width: 0; box-sizing: border-box; padding: 10px; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; font: inherit; color-scheme: dark; }
+.vault-setup input[aria-invalid="true"] { border-color: var(--pink); }
+.field-error { display: block; color: var(--pink); font-size: 13px; }
+.setup-buttons, .setup-address { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+.setup-address input { flex: 1 1 180px; }
+.setup-locked { color: var(--ink-3); margin: 8px 0 16px; }
+.withdraw-policy { margin-top: 20px; }
+.withdraw-policy h3 { font-size: 14px; margin-bottom: 10px; }
+.withdraw-choice { display: grid; gap: 10px; padding-block: 16px; }
+.withdraw-choice select:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+@media (max-width: 520px) { .setup-limits { grid-template-columns: minmax(0, 1fr); } }

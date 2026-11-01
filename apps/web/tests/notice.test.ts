@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import aegisIdl from "../../../artifacts/idl/aegis.json";
 import dexIdl from "../../../artifacts/idl/demo_dex.json";
 import { RPC_RATE_LIMITED, WALLET_REJECTED } from "../../../packages/sdk/src/errors";
-import { describeError, PROGRAM_ERROR_MESSAGES } from "../src/errors";
+import { describeError, FAUCET_NEEDS_SOL, PROGRAM_ERROR_MESSAGES } from "../src/errors";
 import { Notice } from "../src/Notice";
 import { DEVNET_GUIDANCE, WALLET_CANCELLED } from "../src/wallet-lifecycle";
 
@@ -142,4 +142,11 @@ it("never prints raw wallet details or error codes under a notice", () => {
   expect(markup).not.toContain("Unexpected error");
   expect(markup).not.toContain("WalletSignTransactionError");
   expect(markup).not.toContain("notice-code");
+});
+
+it("shows the USDC logo in success toasts but keeps the name when a warning is attached", () => {
+  const render = (message: string) => renderToStaticMarkup(createElement(Notice, { tone: "success", message }));
+  expect(render("Added 1,000 testUSDC to your vault.")).toContain('<span class="usdc">');
+  expect(render(FAUCET_NEEDS_SOL)).toContain(FAUCET_NEEDS_SOL);
+  expect(render(FAUCET_NEEDS_SOL)).not.toContain('class="usdc"');
 });

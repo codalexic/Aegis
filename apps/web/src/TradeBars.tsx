@@ -3,6 +3,7 @@
 // Larger requests fill the plot and keep their true amount in the value label.
 import { useEffect, useRef, useState, type JSX } from "react";
 import { PROGRAM_ERROR_MESSAGES } from "./errors";
+import { withUsdc } from "./Usdc";
 
 export type TradeBar = { id?: string; amount: number; ok: boolean; error?: string; time?: string };
 
@@ -120,7 +121,7 @@ export function TradeBars({ trades, cap, unit, className }: {
           style={{ left: `${Math.min(82, Math.max(18, left))}%`, top: `${((BASE - heightFor(t.amount)) / H) * 100}%` }}>
           <strong>{info.kind}</strong>
           <span>{info.reason}</span>
-          <small>{info.meta}</small>
+          <small>{withUsdc(info.meta)}</small>
         </div>
       );
     })()}

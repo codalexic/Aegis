@@ -6,6 +6,7 @@ import { Icon, type IconName } from "./icons";
 import { describeError, PROGRAM_ERROR_MESSAGES } from "./errors";
 import { ProgressButton } from "./Progress";
 import { useCopy } from "./use-copy";
+import { Usdc, withUsdc } from "./Usdc";
 import type { Scenario } from "./client";
 
 const decimal = (value: string) => {
@@ -38,11 +39,11 @@ export function blockedTitle(error: string): string {
 // Plain-language framing for each scenario. Keep the button labels stable: server error copy refers to them.
 const SCENARIOS: { id: Scenario; icon: IconName; tone: string; title: string; text: string; button: string }[] = [
   { id: "normal", icon: "swap", tone: "", title: "Within the rules",
-    text: "Swaps 20 testUSDC.", button: "Run normal trade" },
+    text: "Swaps 20 testUSDC", button: "Run normal trade" },
   { id: "injected", icon: "news", tone: "attack", title: "Fake news attack",
-    text: "Hidden news tells the agent to spend 1,000.", button: "Inject malicious news" },
+    text: "Hidden news tells the agent to spend 1,000 testUSDC", button: "Inject malicious news" },
   { id: "attacker", icon: "redirect", tone: "hack", title: "Hacker redirect",
-    text: "Tries to send the output to an attacker.", button: "Hacker redirect" },
+    text: "Tries to send the output to an attacker", button: "Hacker redirect" },
 ];
 
 function News({ step }: { step: Extract<Step, { type: "news" }> }) {
@@ -117,7 +118,7 @@ function Flow({ id, steps, busy, failed }: { id: Scenario; steps: Step[]; busy: 
   return <div className="flow" data-state={busy ? "run" : result ? (result.ok ? "ok" : "no") : failed ? "error" : "idle"} aria-hidden="true">
     <div className="flow-node">
       <span className="flow-k"><Icon name={id === "attacker" ? "redirect" : "robot"} size={14} />{REQUESTER[id]} asks for</span>
-      {amountUsdc && !busy ? <span className="flow-v">{decimal(amountUsdc)}<small>testUSDC</small></span>
+      {amountUsdc && !busy ? <span className="flow-v">{decimal(amountUsdc)}<small className="unit-icon"><Usdc /></small></span>
         : <span className="flow-idle">{idle}</span>}
     </div>
     <span className="flow-wire"><i /></span>
@@ -237,7 +238,7 @@ export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, en
               : last ? <span className={`badge ${last.ok ? "ok" : "bad"}`}>{last.ok ? "Allowed" : last.origin === "program" ? "Blocked" : "Failed"}</span>
               : failed ? <span className="badge warn">Didn’t run</span> : null}</span>
           </div>
-          <div className="scenario-copy"><strong>{scenario.title}</strong><p>{scenario.text}</p></div>
+          <div className="scenario-copy"><strong>{scenario.title}</strong><p>{withUsdc(scenario.text)}</p></div>
           <ProgressButton className={scenario.id === "normal" && usable ? "primary" : undefined} disabled={locked}
             busy={running} progress="Running…" onClick={(event) => { event.stopPropagation(); void run(scenario.id); }}>{scenario.button}</ProgressButton>
         </li>;
@@ -263,7 +264,7 @@ export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, en
           <span className="outcome-icon" aria-hidden="true"><Icon name={result.ok ? "check" : "shield"} /></span>
           <div>
             <strong>{result.ok ? "Trade went through" : result.origin === "program" ? `Blocked by Aegis · ${blockedTitle(result.error)}` : "Request failed"}</strong>
-            <p>{result.ok ? `Swapped ${decimal(request?.amountUsdc ?? "0")} testUSDC for testSOL.`
+            <p>{result.ok ? <>Swapped {decimal(request?.amountUsdc ?? "0")} <Usdc /> for testSOL.</>
               : <>{result.origin === "program" && vault ? `${rejectionReason(result.error, vault, request?.amountUsdc)}` : "The request could not be confirmed. Try again in a moment."}</>}</p>
           </div>
         </div>}
@@ -280,8 +281,8 @@ export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, en
             switch (step.type) {
               case "news": return <div key={index}><h3>News the agent read</h3><News step={step} /></div>;
               case "model_reply": return <div key={index}><h3>{step.source === "live" ? "Model reply" : step.source === "scripted" ? "Scripted reply" : "Fixed hacker request · No AI"}</h3><CodeBlock reply={step.reply} /></div>;
-              case "request": return <div key={index}><h3>Request sent to the vault</h3><p>{decimal(step.amountUsdc)} testUSDC</p>{step.outputVault && <p className="agent-destination">Redirect output to <code>{step.outputVault}</code></p>}</div>;
-              case "balances": return <div key={index}><h3>After</h3><p className="muted">{decimal(step.inputUsdc)} testUSDC · {step.outputSol} testSOL · {step.remainingUsdc} testUSDC budget left</p></div>;
+              case "request": return <div key={index}><h3>Request sent to the vault</h3><p>{decimal(step.amountUsdc)} <Usdc /></p>{step.outputVault && <p className="agent-destination">Redirect output to <code>{step.outputVault}</code></p>}</div>;
+              case "balances": return <div key={index}><h3>After</h3><p className="muted">{decimal(step.inputUsdc)} <Usdc /> · {step.outputSol} testSOL · {step.remainingUsdc} <Usdc /> budget left</p></div>;
               case "notice": return step.code === "error" ? <div key={index}><h3>Server message</h3><p className="agent-error-raw"><code>{step.message}</code></p></div> : null;
               default: return null;
             }

@@ -3,6 +3,7 @@ import { WalletAegisClient, type WalletSigner } from "../../../packages/sdk/src/
 import type { ChainDeployment, TxResult } from "@aegis/sdk";
 import { NO_DEVNET_SOL } from "../../../packages/sdk/src/wallet-errors";
 import { actionDetail } from "./activity";
+import { FAUCET_NEEDS_SOL } from "./errors";
 import type { DashboardConnection, ProgressCallback } from "./client";
 import { getAssociatedTokenAddressSync } from "./browser-token";
 import { readWalletBalance } from "./funding";
@@ -106,7 +107,7 @@ export async function connectWalletDashboard(environment: "localnet" | "devnet",
         ? "Faucet request limit reached. Wait before retrying."
         : "Faucet is temporarily unavailable. Check your token balance before retrying." }));
       if (!response.ok) throw new Error(result.error ?? "Faucet request failed.");
-      return "Received 1,000 testUSDC. Your wallet also needs SOL on this cluster for transaction fees.";
+      return FAUCET_NEEDS_SOL;
     },
     readDetail: async (signature, vault) => {
       const transaction = await client.getTransaction(signature);

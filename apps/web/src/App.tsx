@@ -4,7 +4,7 @@ import type { AegisEnvironment, Activity, TxResult, VaultState, WithdrawPolicySt
 import { rawAmountToUi } from "../../../packages/sdk/src/amounts";
 import { connectDashboard, type DashboardConnection, type Scenario } from "./client";
 import type { ActionDetail } from "./activity";
-import { AgentConsole, blockedTitle, rejectionReason } from "./AgentConsole";
+import { AgentConsole, blockedTitle } from "./AgentConsole";
 import { useWallet } from "./wallet-react";
 import { connectWalletDashboard } from "./wallet-client";
 import { startDashboardPolling } from "./polling";
@@ -26,6 +26,7 @@ import { useCopy } from "./use-copy";
 import { isMobileBrowser, phantomBrowseUrl, PHANTOM_INSTALL_MESSAGE, PHANTOM_MOBILE_MESSAGE } from "./phantom-availability";
 
 import { VaultSetup } from "./VaultSetup";
+import { Select } from "./Select";
 import type { DemoVaultSettings } from "./vault-setup";
 
 const nowUnix = () => BigInt(Math.floor(Date.now() / 1000));
@@ -42,7 +43,10 @@ const groupThousands = (text: string) => text.replace(/^\d{4,}(?=(?:\.\d+)? )/, 
 
 function countdown(expiry: bigint, now: bigint): string {
   const remaining = expiry > now ? expiry - now : 0n;
-  return remaining === 0n ? "Expired" : `${remaining / 60n}m ${(remaining % 60n).toString().padStart(2, "0")}s`;
+  if (remaining === 0n) return "Expired";
+  if (remaining < 60n) return `${remaining}s`;
+  const days = remaining / 86400n, hours = remaining % 86400n / 3600n, minutes = remaining % 3600n / 60n;
+  return [days && `${days}d`, hours && `${hours}h`, minutes && `${minutes}m`].filter(Boolean).join(" ");
 }
 
 function timeLabel(unix?: bigint): string {
@@ -265,16 +269,15 @@ export function FundingStep({ text, balance, hasFaucet, finished, locked, busy, 
   </div>;
 }
 
-function feedEntry(item: Activity, detail: ActionDetail | undefined, vault: VaultState | null): { icon: IconName; tone: "ok" | "bad" | "neutral"; title: string; sub?: string } {
+function feedEntry(item: Activity, detail: ActionDetail | undefined): { icon: IconName; tone: "ok" | "bad" | "neutral"; title: string } {
   const what = detail ? groupThousands(detail.amount) : "";
   switch (detail?.label) {
     case "Agent swap": return item.ok
-      ? { icon: "swap", tone: "ok", title: `AI traded ${what}`, sub: "Within your rules" }
-      : { icon: "shield", tone: "bad", title: `Blocked · ${blockedTitle(item.error ?? "Failed")}`,
-        sub: vault ? rejectionReason(item.error ?? "Failed", vault, detail.amount.replace(/ testUSDC$/, "")) : `The AI asked for ${what}` };
+      ? { icon: "swap", tone: "ok", title: `AI traded ${what}` }
+      : { icon: "shield", tone: "bad", title: `Blocked · ${blockedTitle(item.error ?? "Failed")}` };
     case "Fund vault": return { icon: "coins", tone: item.ok ? "neutral" : "bad", title: item.ok ? `Added ${what}` : "Funding failed" };
     case "Create vault": return { icon: "vault", tone: item.ok ? "neutral" : "bad", title: item.ok ? "Vault created" : "Vault setup failed" };
-    case "Withdraw": return { icon: "wallet", tone: item.ok ? "neutral" : "bad", title: item.ok ? `Withdrew ${what} to ${detail.destination ?? "your wallet"}` : "Withdrawal failed" };
+    case "Withdraw": return { icon: "wallet", tone: item.ok ? "neutral" : "bad", title: item.ok ? `Withdrew ${what} to ${!detail.destination || detail.destination === "your wallet" ? "your wallet" : shorten(detail.destination)}` : "Withdrawal failed" };
     case "Revoke agent": return { icon: "lock", tone: item.ok ? "neutral" : "bad", title: item.ok ? "AI agent stopped" : "Stopping the AI failed" };
     default: return { icon: "activity", tone: item.ok ? "neutral" : "bad", title: item.ok ? "Transaction" : "Transaction failed" };
   }
@@ -569,7 +572,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
   const hasBalance = vault && (vault.inputBalanceRaw > 0n || vault.outputBalanceRaw > 0n);
   const hasInput = !!vault && vault.inputBalanceRaw > 0n;
   const secondsLeft = vault ? (vault.expiryUnix > now ? vault.expiryUnix - now : 0n) : 0n;
-  const lifePercent = vault ? Math.min(100, Number(secondsLeft * 100n / VAULT_LIFETIME)) : 0;
+  const lifePercent = vault && !vault.revoked ? Math.min(100, Number(secondsLeft * 100n / VAULT_LIFETIME)) : 0;
   const locked = !!busy || agentBusy || loading;
   const swaps = activityReady ? activity.filter((item) => details.current.get(item.signature)?.label === "Agent swap") : [];
   const allowedSwaps = swaps.filter((item) => item.ok).length;
@@ -603,10 +606,10 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
     <thead><tr><th>Event</th><th className="hide-sm">Amount</th><th>Status</th><th className="num">Time</th><th aria-label="Explorer link" /></tr></thead>
     <tbody>{rows.map((item) => {
       const detail = details.current.get(item.signature);
-      const entry = feedEntry(item, detail, vault);
+      const entry = feedEntry(item, detail);
       return <tr key={item.signature}>
         <td><div className="event"><span className={`event-icon ${entry.tone}`} aria-hidden="true"><Icon name={entry.icon} size={14} /></span>
-          <div><strong>{entry.title}</strong>{entry.sub && <span>{entry.sub}</span>}</div></div></td>
+          <strong title={entry.title}>{entry.title}</strong></div></td>
         <td className="hide-sm num-cell">{detail ? groupThousands(detail.amount) : "0"}</td>
         <td><span className={`badge ${item.ok ? "ok" : detail?.label === "Agent swap" ? "bad" : "warn"}`}>{item.ok ? "Succeeded" : detail?.label === "Agent swap" ? "Blocked" : "Failed"}</span></td>
         <td className="num muted"><time>{timeLabel(item.blockTime)}</time></td>
@@ -616,32 +619,24 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
     })}</tbody>
   </table>;
   const activityBody = (limit?: number) => vault && !activityReady ? <p className="empty" role="status">Loading…</p>
-    : !vault || activity.length === 0 ? <div className="empty"><strong>No activity yet</strong><span>Every trade and every blocked attempt will show up here.</span></div>
+    : !vault || activity.length === 0 ? <div className="empty"><strong>No activity yet</strong></div>
     : activityRows(limit ? activity.slice(0, limit) : activity);
 
   const checklist = blocker && <section className="card setup-card" aria-labelledby="setup-title">
     <div className="card-head setup-head">
       <span className="banner-icon"><Icon name={blocker === "create" ? "vault" : blocker === "fund" ? "coins" : "lock"} size={16} /></span>
-      <div>
       <h2 id="setup-title">{blocker === "create" ? "Set up your demo vault" : blocker === "fund" ? (hasFunded ? "Top up your vault" : "Add test money") : "This vault is closed"}</h2>
-      <p className="card-sub">{blocker === "create" ? "A vault is a safe box for your AI’s trading money. Choose your limits and add 1,000 test USDC."
-        : blocker === "fund" ? "Your vault is open. Give the AI something to trade with."
-        : vault!.revoked ? "You stopped the AI, so it can’t trade from this vault anymore." : "The trading window ended, so the AI can’t trade anymore."}</p>
-    </div></div>
-    <ol className="checklist">
+    </div>
+    {!finished && <ol className="checklist">
       {([
         ["Create your vault", vault ? "done" : "next"],
-        ["Add test money", hasFunded ? "done" : finished ? "skipped" : vault ? "next" : ""],
-        ["Try to trick the AI", swaps.length ? "done" : finished ? "skipped" : ""],
-      ] as const).map(([label, state], index) => <li key={label} className={state}>
-        <span className="step-bar" aria-hidden="true" />
-        <span className="step-label"><small>Step {index + 1}</small>{state === "done" && <Icon name="check" size={12} />}{label}</span>
-      </li>)}
-    </ol>
+        ["Add test money", hasFunded ? "done" : vault ? "next" : ""],
+        ["Try to trick the AI", swaps.length ? "done" : ""],
+      ] as const).map(([label, state]) => <li key={label} className={state}><span className="sr-only">{label}</span></li>)}
+    </ol>}
     {blocker === "create" ? <div className="next-action">
       <ProgressButton className="primary" disabled={locked} busy={busy === "New demo vault"} progress="Setting up…"
         onClick={() => setSetupOpen(true)}>Create my vault</ProgressButton>
-      {connection.walletMode && <p className="next-hint">Phantom will ask you to approve.</p>}
     </div> : <FundingStep balance={walletBalance} hasFaucet={!!connection.faucet} finished={blocker === "closed"} locked={locked} busy={busy}
       text={fundingText} onFaucet={() => void run("Get testUSDC", connection.faucet!)} onFund={() => void fund()} onNewDemo={() => setSetupOpen(true)} />}
   </section>;
@@ -650,7 +645,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
     <div className="stat">
       <span className="stat-label">Vault balance</span>
       <strong className="stat-value"><span data-testid="input-balance">{vault ? amount(vault.inputBalanceRaw) : "0"}</span><small>testUSDC</small></strong>
-      <span className="stat-sub"><span data-testid="output-balance">+{vault ? amount(vault.outputBalanceRaw, 9) : "0"}</span> testSOL bought by the AI</span>
+      {vault && vault.outputBalanceRaw > 0n && <span className="stat-sub"><span data-testid="output-balance">+{amount(vault.outputBalanceRaw, 9)}</span> testSOL</span>}
     </div>
     <div className="stat">
       <span className="stat-label">Budget left</span>
@@ -659,13 +654,12 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
     </div>
     <div className="stat">
       <span className="stat-label">Time left</span>
-      <strong className="stat-value"><span data-testid="expiry">{vault ? countdown(vault.expiryUnix, now) : "1 hour"}</span></strong>
-      <div className="meter neutral" role="img" aria-label={vault ? `${countdown(vault.expiryUnix, now)} remaining` : "Full hour"}><span style={{ width: `${vault ? lifePercent : 100}%` }} /></div>
+      <strong className="stat-value is-time"><span data-testid="expiry">{!vault ? "1 hour" : vault.revoked ? "Closed" : countdown(vault.expiryUnix, now)}</span></strong>
+      <div className="meter neutral" role="img" aria-label={!vault ? "Full hour" : vault.revoked ? "Closed" : `${countdown(vault.expiryUnix, now)} remaining`}><span style={{ width: `${vault ? lifePercent : 100}%` }} /></div>
     </div>
     <div className="stat">
       <span className="stat-label">Attacks blocked</span>
       <strong className={`stat-value${blocked ? " pink" : ""}`}><CountUp value={blocked} /></strong>
-      <span className="stat-sub">{swaps.length ? `${allowedSwaps} of ${swaps.length} requests allowed` : "No requests yet"}</span>
     </div>
   </section>;
 
@@ -685,7 +679,6 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
         {withdrawPolicy.allowed.map((key, index) => <KeyRow key={key.toBase58()} label={`Extra ${index + 1}`} value={key.toBase58()} />)}
       </div> : <p>Only your wallet</p>}
     </div>}
-    <p className="card-foot">The AI can’t change these rules, even if it’s tricked.</p>
   </section>;
 
   const content = page === "overview" ? <>
@@ -693,7 +686,7 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
     {stats}
     {!blocker && swaps.length === 0 && <section className="card callout">
       <span className="callout-icon" aria-hidden="true"><Icon name="robot" size={20} /></span>
-      <div><h2>Your AI is ready. Try to trick it.</h2><p className="card-sub">Run a normal trade, then two attacks, and watch Aegis decide.</p></div>
+      <h2>Your AI is ready. Try to trick it.</h2>
       <button type="button" className="primary" onClick={() => go("agent")}>Run the test cases<Icon name="arrow" size={14} /></button>
     </section>}
     <div className="grid-2">
@@ -707,8 +700,8 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
     {blocker && <div className="banner">
       <span className="banner-icon"><Icon name={blocker === "closed" ? "lock" : "info"} size={16} /></span>
       <div className="banner-text">{blocker === "closed"
-        ? <><strong>This vault is closed</strong><span>Open a new demo vault to run the cases again.</span></>
-        : <><strong>Your vault isn’t ready</strong><span>Set up and fund your vault before running the cases.</span></>}</div>
+        ? <strong>This vault is closed</strong>
+        : <strong>Set up and fund your vault before running the cases.</strong>}</div>
       {blocker === "closed"
       ? <ProgressButton className="primary small" disabled={locked} busy={busy === "New demo vault"} progress="Setting up…" onClick={() => setSetupOpen(true)}>New demo vault</ProgressButton>
       : <button type="button" className="primary small" onClick={() => go("overview")}>Go to setup<Icon name="arrow" size={14} /></button>}</div>}
@@ -722,10 +715,10 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       <div className="stat kpi is-pink"><span className="stat-label">Money protected</span><strong className="stat-value"><CountUp value={protectedUsdc} /><small>testUSDC</small></strong></div>
     </section>
     <section className="card" aria-labelledby="chart-title">
-      <div className="card-head"><div><h2 id="chart-title">Requests vs. your cap</h2><p className="card-sub">Anything above the dashed line is blocked.</p></div>
+      <div className="card-head"><div><h2 id="chart-title">Requests vs. your cap</h2></div>
         <span className="chart-legend" aria-hidden="true"><span><i />Allowed</span><span><i className="bad" />Blocked</span></span></div>
       {bars.length > 0 ? <TradeBars trades={bars} cap={capUi} unit="testUSDC" />
-        : <div className="empty"><strong>No requests yet</strong><span>Run the test cases on the AI agent page.</span>{link("agent", "Open AI agent")}</div>}
+        : <div className="empty"><strong>No requests yet</strong>{link("agent", "Open AI agent")}</div>}
     </section>
     <section className="card" aria-labelledby="reasons-title">
       <div className="card-head"><h2 id="reasons-title">Why requests were blocked</h2></div>
@@ -735,27 +728,27 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       </li>)}</ul>
     </section>
   </> : page === "activity" ? <section className="card flush" aria-labelledby="activity-title">
-    <div className="card-head"><h2 id="activity-title">All activity</h2>{activity.length > 0 && <span className="muted small">{activity.length} {activity.length === 1 ? "event" : "events"}</span>}</div>
+    <div className="card-head"><h2 id="activity-title">All activity</h2></div>
     {activityBody()}
   </section> : <>
     {rulesCard}
     <section className="card" aria-labelledby="control-title">
       <div className="card-head"><h2 id="control-title">Controls</h2></div>
       {vault ? <div className="settings">
-        <div className="setting"><div><strong>Stop the AI</strong><p>{vault.revoked ? "Already stopped. The AI can’t trade from this vault." : "Instantly cut off the AI’s permission to trade."}</p></div>
+        <div className="setting"><strong>Stop the AI</strong>
           <ProgressButton className="danger" disabled={vault.revoked || locked} busy={busy === "Revoke agent"} progress="Revoking…" onClick={() => void revoke()}>Revoke agent</ProgressButton></div>
-        <div className="setting"><div><strong>Withdraw everything</strong><p>{withdrawPolicy ? "Send all testUSDC and testSOL to your wallet or an allowed address." : "Send all testUSDC and testSOL in the vault back to your wallet."}</p></div>
+        <div className="setting"><strong>Withdraw everything</strong>
           <ProgressButton disabled={!hasBalance || locked} busy={busy === "Withdraw all"} progress="Withdrawing…" onClick={() => { if (withdrawPolicy) { setDestination(owner.toBase58()); setWithdrawOpen(true); } else void withdraw(); }}>Withdraw all</ProgressButton></div>
         {withdrawOpen && withdrawPolicy && <form className="withdraw-choice" onSubmit={(event) => { event.preventDefault(); void withdraw(destination); }}>
           <label htmlFor="withdraw-destination">Withdrawal destination</label>
-          <select id="withdraw-destination" value={destination} disabled={locked} onChange={(event) => setDestination(event.target.value)}>
-            <option value={owner.toBase58()}>Your wallet</option>
-            {withdrawPolicy.allowed.map((key) => <option key={key.toBase58()} value={key.toBase58()}>{key.toBase58()}</option>)}
-          </select>
+          <Select id="withdraw-destination" value={destination} disabled={locked} onChange={setDestination} options={[
+            { value: owner.toBase58(), label: "Your wallet" },
+            ...withdrawPolicy.allowed.map((key) => ({ value: key.toBase58(), label: key.toBase58() })),
+          ]} />
           <div className="setup-buttons"><button type="button" disabled={locked} onClick={() => setWithdrawOpen(false)}>Cancel</button>
             <ProgressButton type="submit" className="primary" disabled={locked} busy={busy === "Withdraw all"} progress="Withdrawing…">Confirm withdrawal</ProgressButton></div>
         </form>}
-        {!finished && <div className="setting"><div><strong>Start over</strong><p>Open a fresh vault with 1,000 test USDC.</p></div>
+        {!finished && <div className="setting"><strong>Start over</strong>
           <ProgressButton disabled={locked} busy={busy === "New demo vault"} progress="Setting up…" onClick={() => setSetupOpen(true)}>New demo vault</ProgressButton></div>}
       </div> : <p className="empty">Create your vault on the Overview page first.</p>}
     </section>
@@ -786,7 +779,8 @@ export function Dashboard({ connection, toolbar, isCurrent = alwaysCurrent, onBu
       <h1 className="sr-only">Your Aegis vault</h1>
       {siteNotice}
       {connection.getWalletSolBalance && <DevnetSolHint readBalance={connection.getWalletSolBalance} />}
-      {setupOpen ? <VaultSetup owner={owner} agent={agent} busy={locked} onCancel={() => setSetupOpen(false)} onCreate={(settings) => void newDemo(settings)} /> : content}
+      {content}
     </main>
+    {setupOpen && <VaultSetup owner={owner} agent={agent} busy={locked} onCancel={() => setSetupOpen(false)} onCreate={(settings) => void newDemo(settings)} />}
   </Frame>;
 }

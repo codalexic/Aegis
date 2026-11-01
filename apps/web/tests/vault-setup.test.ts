@@ -201,7 +201,7 @@ it("opens setup without creating, validates accessibly, resets defaults, and can
   await input("setup-cap", "101");
   expect(container.querySelector('#setup-cap')?.getAttribute('aria-invalid')).toBe("true");
   expect(container.querySelector('#setup-cap')?.getAttribute('aria-describedby')).toBe("setup-cap-error");
-  expect(container.querySelector('#setup-cap-error')?.textContent).toContain("cannot exceed");
+  expect(container.querySelector('#setup-cap-error')?.textContent).toContain("Cannot exceed");
   expect([...container.querySelectorAll('button')].find((b) => b.textContent === "Create vault")?.disabled).toBe(true);
   await click("1 week");
   await click("+ Add address");
@@ -211,12 +211,12 @@ it("opens setup without creating, validates accessibly, resets defaults, and can
   expect(container.querySelector<HTMLInputElement>('#setup-budget')?.value).toBe("100");
   expect(new Date(container.querySelector<HTMLInputElement>('#setup-until')!.value).getTime()).toBe(Date.now() + 3_600_000);
   expect(container.querySelector('#setup-address-0')).toBeNull();
-  await click("Cancel");
+  await act(async () => container.querySelector<HTMLButtonElement>('.vault-setup [aria-label="Close"]')!.click());
   expect(setupTitle()).toBe("Set up your demo vault");
   expect(create).not.toHaveBeenCalled();
 });
 
-it.each([["1 hour", 3600], ["1 day", 86400], ["1 week", 604800]] as const)("applies the %s preset", async (label, seconds) => {
+it.each([["1 hour", 3600], ["6 hours", 21600], ["12 hours", 43200], ["1 day", 86400], ["1 week", 604800]] as const)("applies the %s preset", async (label, seconds) => {
   await mount(); await click("Create my vault"); await click(label);
   expect(new Date(container.querySelector<HTMLInputElement>('#setup-until')!.value).getTime()).toBe(Date.now() + seconds * 1000);
 });
@@ -233,7 +233,7 @@ it("passes chosen amounts, expiry and addresses to the mock and shows its policy
     expiryUnix: BigInt(Math.floor(Date.now() / 1000)) + 86400n, inputBalanceRaw: 1_000_000_000n });
   expect(container.querySelector(`.withdraw-policy code[title="${extra.toBase58()}"]`)).not.toBeNull();
   expect(container.querySelectorAll('.withdraw-policy button')).toHaveLength(2);
-  await openPage("vault"); await click("New demo vault"); await click("Cancel");
+  await openPage("vault"); await click("New demo vault"); await act(async () => container.querySelector<HTMLButtonElement>('.vault-setup [aria-label="Close"]')!.click());
   expect(container.querySelector('#control-title')?.textContent).toBe("Controls");
 });
 
@@ -244,17 +244,19 @@ it.each(["wallet", "extra"])("withdraws both tokens to %s using the correct meth
   await connection.scenario!("normal", created.vault!);
   const legacy = vi.spyOn(connection, "withdraw"), to = vi.spyOn(connection, "withdrawTo");
   await mount(); await openPage("vault"); await click("Withdraw all");
-  const select = container.querySelector<HTMLSelectElement>('#withdraw-destination')!;
-  expect(select.value).toBe(connection.owner.toBase58());
-  expect([...select.options].map((o) => o.value)).toEqual([connection.owner.toBase58(), extra.toBase58()]);
+  const select = container.querySelector<HTMLButtonElement>('#withdraw-destination')!;
+  expect(select.textContent).toBe("Your wallet");
+  await act(async () => select.click());
+  const options = [...container.querySelectorAll<HTMLButtonElement>('[role="option"]')];
+  expect(options.map((o) => o.dataset.value)).toEqual([connection.owner.toBase58(), extra.toBase58()]);
   expect(legacy).not.toHaveBeenCalled(); expect(to).not.toHaveBeenCalled();
-  if (target === "extra") await act(async () => { select.value = extra.toBase58(); select.dispatchEvent(new Event("change", { bubbles: true })); });
+  await act(async () => options[target === "extra" ? 1 : 0].click());
   await click("Confirm withdrawal");
   expect(target === "wallet" ? legacy : to).toHaveBeenCalledTimes(2);
   expect(target === "wallet" ? to : legacy).not.toHaveBeenCalled();
   if (target === "extra") expect(to.mock.calls.every((call) => call[2].equals(extra))).toBe(true);
   await openPage("activity");
-  expect(container.textContent).toContain(`to ${target === "wallet" ? "your wallet" : extra.toBase58()}`);
+  expect(container.textContent).toContain(`to ${target === "wallet" ? "your wallet" : `${extra.toBase58().slice(0, 4)}…${extra.toBase58().slice(-4)}`}`);
 });
 
 it("shows wallet-only policy and withdraws immediately without a chooser", async () => {

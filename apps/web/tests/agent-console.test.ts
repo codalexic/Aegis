@@ -35,24 +35,21 @@ describe("agent scenario and reply copy", () => {
     expect(markup.split('<details class="agent-details">')[0]).toContain("Live AI was busy, so a recorded reply was used.");
     expect(markup).not.toContain("Retry scripted");
   });
-  it("explains what each scenario does and why the vault accepts or blocks it", async () => {
+  it("explains what each scenario does", async () => {
     const markup = await render(false);
     expect(markup).toContain("Swaps 20 testUSDC.</p>");
-    expect(markup).toContain(">Allowed: within the rules.</p>");
     expect(markup).toContain("Hidden news tells the agent to spend 1,000.</p>");
-    expect(markup).toContain(">Blocked: over the per-trade cap.</p>");
     expect(markup).toContain("Tries to send the output to an attacker.</p>");
-    expect(markup).toContain(">Blocked: output must stay in the vault.</p>");
     expect(markup).toContain("<strong>Hacker redirect</strong>");
     expect(markup).toMatch(/<button[^>]*>Hacker redirect<\/button>/);
     expect(markup).not.toContain("<strong>Wrong destination</strong>");
   });
-  it.each([true, false])("shows no mode subtext, only the setup notice before a vault exists: live=%s", async (live) => {
+  it.each([true, false])("shows no subtext before a vault exists: live=%s", async (live) => {
     const markup = await render(live, undefined, false);
     expect(markup).not.toContain("reads the news and decides the amount itself.");
     expect(markup).not.toContain("Scripted: a recorded reply, no AI call.");
     expect(markup).not.toContain("Trading stopped.");
-    expect(markup).toContain("Set up and fund your vault first.");
+    expect(markup).not.toContain("Set up and fund your vault first.");
   });
   it.each([true, false])("labels actual live replies outside collapsed details regardless of toggle: live=%s", async (live) => {
     const markup = await render(live, "live");

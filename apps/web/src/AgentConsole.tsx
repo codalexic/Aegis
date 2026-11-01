@@ -36,13 +36,13 @@ export function blockedTitle(error: string): string {
 }
 
 // Plain-language framing for each scenario. Keep the button labels stable: server error copy refers to them.
-const SCENARIOS: { id: Scenario; icon: IconName; tone: string; title: string; story: string; text: string; outcome: string; button: string }[] = [
-  { id: "normal", icon: "swap", tone: "", title: "Within the rules", story: "Your AI makes an ordinary trade. Aegis checks it and lets it through.",
-    text: "Swaps 20 testUSDC.", outcome: "Allowed: within the rules.", button: "Run normal trade" },
-  { id: "injected", icon: "news", tone: "attack", title: "Fake news attack", story: "Someone plants a fake headline telling your AI to go all-in. Even if the AI is fooled, Aegis caps the trade.",
-    text: "Hidden news tells the agent to spend 1,000.", outcome: "Blocked: over the per-trade cap.", button: "Inject malicious news" },
-  { id: "attacker", icon: "redirect", tone: "hack", title: "Hacker redirect", story: "A hacked tool tries to send your coins to a stranger’s wallet. Aegis only pays out into your vault.",
-    text: "Tries to send the output to an attacker.", outcome: "Blocked: output must stay in the vault.", button: "Hacker redirect" },
+const SCENARIOS: { id: Scenario; icon: IconName; tone: string; title: string; text: string; button: string }[] = [
+  { id: "normal", icon: "swap", tone: "", title: "Within the rules",
+    text: "Swaps 20 testUSDC.", button: "Run normal trade" },
+  { id: "injected", icon: "news", tone: "attack", title: "Fake news attack",
+    text: "Hidden news tells the agent to spend 1,000.", button: "Inject malicious news" },
+  { id: "attacker", icon: "redirect", tone: "hack", title: "Hacker redirect",
+    text: "Tries to send the output to an attacker.", button: "Hacker redirect" },
 ];
 
 function News({ step }: { step: Extract<Step, { type: "news" }> }) {
@@ -222,7 +222,6 @@ export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, en
     <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">{busy ? progress : ""}</span>
     <section id="agent" className="agent-console" aria-label="Test cases" aria-busy={busy}>
     <div className="cases-bar">
-      {!finished && <p className="card-sub">{!vault ? "Set up and fund your vault first." : "Run a normal trade, then try both attacks."}</p>}
       {model && <span className="badge">Live AI · {model}</span>}
     </div>
     {live && !model && <p className="muted agent-model">No AI key is set up on this server. Switch back to Scripted to run the scenarios.</p>}
@@ -238,7 +237,7 @@ export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, en
               : last ? <span className={`badge ${last.ok ? "ok" : "bad"}`}>{last.ok ? "Allowed" : last.origin === "program" ? "Blocked" : "Failed"}</span>
               : failed ? <span className="badge warn">Didn’t run</span> : null}</span>
           </div>
-          <div className="scenario-copy"><strong>{scenario.title}</strong><p>{scenario.text}</p><p className={`scenario-outcome ${scenario.tone ? "blocked" : "allowed"}`}>{scenario.outcome}</p></div>
+          <div className="scenario-copy"><strong>{scenario.title}</strong><p>{scenario.text}</p></div>
           <ProgressButton className={scenario.id === "normal" && usable ? "primary" : undefined} disabled={locked}
             busy={running} progress="Running…" onClick={(event) => { event.stopPropagation(); void run(scenario.id); }}>{scenario.button}</ProgressButton>
         </li>;
@@ -246,15 +245,14 @@ export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, en
     </ul>
 
     <section className="card" aria-labelledby="result-title">
-      <div className="card-head"><div><h2 id="result-title">{current.title}</h2><p className="card-sub">{current.story}</p></div></div>
+      <div className="card-head"><h2 id="result-title">{current.title}</h2></div>
       <Flow id={selected} steps={shown} busy={selectedBusy} failed={!!failure} />
       <div className="agent-result-area" aria-busy={selectedBusy}>
         {reply && <p className="agent-source"><span className="status">{reply.source === "live" ? "AI decided" : reply.source === "scripted" ? "Recorded reply" : "Fixed hacker request · No AI"}</span>{reply.source === "live" && model && <> {model}</>}</p>}
         {shown.some((step) => step.type === "notice" && step.code === "live_fallback") && <p className="agent-source">Live AI was busy, so a recorded reply was used.</p>}
         {selectedBusy && <div className="agent-running">
           <span className="progress-spinner" aria-hidden="true" />
-          <div><strong>{progress}</strong><p>{progress === "Refreshing vault…" ? "Updating balances and activity."
-            : "Waiting for the agent’s result. Solana transactions can take 5–15 seconds; live AI adds a few more seconds."}</p></div>
+          <strong>{progress}</strong>
         </div>}
         {failure && <div className="agent-outcome failed" role="alert">
           <span className="outcome-icon" aria-hidden="true"><Icon name="alert" /></span>
@@ -265,12 +263,12 @@ export function AgentConsole({ vault, finished, disabled, onBusy, onComplete, en
           <span className="outcome-icon" aria-hidden="true"><Icon name={result.ok ? "check" : "shield"} /></span>
           <div>
             <strong>{result.ok ? "Trade went through" : result.origin === "program" ? `Blocked by Aegis · ${blockedTitle(result.error)}` : "Request failed"}</strong>
-            <p>{result.ok ? `Swapped ${decimal(request?.amountUsdc ?? "0")} testUSDC for testSOL, which stays in the vault. Now try one of the two attacks.`
-              : <>{result.origin === "program" && vault ? `${rejectionReason(result.error, vault, request?.amountUsdc)} The vault is untouched.` : "The request could not be confirmed. Try again in a moment."}</>}</p>
+            <p>{result.ok ? `Swapped ${decimal(request?.amountUsdc ?? "0")} testUSDC for testSOL.`
+              : <>{result.origin === "program" && vault ? `${rejectionReason(result.error, vault, request?.amountUsdc)}` : "The request could not be confirmed. Try again in a moment."}</>}</p>
           </div>
         </div>}
         {resisted && <div className="agent-resisted" role="status"><strong>The AI did not fall for it</strong>
-          <p>It did not follow the planted headline, so whatever it actually proposed was sent as-is. Use Retry scripted to see what happens when an agent does obey the fake news.</p>
+          <p>It did not follow the planted headline.</p>
           <button className="small" disabled={locked} onClick={() => { setLive(false); void run("injected", false); }}>Retry scripted</button>
         </div>}
         {!result && !failure && !selectedBusy && <p className="result-hint">Press <b>{current.button}</b> to send this request through Aegis.</p>}
